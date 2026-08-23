@@ -28,10 +28,13 @@ deconv <- function(x, experiment, method, assay = "tpm", ...) {
   if (tolower(method) == "xcell") {
     message("xCell output is an enrichment score, not an estimated cell fraction.")
   }
-  .call_backend(
+  arguments <- c(
+    list(gene_expression = matrix, method = method),
+    list(...)
+  )
+  .with_attached_namespaces(
     "immunedeconv",
-    "deconvolute",
-    c(list(gene_expression = matrix, method = method), list(...))
+    .call_backend("immunedeconv", "deconvolute", arguments)
   )
 }
 
@@ -63,38 +66,60 @@ deconv_music <- function(
   ) {
     stop("`clusters` and `samples` must each name one reference column.", call. = FALSE)
   }
+  if (!methods::is(sc_reference, "SingleCellExperiment")) {
+    stop("`sc_reference` must be a SingleCellExperiment.", call. = FALSE)
+  }
+  reference_data <- as.data.frame(
+    SummarizedExperiment::colData(sc_reference),
+    optional = TRUE
+  )
+  missing_columns <- setdiff(c(clusters, samples), names(reference_data))
+  if (length(missing_columns)) {
+    stop(
+      "Reference metadata is missing: ", paste(missing_columns, collapse = ", "),
+      call. = FALSE
+    )
+  }
+  if (
+    anyNA(reference_data[[clusters]]) || anyNA(reference_data[[samples]]) ||
+      any(!nzchar(as.character(reference_data[[clusters]]))) ||
+      any(!nzchar(as.character(reference_data[[samples]])))
+  ) {
+    stop("Reference cluster and sample labels cannot be missing or empty.", call. = FALSE)
+  }
+  if (length(unique(reference_data[[clusters]])) < 2L) {
+    stop("MuSiC requires at least two reference cell types.", call. = FALSE)
+  }
   matrix <- .as_count_matrix(x, experiment, assay)
   .assert_deconvolution_ids(matrix, "MuSiC bulk input")
   reference_ids <- rownames(sc_reference)
-  if (!is.null(reference_ids)) {
-    .assert_identifier_vector(reference_ids, "MuSiC reference feature names")
-    overlap <- intersect(rownames(matrix), reference_ids)
-    if (!length(overlap)) {
-      stop(
-        "MuSiC bulk and reference inputs have no common feature identifiers.",
-        call. = FALSE
-      )
-    }
-    if (length(overlap) < 100L) {
-      warning(
-        "MuSiC inputs share only ", length(overlap),
-        " features; check identifier types and reference coverage.",
-        call. = FALSE
-      )
-    }
-  }
-  .call_backend(
-    "MuSiC",
-    "music_prop",
-    c(
-      list(
-        bulk.mtx = matrix,
-        sc.sce = sc_reference,
-        clusters = clusters,
-        samples = samples
-      ),
-      list(...)
+  .assert_identifier_vector(reference_ids, "MuSiC reference feature names")
+  overlap <- intersect(rownames(matrix), reference_ids)
+  if (!length(overlap)) {
+    stop(
+      "MuSiC bulk and reference inputs have no common feature identifiers.",
+      call. = FALSE
     )
+  }
+  if (length(overlap) < 100L) {
+    warning(
+      "MuSiC inputs share only ", length(overlap),
+      " features; check identifier types and reference coverage.",
+      call. = FALSE
+    )
+  }
+  arguments <- c(
+    list(
+      bulk.mtx = matrix,
+      sc.sce = sc_reference,
+      clusters = clusters,
+      samples = samples
+    ),
+    list(...)
+  )
+  .with_attached_namespaces(
+    c("SummarizedExperiment", "SingleCellExperiment"),
+    .call_backend("MuSiC", "music_prop", arguments)
   )
 }
 
@@ -147,6 +172,9 @@ deconv_cibersortx_input <- function(
 #' @param key Optional malignant/tumour key accepted by BayesPrism.
 #' @param input_type BayesPrism reference input type.
 #' @param cores Number of worker cores passed to `run.prism()`.
+#' @param update_gibbs Run the final Gibbs update.
+#' @param gibbs_control,opt_control Named control lists passed to
+#'   [BayesPrism::run.prism()].
 #' @param ... Additional arguments passed to `BayesPrism::new.prism()`.
 #'
 #' @return The native object returned by `BayesPrism::run.prism()`.
@@ -162,6 +190,9 @@ deconv_bayesprism <- function(
     key = NULL,
     input_type = "count.matrix",
     cores = 1,
+    update_gibbs = TRUE,
+    gibbs_control = list(),
+    opt_control = list(),
     ...
 ) {
   .require_backend("BayesPrism", "to run BayesPrism deconvolution")
@@ -236,6 +267,18 @@ deconv_bayesprism <- function(
   ) {
     stop("`input_type` must be one non-empty string.", call. = FALSE)
   }
+  if (
+    !is.logical(update_gibbs) || length(update_gibbs) != 1L ||
+      is.na(update_gibbs)
+  ) {
+    stop("`update_gibbs` must be TRUE or FALSE.", call. = FALSE)
+  }
+  if (!is.list(gibbs_control) || is.data.frame(gibbs_control)) {
+    stop("`gibbs_control` must be a list.", call. = FALSE)
+  }
+  if (!is.list(opt_control) || is.data.frame(opt_control)) {
+    stop("`opt_control` must be a list.", call. = FALSE)
+  }
   arguments <- c(
     list(
       reference = reference,
@@ -251,7 +294,13 @@ deconv_bayesprism <- function(
   .call_backend(
     "BayesPrism",
     "run.prism",
-    list(prism = prism, n.cores = cores)
+    list(
+      prism = prism,
+      n.cores = cores,
+      update.gibbs = update_gibbs,
+      gibbs.control = gibbs_control,
+      opt.control = opt_control
+    )
   )
 }
 
@@ -285,13 +334,17 @@ deconv_bayesprism <- function(
 
 .as_reference_count_matrix <- function(reference) {
   reference <- as.matrix(reference)
+  if (!is.numeric(reference)) {
+    stop("BayesPrism `reference` must contain numeric raw counts.", call. = FALSE)
+  }
   storage.mode(reference) <- "double"
   if (is.null(rownames(reference)) || is.null(colnames(reference))) {
     stop("BayesPrism `reference` must have row and column names.", call. = FALSE)
   }
   if (
     any(!is.finite(reference)) || any(reference < 0) ||
-      any(abs(reference - round(reference)) > sqrt(.Machine$double.eps))
+      any(abs(reference - round(reference)) > sqrt(.Machine$double.eps)) ||
+      any(reference > .Machine$integer.max)
   ) {
     stop("BayesPrism `reference` must contain raw integer counts.", call. = FALSE)
   }

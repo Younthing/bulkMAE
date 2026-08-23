@@ -8,7 +8,14 @@
 #' annotate_ensembl(c("ENSG00000141510.18", "TP53"))
 #' @export
 annotate_ensembl <- function(ids) {
-  sub("\\.[0-9]+$", "", as.character(ids))
+  if (!is.atomic(ids) || is.list(ids)) {
+    stop("`ids` must be an atomic vector of identifiers.", call. = FALSE)
+  }
+  ids <- as.character(ids)
+  if (!length(ids) || anyNA(ids) || any(!nzchar(ids))) {
+    stop("`ids` must contain non-missing identifiers.", call. = FALSE)
+  }
+  sub("\\.[0-9]+$", "", ids)
 }
 
 #' Map feature identifiers with an AnnotationDbi database
@@ -32,20 +39,28 @@ annotate_ids <- function(
     multi_values = "first"
 ) {
   .require_backend("AnnotationDbi", "to map feature identifiers")
+  ids <- .clean_gene_ids(ids, "ids")
+  .assert_scalar_character(from, "from")
+  .assert_scalar_character(to, "to")
   mapped <- AnnotationDbi::mapIds(
     x = database,
-    keys = unique(as.character(ids)),
+    keys = ids,
     column = to,
     keytype = from,
     multiVals = multi_values
   )
 
-  data.frame(
+  target <- unname(mapped)
+  if (is.list(target) || methods::is(target, "List")) {
+    target <- I(as.list(target))
+  }
+  result <- data.frame(
     source_id = names(mapped),
-    target_id = unname(mapped),
     stringsAsFactors = FALSE,
     row.names = NULL
   )
+  result$target_id <- target
+  result[, c("source_id", "target_id"), drop = FALSE]
 }
 
 #' Query Ensembl through biomaRt
@@ -70,6 +85,18 @@ annotate_biomart <- function(
     version = NULL
 ) {
   .require_backend("biomaRt", "to query Ensembl")
+  if (!is.atomic(values) || is.list(values) || !length(values) || anyNA(values)) {
+    stop("`values` must contain non-missing filter values.", call. = FALSE)
+  }
+  if (
+    !is.character(attributes) || !length(attributes) || anyNA(attributes) ||
+      any(!nzchar(attributes)) || anyDuplicated(attributes)
+  ) {
+    stop("`attributes` must contain unique, non-empty names.", call. = FALSE)
+  }
+  .assert_scalar_character(filter, "filter")
+  .assert_scalar_character(dataset, "dataset")
+  .assert_scalar_character(biomart, "biomart")
 
   mart_args <- list(biomart = biomart, dataset = dataset)
   if (!is.null(mirror)) {

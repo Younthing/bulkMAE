@@ -9,6 +9,17 @@
   `method` arguments instead of multiplying function names.
 - Removes old exported aliases intentionally so autocomplete exposes one
   coherent API; an installed migration map records every breaking rename.
+- Restores compatibility across the declared R 4.4+ dependency range, including
+  edgeR tximport/differential-splicing fallbacks, current dream moderation,
+  timeROC namespace resolution, decoupleR method-argument conventions, and
+  namespace-only NMF, WGCNA, MuSiC, and immunedeconv execution.
+- Adds explicit MAE assay/feature helpers and direct TPM normalization from gene
+  lengths stored in `rowData`, an aligned assay, or a supplied vector/matrix.
+- Completes a simulated-data suite spanning all 84 public functions, including
+  real offline xCell, MuSiC, BayesPrism, NMF, WGCNA, GO, and Reactome backend
+  smoke tests without requiring network services.
+- Keeps network-backed tests disabled by default. Set
+  `BULKMAE_RUN_ONLINE_TESTS=true` only when deliberately testing remote resources.
 
 # bulkMAE 0.3.0
 

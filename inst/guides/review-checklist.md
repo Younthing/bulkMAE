@@ -54,19 +54,22 @@ Use this list before accepting a new wrapper or publishing an analysis.
 
 ## Release checks
 
-The present source snapshot was authored in an environment without an R
-runtime. Before release, run the following in a current Bioconductor container:
+For every release candidate, create a clean package library and install the
+declared backends using
+[`dependency-installation-zh.md`](dependency-installation-zh.md). Preserve the
+installation plan, package versions, session information, and check logs as
+release artifacts. This checklist defines required verification; it does not
+claim that a particular release candidate has passed until those artifacts are
+recorded.
 
-- [ ] Use R 4.6 / Bioconductor 3.23 or a newer mutually compatible release,
-      matching the declared edgeR and GSVA API baselines.
+- [ ] Use a mutually compatible R/Bioconductor pair that satisfies every
+      minimum version in `DESCRIPTION`; do not reuse a mixed-release library.
 
 - [ ] Replace the provisional maintainer identity in `DESCRIPTION`.
 - [ ] Add the project URL and bug tracker after creating the repository.
 
 ```r
-# The aggregate page is a no-R fallback for this source snapshot. Remove it so
-# roxygen2 can generate one standard Rd topic per public function.
-file.remove("bulkMAE/man/bulkMAE-api.Rd")
+# Regenerate one standard Rd topic per public function from the roxygen source.
 devtools::document("bulkMAE")
 devtools::test("bulkMAE")
 devtools::check("bulkMAE", args = "--as-cran")
@@ -79,3 +82,7 @@ parameter constructors, decoupleR resource column names, dream contrasts, and
 the three non-standard deconvolution packages. Also verify the installed
 versions of ConsensusClusterPlus `calcICL()`, diffcoexp, maSigPro, ReactomePA,
 singscore, timeROC, uwot, Rtsne, and WGCNA `modulePreservation()`.
+
+Network-, credential-, license-, or externally hosted data-dependent checks
+must be reported separately from the default offline suite. Record whether each
+such check ran, skipped, or failed; do not treat an unrecorded skip as a pass.

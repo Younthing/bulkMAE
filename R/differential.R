@@ -22,6 +22,12 @@ de_deseq2 <- function(
   if (test == "LRT" && is.null(reduced)) {
     stop("`reduced` is required when `test = \"LRT\"`.", call. = FALSE)
   }
+  if (test == "Wald" && !is.null(reduced)) {
+    stop("`reduced` is only valid when `test = \"LRT\"`.", call. = FALSE)
+  }
+  if (test == "LRT" && !inherits(reduced, "formula")) {
+    stop("`reduced` must be a formula for a likelihood-ratio test.", call. = FALSE)
+  }
 
   dds <- .make_deseq_dataset(x, experiment, assay, design)
   arguments <- list(object = dds, test = test, ...)
@@ -52,8 +58,18 @@ de_deseq2_results <- function(
     ...
 ) {
   .require_backend("DESeq2", "to extract DESeq2 results")
+  if (!methods::is(fit, "DESeqDataSet")) {
+    stop("`fit` must be a DESeqDataSet.", call. = FALSE)
+  }
   if (!is.null(contrast) && !is.null(name)) {
     stop("Supply only one of `contrast` and `name`.", call. = FALSE)
+  }
+  .differential_assert_probability(alpha, "alpha")
+  if (
+    !is.logical(independent_filtering) || length(independent_filtering) != 1L ||
+      is.na(independent_filtering)
+  ) {
+    stop("`independent_filtering` must be TRUE or FALSE.", call. = FALSE)
   }
 
   arguments <- list(
@@ -95,6 +111,12 @@ de_edger <- function(
     ...
 ) {
   .require_backend("edgeR", "to fit a quasi-likelihood model")
+  if (!is.logical(filter) || length(filter) != 1L || is.na(filter)) {
+    stop("`filter` must be TRUE or FALSE.", call. = FALSE)
+  }
+  if (!is.logical(robust) || length(robust) != 1L || is.na(robust)) {
+    stop("`robust` must be TRUE or FALSE.", call. = FALSE)
+  }
   if (!is.null(coef) && !is.null(contrast)) {
     stop("Supply only one of `coef` and `contrast`.", call. = FALSE)
   }
@@ -143,6 +165,9 @@ de_voom <- function(
 ) {
   .require_backend("edgeR", "to prepare counts for voom")
   .require_backend("limma", "to fit a voom model")
+  if (!is.logical(filter) || length(filter) != 1L || is.na(filter)) {
+    stop("`filter` must be TRUE or FALSE.", call. = FALSE)
+  }
   data <- mae_samples(x, experiment)
   design <- .model_matrix(formula, data)
   y <- .make_dge_list(x, experiment, assay)
@@ -292,7 +317,12 @@ dtu_diffsplice <- function(
     )
     if (!is.null(coef)) arguments$coef <- coef
     if (!is.null(contrast)) arguments$contrast <- contrast
-    return(do.call(edgeR::diffSplice, arguments))
+    function_name <- if ("diffSplice" %in% getNamespaceExports("edgeR")) {
+      "diffSplice"
+    } else {
+      "diffSpliceDGE"
+    }
+    return(do.call(getExportedValue("edgeR", function_name), arguments))
   }
   stop("No differential-splicing method is available for `fit`.", call. = FALSE)
 }
@@ -560,15 +590,20 @@ de_dream <- function(
     ...
 ) {
   .require_backend("edgeR", "to prepare counts for dream")
-  .require_backend("lme4", "to identify fixed effects in a dream formula")
-  .require_backend("limma", "to moderate dream results")
+  .require_backend("reformulas", "to identify fixed effects in a dream formula")
   .require_backend("variancePartition", "to fit a dream model")
+  if (!is.logical(filter) || length(filter) != 1L || is.na(filter)) {
+    stop("`filter` must be TRUE or FALSE.", call. = FALSE)
+  }
   data <- mae_samples(x, experiment)
-  fixed_formula <- lme4::nobars(formula)
+  fixed_formula <- reformulas::nobars(formula)
   design <- .model_matrix(fixed_formula, data)
   y <- .make_dge_list(x, experiment, assay)
   if (filter) {
     y <- y[edgeR::filterByExpr(y, design = design), , keep.lib.sizes = FALSE]
+  }
+  if (!nrow(y)) {
+    stop("No features remain after dream expression filtering.", call. = FALSE)
   }
   y <- edgeR::normLibSizes(y, method = normalize_method)
   voom <- variancePartition::voomWithDreamWeights(y, formula, data)
@@ -576,5 +611,5 @@ de_dream <- function(
   arguments <- list(exprObj = voom, formula = formula, data = data, ...)
   if (!is.null(contrast)) arguments$L <- contrast
   fit <- do.call(variancePartition::dream, arguments)
-  limma::eBayes(fit)
+  variancePartition::eBayes(fit)
 }

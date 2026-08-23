@@ -159,10 +159,59 @@ mae_create <- function(experiments, col_data, sample_map = NULL) {
     colData = col_data
   )
   if (!is.null(sample_map)) {
+    sample_map <- as.data.frame(sample_map, stringsAsFactors = FALSE)
+    required_columns <- c("assay", "primary", "colname")
+    if (!all(required_columns %in% names(sample_map))) {
+      stop(
+        "`sample_map` must contain `assay`, `primary`, and `colname` columns.",
+        call. = FALSE
+      )
+    }
+    sample_map <- sample_map[, required_columns, drop = FALSE]
+    invalid_value <- vapply(
+      sample_map,
+      function(value) {
+        !is.atomic(value) || anyNA(value) || any(!nzchar(as.character(value)))
+      },
+      logical(1)
+    )
+    if (any(invalid_value)) {
+      stop("`sample_map` values must be non-missing identifiers.", call. = FALSE)
+    }
+    sample_map[] <- lapply(sample_map, as.character)
+    if (anyDuplicated(sample_map[c("assay", "colname")])) {
+      stop(
+        "Each `sample_map` assay/colname pair must be unique.",
+        call. = FALSE
+      )
+    }
+    if (any(!sample_map$assay %in% names(experiments))) {
+      stop("`sample_map$assay` contains an unknown experiment.", call. = FALSE)
+    }
+    if (any(!sample_map$primary %in% rownames(col_data))) {
+      stop("`sample_map$primary` contains an unknown primary sample.", call. = FALSE)
+    }
+    valid_colname <- vapply(
+      seq_len(nrow(sample_map)),
+      function(index) {
+        sample_map$colname[[index]] %in%
+          colnames(experiments[[sample_map$assay[[index]]]])
+      },
+      logical(1)
+    )
+    if (any(!valid_colname)) {
+      stop(
+        "`sample_map$colname` contains an unknown experiment column.",
+        call. = FALSE
+      )
+    }
+    sample_map$assay <- factor(sample_map$assay, levels = names(experiments))
     arguments$sampleMap <- S4Vectors::DataFrame(sample_map)
   }
 
-  do.call(MultiAssayExperiment::MultiAssayExperiment, arguments)
+  result <- do.call(MultiAssayExperiment::MultiAssayExperiment, arguments)
+  mae_validate(result)
+  result
 }
 
 #' Import transcript abundance estimates with tximport
@@ -195,6 +244,14 @@ import_tximport <- function(
     stop("`files` must contain one non-empty path per sample.", call. = FALSE)
   }
   .assert_ids(names(files), "Sample names in `files`")
+  missing_files <- files[!file.exists(files)]
+  if (length(missing_files)) {
+    stop(
+      "Quantification files do not exist: ",
+      paste(utils::head(missing_files, 10L), collapse = ", "),
+      call. = FALSE
+    )
+  }
 
   col_data <- as.data.frame(col_data, optional = TRUE)
   .assert_ids(rownames(col_data), "`col_data` row names")
@@ -240,17 +297,38 @@ import_tximport <- function(
     return(NULL)
   }
 
-  counts <- as.matrix(SummarizedExperiment::assay(se, "counts"))
-  invalid_counts <- !is.numeric(counts)
-  if (!invalid_counts) {
-    invalid_counts <- any(!is.finite(counts)) || any(counts < 0)
-  }
-  if (invalid_counts) {
+  matrices <- lapply(required, function(name) {
+    as.matrix(SummarizedExperiment::assay(se, name))
+  })
+  names(matrices) <- required
+  same_shape <- vapply(
+    matrices,
+    function(value) {
+      identical(dim(value), dim(matrices$counts)) &&
+        identical(dimnames(value), dimnames(matrices$counts))
+    },
+    logical(1)
+  )
+  if (!all(same_shape)) {
     stop(
-      "The tximport counts assay must be non-negative with positive libraries.",
+      "The tximport counts, abundance, and length assays must align exactly.",
       call. = FALSE
     )
   }
+  valid_numeric <- vapply(
+    matrices,
+    function(value) {
+      is.numeric(value) && all(is.finite(value)) && all(value >= 0)
+    },
+    logical(1)
+  )
+  if (!all(valid_numeric)) {
+    stop(
+      "The tximport assays must contain finite, non-negative numeric values.",
+      call. = FALSE
+    )
+  }
+  counts <- matrices$counts
   library_sizes <- colSums(counts)
   if (any(!is.finite(library_sizes)) || any(library_sizes <= 0)) {
     stop(
@@ -258,11 +336,14 @@ import_tximport <- function(
       call. = FALSE
     )
   }
+  if (any(matrices$length <= 0)) {
+    stop("The tximport length assay must be strictly positive.", call. = FALSE)
+  }
 
   list(
     counts = counts,
-    abundance = as.matrix(SummarizedExperiment::assay(se, "abundance")),
-    length = as.matrix(SummarizedExperiment::assay(se, "length")),
+    abundance = matrices$abundance,
+    length = matrices$length,
     countsFromAbundance = info$counts_from_abundance
   )
 }

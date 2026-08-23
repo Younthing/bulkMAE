@@ -4,10 +4,9 @@ Title: Stateless Bulk Transcriptomics with MultiAssayExperiment
 Version: 0.4.0
 Authors@R: c(
     person(
-      given = "bulkMAE",
-      family = "Developers",
+      given = "Younthing",
       role = c("aut", "cre"),
-      email = "maintainer@example.org"
+      email = "fanxingfu3344@gmail.com"
     )
   )
 Description: Provides small, stateless adapters from MultiAssayExperiment
@@ -20,10 +19,10 @@ biocViews: RNASeq, GeneExpression, DifferentialExpression, DifferentialSplicing,
     Classification, Survival
 License: Artistic-2.0
 Encoding: UTF-8
-LazyData: false
 Depends:
-    R (>= 4.6.0)
+    R (>= 4.4.0)
 Imports:
+    grDevices,
     methods,
     MultiAssayExperiment,
     S4Vectors,
@@ -39,7 +38,7 @@ Suggests:
     decoupleR (>= 2.0.0),
     DESeq2,
     diffcoexp,
-    edgeR (>= 4.10.0),
+    edgeR (>= 4.0.0),
     fgsea,
     GENIE3,
     glmnet,
@@ -53,11 +52,14 @@ Suggests:
     metafor,
     MuSiC,
     NMF,
+    org.Hs.eg.db,
     RUVSeq,
     ReactomePA,
+    reformulas,
     rmarkdown,
     Rtsne,
     signatureSearch,
+    SingleCellExperiment,
     singscore,
     STRINGdb,
     survival,
@@ -70,5 +72,6 @@ Suggests:
     WGCNA
 VignetteBuilder: knitr
 Config/testthat/edition: 3
+Config/testthat/parallel: true
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2

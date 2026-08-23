@@ -1,5 +1,5 @@
 test_that("edgeR wrapper runs the complete quasi-likelihood workflow", {
-  skip_if_not_installed("edgeR", minimum_version = "4.10.0")
+  skip_if_not_installed("edgeR", minimum_version = "4.0.0")
   mae <- make_model_mae()
 
   fit <- de_edger(
@@ -8,7 +8,7 @@ test_that("edgeR wrapper runs the complete quasi-likelihood workflow", {
     formula = ~ condition,
     filter = FALSE
   )
-  expect_s3_class(fit, "DGEGLM")
+  expect_true(methods::is(fit, "DGEGLM"))
   expect_true(!is.null(fit$dispersion))
 
   tested <- de_edger(
@@ -18,7 +18,7 @@ test_that("edgeR wrapper runs the complete quasi-likelihood workflow", {
     filter = FALSE,
     coef = "conditiontreated"
   )
-  expect_s3_class(tested, "DGELRT")
+  expect_true(methods::is(tested, "DGELRT"))
 })
 
 test_that("DESeq2 wrapper builds and fits a name-aligned dataset", {
@@ -41,18 +41,18 @@ test_that("limma wrapper keeps expression features and sample alignment", {
   mae <- make_model_mae()
   fit <- de_limma(mae, "rna", ~ condition, assay = "log_expression")
 
-  expect_s3_class(fit, "MArrayLM")
+  expect_true(methods::is(fit, "MArrayLM"))
   expect_identical(rownames(fit$coefficients), paste0("gene", 1:100))
 })
 
 test_that("GSVA uses the parameter-object API", {
-  skip_if_not_installed("GSVA", minimum_version = "2.0.0")
+  suppressWarnings(skip_if_not_installed("GSVA", minimum_version = "2.0.0"))
   mae <- make_model_mae()
   sets <- list(
     first = paste0("gene", 1:20),
     second = paste0("gene", 21:40)
   )
-  scores <- score_gsva(
+  scores <- suppressWarnings(score_gsva(
     mae,
     "rna",
     gene_sets = sets,
@@ -60,7 +60,7 @@ test_that("GSVA uses the parameter-object API", {
     kcdf = "Gaussian",
     min_size = 5L,
     verbose = FALSE
-  )
+  ))
 
   expect_identical(dim(scores), c(2L, 8L))
   expect_identical(colnames(scores), paste0("sample", 1:8))
@@ -114,7 +114,7 @@ test_that("consensus clustering returns classes and diagnostics", {
 })
 
 test_that("goseq accepts a named logical selection vector", {
-  skip_if_not_installed("goseq")
+  suppressWarnings(skip_if_not_installed("goseq"))
   genes <- paste0("gene", seq_len(200))
   selected <- stats::setNames(seq_along(genes) <= 40L, genes)
   bias <- stats::setNames(seq_along(genes), genes)
@@ -124,7 +124,7 @@ test_that("goseq accepts a named logical selection vector", {
     stringsAsFactors = FALSE
   )
 
-  result <- enrich_goseq(
+  result <- suppressWarnings(enrich_goseq(
     selected,
     genome = "custom",
     id = "custom",
@@ -132,7 +132,7 @@ test_that("goseq accepts a named logical selection vector", {
     gene_to_category = mapping,
     categories = NULL,
     plot_fit = FALSE
-  )
+  ))
   expect_s3_class(result, "data.frame")
 })
 

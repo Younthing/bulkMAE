@@ -118,6 +118,9 @@ enrich_goseq <- function(
   ) {
     stop("`selected` must be a named binary or logical vector.", call. = FALSE)
   }
+  if (length(unique(selected)) != 2L) {
+    stop("`selected` must contain both selected and unselected genes.", call. = FALSE)
+  }
   if (!is.null(bias)) {
     if (!is.null(names(bias))) {
       if (
@@ -140,6 +143,9 @@ enrich_goseq <- function(
         "`bias` must have one finite, non-negative value per tested gene.",
         call. = FALSE
       )
+    }
+    if (length(unique(bias)) < 2L) {
+      stop("`bias` must vary across tested genes.", call. = FALSE)
     }
   }
   if (
@@ -471,6 +477,9 @@ score_gsva <- function(
     ...
 ) {
   .require_backend("GSVA", "to calculate GSVA scores")
+  if (!is.logical(verbose) || length(verbose) != 1L || is.na(verbose)) {
+    stop("`verbose` must be TRUE or FALSE.", call. = FALSE)
+  }
   matrix <- .pull_matrix(x, experiment, assay)
   if (any(!is.finite(matrix))) {
     stop("GSVA requires a finite assay matrix.", call. = FALSE)
@@ -515,6 +524,18 @@ score_ssgsea <- function(
     ...
 ) {
   .require_backend("GSVA", "to calculate ssGSEA scores")
+  if (
+    !is.logical(normalize) || length(normalize) != 1L || is.na(normalize) ||
+      !is.logical(verbose) || length(verbose) != 1L || is.na(verbose)
+  ) {
+    stop("`normalize` and `verbose` must be TRUE or FALSE.", call. = FALSE)
+  }
+  if (
+    !is.numeric(alpha) || length(alpha) != 1L || is.na(alpha) ||
+      !is.finite(alpha) || alpha < 0
+  ) {
+    stop("`alpha` must be one finite, non-negative number.", call. = FALSE)
+  }
   matrix <- .pull_matrix(x, experiment, assay)
   if (any(!is.finite(matrix))) {
     stop("ssGSEA requires a finite assay matrix.", call. = FALSE)
@@ -658,6 +679,7 @@ activity_decouple <- function(
   if (any(!is.finite(matrix))) {
     stop("decoupleR requires a finite assay matrix.", call. = FALSE)
   }
+  statistics <- .expand_decouple_statistics(statistics)
   network <- .prepare_decouple_network(
     network,
     rownames(matrix),
@@ -823,7 +845,7 @@ activity_tf <- function(
 
 .assert_named_numeric <- function(x, argument) {
   if (
-    !is.numeric(x) || is.null(names(x)) || anyNA(names(x)) ||
+    !is.numeric(x) || !length(x) || is.null(names(x)) || anyNA(names(x)) ||
       any(!nzchar(names(x)))
   ) {
     stop("`", argument, "` must be a named numeric vector.", call. = FALSE)
@@ -1133,8 +1155,28 @@ activity_tf <- function(
       stop("Named `method_args` must be named exactly as `statistics`.", call. = FALSE)
     }
     method_args <- method_args[statistics]
+  } else {
+    names(method_args) <- statistics
   }
   method_args
+}
+
+.expand_decouple_statistics <- function(statistics) {
+  if (
+    !is.null(statistics) && length(statistics) == 1L &&
+      is.character(statistics) && !is.na(statistics) &&
+      identical(tolower(statistics), "all")
+  ) {
+    methods <- decoupleR::show_methods()
+    function_column <- if ("Function" %in% names(methods)) {
+      methods$Function
+    } else {
+      methods[[1L]]
+    }
+    statistics <- sub("^run_", "", tolower(as.character(function_column)))
+    statistics <- setdiff(statistics, "consensus")
+  }
+  statistics
 }
 
 .validate_decouple_consensus <- function(

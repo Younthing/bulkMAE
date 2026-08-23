@@ -1,2 +1,7 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
+^bulkMAE\.Rcheck$
+^bulkMAE_[0-9.]+\.tar\.gz$
+^Rplots\.pdf$
+^tests/testthat/Rplots\.pdf$
+^omnipathr-log$

@@ -8,8 +8,8 @@ make_toy_mae <- function(n_features = 3L, n_samples = 4L) {
     )
   )
   samples <- data.frame(
-    condition = rep(c("a", "b"), length.out = n_samples),
-    batch = rep(c("x", "y"), length.out = n_samples),
+    condition = factor(rep(c("a", "b"), length.out = n_samples)),
+    batch = factor(rep(c("x", "y"), length.out = n_samples)),
     row.names = colnames(counts)
   )
   se <- mae_create_experiment(
@@ -33,8 +33,8 @@ make_model_mae <- function(n_features = 100L, n_samples = 8L, seed = 1L) {
     )
   )
   samples <- data.frame(
-    condition = rep(c("control", "treated"), each = n_samples / 2L),
-    batch = rep(c("a", "b"), length.out = n_samples),
+    condition = factor(rep(c("control", "treated"), each = n_samples / 2L)),
+    batch = factor(rep(c("a", "b"), length.out = n_samples)),
     row.names = colnames(counts)
   )
   experiment <- mae_create_experiment(

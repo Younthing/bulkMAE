@@ -63,20 +63,48 @@ quality result to the returned WGCNA list; it does not pause for confirmation.
 ```r
 library(bulkMAE)
 
+set.seed(1)
+sample_data <- data.frame(
+  condition = factor(rep(c("control", "treated"), each = 4)),
+  batch = factor(rep(c("A", "B"), times = 4)),
+  row.names = sprintf("sample%02d", seq_len(8))
+)
+counts <- matrix(
+  rnbinom(120 * 8, mu = 100, size = 5),
+  nrow = 120,
+  dimnames = list(
+    sprintf("gene%03d", seq_len(120)),
+    rownames(sample_data)
+  )
+)
+feature_data <- data.frame(
+  gene_length = seq(500, 2500, length.out = nrow(counts)),
+  row.names = rownames(counts)
+)
+
 rna <- mae_create_experiment(
   assays = counts,
-  col_data = sample_table,
+  col_data = sample_data,
+  row_data = feature_data,
   assay_name = "counts"
 )
+mae <- mae_create(list(rna = rna), sample_data)
 
-mae <- mae_create(
-  experiments = list(rna = rna),
-  col_data = sample_table
+tpm <- normalize_tpm(mae, "rna", lengths = "gene_length")
+mae_with_tpm <- mae_add_assay(mae, "rna", tpm, name = "tpm")
+mae_small <- mae_subset_features(
+  mae_with_tpm,
+  "rna",
+  features = rownames(counts)[seq_len(50)]
 )
 
-dds <- de_deseq2(mae, "rna", design = ~ batch + condition)
-res <- de_deseq2_results(dds, contrast = c("condition", "treated", "control"))
+mae_assays(mae_with_tpm, "rna")
+dim(mae_pull_assay(mae_small, "rna", "tpm"))
+colSums(mae_pull_assay(mae_with_tpm, "rna", "tpm"))
 ```
+
+These helpers return modified copies: `mae` remains the raw-count input, while
+`mae_with_tpm` and `mae_small` make each added or filtered data state explicit.
 
 Read the [complete walkthrough](vignettes/getting-started.Rmd), the
 [method-selection guide](inst/guides/expanded-methods-zh.md), and the
@@ -94,5 +122,11 @@ needed for a project instead of forcing one large, conflict-prone environment.
 
 MuSiC, immunedeconv, and BayesPrism are declared optional dependencies but are
 not available from every standard Bioconductor/CRAN repository. Their wrappers
-load the installed namespace only when called; install them from their official
-repositories and record the commit or release in the project lockfile.
+resolve the installed backend only when called and restore any temporary search
+path compatibility changes; install them from their official repositories and
+record the commit or release in the project lockfile.
+
+See the [Chinese pak dependency installation guide](inst/guides/dependency-installation-zh.md)
+for the complete CRAN/Bioconductor backend list, verified GitHub package
+specifications, and notes about resources that package installation cannot
+provide.

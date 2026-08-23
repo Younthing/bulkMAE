@@ -1,0 +1,7 @@
+bulkMAE.Rcheck/
+bulkMAE_*.tar.gz
+Rplots.pdf
+tests/testthat/Rplots.pdf
+omnipathr-log/
+.Rhistory
+.RData

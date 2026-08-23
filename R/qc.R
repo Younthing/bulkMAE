@@ -63,6 +63,9 @@ qc_library <- function(
   if (any(!is.finite(matrix))) {
     stop("The selected assay contains non-finite values.", call. = FALSE)
   }
+  if (any(matrix < 0)) {
+    stop("Library metrics require non-negative assay values.", call. = FALSE)
+  }
   if (
     !is.numeric(detected_above) || length(detected_above) != 1L ||
       is.na(detected_above) || !is.finite(detected_above)
@@ -356,10 +359,19 @@ qc_outliers <- function(
   if (!inherits(pca, "prcomp")) {
     stop("`pca` must be a prcomp object.", call. = FALSE)
   }
-  if (!length(components) || any(!components %in% seq_len(ncol(pca$x)))) {
+  if (
+    !is.numeric(components) || !length(components) || anyNA(components) ||
+      any(!is.finite(components)) || any(components != trunc(components)) ||
+      anyDuplicated(components) ||
+      any(!components %in% seq_len(ncol(pca$x)))
+  ) {
     stop("`components` contains unavailable principal components.", call. = FALSE)
   }
-  if (length(probability) != 1L || probability <= 0 || probability >= 1) {
+  if (
+    !is.numeric(probability) || length(probability) != 1L ||
+      is.na(probability) || !is.finite(probability) ||
+      probability <= 0 || probability >= 1
+  ) {
     stop("`probability` must be between zero and one.", call. = FALSE)
   }
 

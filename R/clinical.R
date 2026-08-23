@@ -103,16 +103,31 @@ surv_roc <- function(
   if (length(cause) != 1L || is.na(cause) || !cause %in% data[[event]]) {
     stop("`cause` must be one observed event code.", call. = FALSE)
   }
+  if (!0 %in% data[[event]]) {
+    stop("`event` must contain zero-coded censored observations.", call. = FALSE)
+  }
+  if (!any(data[[event]] == cause) || !any(data[[event]] == 0)) {
+    stop("Time-dependent ROC needs both events of interest and censoring.", call. = FALSE)
+  }
   if (any(times > max(data[[time]]))) {
     warning("Some evaluation `times` exceed the observed follow-up range.", call. = FALSE)
   }
-  timeROC::timeROC(
-    T = data[[time]],
-    delta = data[[event]],
-    marker = marker,
-    cause = cause,
-    times = times,
-    ...
+  backend <- getExportedValue("timeROC", "timeROC")
+  backend_environment <- new.env(parent = environment(backend))
+  backend_environment$Surv <- survival::Surv
+  environment(backend) <- backend_environment
+  do.call(
+    backend,
+    c(
+      list(
+        T = data[[time]],
+        delta = data[[event]],
+        marker = marker,
+        cause = cause,
+        times = times
+      ),
+      list(...)
+    )
   )
 }
 
@@ -240,6 +255,14 @@ ml_glmnet <- function(
   if (!is.character(family) || length(family) != 1L || is.na(family)) {
     stop("`family` must name one glmnet model family.", call. = FALSE)
   }
+  supported_families <- c("gaussian", "binomial", "poisson", "multinomial")
+  if (!family %in% supported_families) {
+    stop(
+      "`family` must be one of: ", paste(supported_families, collapse = ", "),
+      ". Use `surv_penalized()` for Cox models.",
+      call. = FALSE
+    )
+  }
   if (is.numeric(response)) {
     .assert_finite_numeric(response, "outcome")
   }
@@ -250,7 +273,13 @@ ml_glmnet <- function(
     if (length(class_sizes) < 2L) {
       stop("Classification requires at least two outcome classes.", call. = FALSE)
     }
+    if (family == "binomial" && length(class_sizes) != 2L) {
+      stop("Binomial classification requires exactly two outcome classes.", call. = FALSE)
+    }
     fold_limit <- min(class_sizes)
+  }
+  if (family == "poisson" && (!is.numeric(response) || any(response < 0))) {
+    stop("Poisson outcomes must be non-negative numeric values.", call. = FALSE)
   }
   .assert_folds(folds, nrow(predictors), fold_limit)
   .with_seed(
@@ -308,13 +337,15 @@ meta_effect <- function(
       .assert_finite_matrix(values, "Numeric moderators")
     }
   }
-  metafor::rma.uni(
+  .assert_scalar_character(method, "method")
+  arguments <- list(
     yi = effects,
     sei = standard_errors,
-    mods = moderators,
     method = method,
     ...
   )
+  if (!is.null(moderators)) arguments$mods <- moderators
+  do.call(metafor::rma.uni, arguments)
 }
 
 #' Prepare an up/down query for LINCS or CMap
@@ -491,6 +522,9 @@ drug_lincs <- function(
     data = data,
     na.action = stats::na.fail
   )
+  if (!inherits(stats::model.response(frame), "Surv")) {
+    stop("The left side of `formula` must construct a survival::Surv response.", call. = FALSE)
+  }
   for (column in frame) {
     if (is.numeric(column) && any(!is.finite(column))) {
       stop("Numeric survival-model variables must be finite.", call. = FALSE)

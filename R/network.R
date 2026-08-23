@@ -46,8 +46,19 @@ cluster_consensus <- function(
   if (any(!is.finite(matrix))) {
     stop("Consensus clustering requires finite assay values.", call. = FALSE)
   }
-  if (any(apply(matrix, 1L, stats::var) == 0)) {
-    stop("Remove zero-variance features before consensus clustering.", call. = FALSE)
+  feature_variance <- apply(matrix, 1L, stats::var)
+  variable <- is.finite(feature_variance) & feature_variance > 0
+  removed_features <- rownames(matrix)[!variable]
+  if (length(removed_features)) {
+    warning(
+      "Consensus clustering removed ", length(removed_features),
+      " non-variable feature(s).",
+      call. = FALSE
+    )
+    matrix <- matrix[variable, , drop = FALSE]
+  }
+  if (nrow(matrix) < 2L) {
+    stop("Consensus clustering needs at least two variable features.", call. = FALSE)
   }
   .network_assert_whole_number(max_k, "max_k", lower = 2L)
   .network_assert_whole_number(repetitions, "repetitions", lower = 1L)
@@ -67,7 +78,7 @@ cluster_consensus <- function(
   }
   .network_assert_seed(seed)
 
-  .with_seed(seed, ConsensusClusterPlus::ConsensusClusterPlus(
+  arguments <- c(list(
     d = matrix,
     maxK = as.integer(max_k),
     reps = as.integer(repetitions),
@@ -77,9 +88,14 @@ cluster_consensus <- function(
     distance = distance,
     seed = seed,
     title = title,
-    plot = plot,
-    ...
-  ))
+    plot = plot
+  ), list(...))
+  result <- .with_seed(
+    seed,
+    .consensus_cluster_call(arguments, suppress_plot = is.null(plot))
+  )
+  attr(result, "bulkMAERemovedFeatures") <- removed_features
+  result
 }
 
 #' Calculate consensus-clustering stability diagnostics
@@ -108,6 +124,10 @@ cluster_consensus_diagnostics <- function(
       (!is.character(plot) || length(plot) != 1L || is.na(plot) || !nzchar(plot))
   ) {
     stop("`plot` must be NULL or one non-empty string.", call. = FALSE)
+  }
+  if (is.null(plot)) {
+    grDevices::pdf(file = NULL)
+    on.exit(grDevices::dev.off(), add = TRUE)
   }
   ConsensusClusterPlus::calcICL(results, title = title, plot = plot, ...)
 }
@@ -257,14 +277,22 @@ coexpr_differential <- function(
   zero_variance <- apply(first, 1L, stats::var) == 0 |
     apply(second, 1L, stats::var) == 0
   if (any(zero_variance)) {
-    stop(
-      "Remove features with zero variance within either group: ",
-      paste(utils::head(rownames(matrix)[zero_variance], 10L), collapse = ", "),
+    removed_features <- rownames(matrix)[zero_variance]
+    warning(
+      "Differential co-expression removed ", length(removed_features),
+      " feature(s) with zero within-group variance.",
       call. = FALSE
     )
+    first <- first[!zero_variance, , drop = FALSE]
+    second <- second[!zero_variance, , drop = FALSE]
+  } else {
+    removed_features <- character()
+  }
+  if (nrow(first) < 2L) {
+    stop("Differential co-expression needs at least two variable features.", call. = FALSE)
   }
 
-  diffcoexp::diffcoexp(
+  result <- diffcoexp::diffcoexp(
     exprs.1 = first,
     exprs.2 = second,
     r.method = correlation,
@@ -275,6 +303,8 @@ coexpr_differential <- function(
     q.diffth = difference_fdr,
     q.dcgth = gene_fdr
   )
+  attr(result, "bulkMAERemovedFeatures") <- removed_features
+  result
 }
 
 #' Run non-negative matrix factorization
@@ -316,18 +346,21 @@ cluster_nmf <- function(
   }
   .network_assert_whole_number(runs, "runs", lower = 1L)
   .assert_scalar_character(method, "method")
+  arguments <- c(list(
+    x = matrix,
+    rank = rank,
+    method = method,
+    nrun = runs,
+    seed = seed
+  ), list(...))
   if (is.numeric(seed)) {
     .network_assert_seed(seed)
-    return(.with_seed(seed, NMF::nmf(
-      matrix,
-      rank = rank,
-      method = method,
-      nrun = runs,
-      seed = seed,
-      ...
-    )))
+    return(.with_attached_namespaces(
+      "NMF",
+      .with_seed(seed, do.call(NMF::nmf, arguments))
+    ))
   }
-  NMF::nmf(matrix, rank = rank, method = method, nrun = runs, seed = seed, ...)
+  .with_attached_namespaces("NMF", do.call(NMF::nmf, arguments))
 }
 
 #' Detect co-expression modules with WGCNA
@@ -432,7 +465,7 @@ coexpr_wgcna <- function(
       call. = FALSE
     )
   }
-  result <- .with_seed(seed, WGCNA::blockwiseModules(
+  arguments <- c(list(
     datExpr = data_expression,
     power = power,
     networkType = network_type,
@@ -441,9 +474,92 @@ coexpr_wgcna <- function(
     mergeCutHeight = merge_cut_height,
     numericLabels = numeric_labels,
     randomSeed = seed,
-    verbose = verbose,
+    verbose = verbose
+  ), list(...))
+  result <- .with_seed(
+    seed,
+    .wgcna_call("blockwiseModules", arguments)
+  )
+  result$bulkMAEQuality <- quality
+  result$bulkMAERemovedSamples <- removed_samples
+  result$bulkMAERemovedFeatures <- removed_features
+  result$bulkMAENetworkType <- network_type
+  result
+}
+
+#' Evaluate candidate WGCNA soft-thresholding powers
+#'
+#' Runs WGCNA's scale-free topology diagnostics directly from an MAE assay and
+#' applies the same automatic sample/feature quality filtering used by
+#' [coexpr_wgcna()]. The returned fit indices support, but do not replace, the
+#' scientific choice of a soft-thresholding power.
+#'
+#' @inheritParams coexpr_wgcna
+#' @param powers Positive candidate powers.
+#' @param r_squared Target scale-free topology fit passed as `RsquaredCut`.
+#' @param ... Additional arguments passed to [WGCNA::pickSoftThreshold()].
+#'
+#' @return The native `pickSoftThreshold()` list, augmented with
+#'   `bulkMAEQuality`, `bulkMAERemovedSamples`, and
+#'   `bulkMAERemovedFeatures` elements.
+#' @export
+coexpr_pick_power <- function(
+    x,
+    experiment,
+    assay,
+    powers = c(seq_len(10L), seq(12L, 20L, by = 2L)),
+    top_n = NULL,
+    network_type = "signed",
+    r_squared = 0.85,
+    verbose = 0,
     ...
-  ))
+) {
+  .require_backend("WGCNA", "to evaluate soft-thresholding powers")
+  if (
+    !is.numeric(powers) || !length(powers) || anyNA(powers) ||
+      any(!is.finite(powers)) || any(powers <= 0) || anyDuplicated(powers)
+  ) {
+    stop("`powers` must contain unique, finite positive values.", call. = FALSE)
+  }
+  network_type <- match.arg(
+    network_type,
+    c("unsigned", "signed", "signed hybrid")
+  )
+  .network_assert_range(r_squared, "r_squared", lower = 0, upper = 1)
+  matrix <- .top_variable_features(
+    .pull_matrix(x, experiment, assay),
+    top_n
+  )
+  data_expression <- t(matrix)
+  quality <- WGCNA::goodSamplesGenes(data_expression, verbose = 0)
+  removed_samples <- rownames(data_expression)[!quality$goodSamples]
+  removed_features <- colnames(data_expression)[!quality$goodGenes]
+  if (!quality$allOK) {
+    warning(
+      "WGCNA power selection removed ", length(removed_samples),
+      " sample(s) and ", length(removed_features), " feature(s).",
+      call. = FALSE
+    )
+    data_expression <- data_expression[
+      quality$goodSamples,
+      quality$goodGenes,
+      drop = FALSE
+    ]
+  }
+  if (nrow(data_expression) < 4L || ncol(data_expression) < 3L) {
+    stop(
+      "Too few samples or features remain for WGCNA power selection.",
+      call. = FALSE
+    )
+  }
+  arguments <- c(list(
+    data = data_expression,
+    powerVector = powers,
+    RsquaredCut = r_squared,
+    networkType = network_type,
+    verbose = verbose
+  ), list(...))
+  result <- .wgcna_call("pickSoftThreshold", arguments)
   result$bulkMAEQuality <- quality
   result$bulkMAERemovedSamples <- removed_samples
   result$bulkMAERemovedFeatures <- removed_features
@@ -585,7 +701,7 @@ coexpr_preservation <- function(
     test = list(data = test_expression)
   )
   multi_color <- list(reference = unname(module_colors[common]))
-  result <- .with_seed(seed, WGCNA::modulePreservation(
+  arguments <- c(list(
     multiData = multi_expression,
     multiColor = multi_color,
     referenceNetworks = 1,
@@ -593,9 +709,12 @@ coexpr_preservation <- function(
     networkType = network_type,
     randomSeed = seed,
     verbose = verbose,
-    savePermutedStatistics = save_permuted_statistics,
-    ...
-  ))
+    savePermutedStatistics = save_permuted_statistics
+  ), list(...))
+  result <- .with_seed(
+    seed,
+    .wgcna_call("modulePreservation", arguments)
+  )
   result$bulkMAEInputQuality <- list(
     reference = reference_quality,
     test = test_quality,
@@ -705,6 +824,27 @@ network_string <- function(
   .require_backend("STRINGdb", "to retrieve protein interactions")
   matrix <- .pull_matrix(x, experiment, assay)
   if (is.null(genes)) genes <- rownames(matrix)
+  genes <- .clean_gene_ids(genes, "genes")
+  .network_assert_whole_number(species, "species", lower = 1L)
+  .assert_scalar_character(version, "version")
+  .network_assert_range(
+    score_threshold,
+    "score_threshold",
+    lower = 0,
+    upper = 1000
+  )
+  if (
+    !is.character(input_directory) || length(input_directory) != 1L ||
+      is.na(input_directory)
+  ) {
+    stop("`input_directory` must be one string.", call. = FALSE)
+  }
+  if (
+    !is.logical(remove_unmapped) || length(remove_unmapped) != 1L ||
+      is.na(remove_unmapped)
+  ) {
+    stop("`remove_unmapped` must be TRUE or FALSE.", call. = FALSE)
+  }
   database <- STRINGdb::STRINGdb$new(
     version = version,
     species = species,
@@ -717,7 +857,12 @@ network_string <- function(
     removeUnmappedRows = remove_unmapped,
     takeFirst = TRUE
   )
-  database$get_interactions(mapping$STRING_id)
+  string_ids <- unique(mapping$STRING_id)
+  string_ids <- string_ids[!is.na(string_ids) & nzchar(string_ids)]
+  if (!length(string_ids)) {
+    stop("No supplied genes could be mapped to STRING identifiers.", call. = FALSE)
+  }
+  database$get_interactions(string_ids)
 }
 
 .network_assert_whole_number <- function(value, argument, lower = 0L) {
@@ -777,4 +922,35 @@ network_string <- function(
     stop("`seed` must be one non-negative integer.", call. = FALSE)
   }
   invisible(seed)
+}
+
+.consensus_cluster_call <- function(arguments, suppress_plot) {
+  backend <- getExportedValue(
+    "ConsensusClusterPlus",
+    "ConsensusClusterPlus"
+  )
+  compatibility_environment <- new.env(parent = environment(backend))
+  compatibility_environment$clusterTrackingPlot <- function(values) {
+    if (is.null(dim(values))) values <- base::matrix(values, nrow = 1L)
+    tracking_plot <- get(
+      "clusterTrackingPlot",
+      envir = asNamespace("ConsensusClusterPlus"),
+      inherits = FALSE
+    )
+    tracking_plot(values)
+  }
+  environment(backend) <- compatibility_environment
+
+  if (suppress_plot) {
+    grDevices::pdf(file = NULL)
+    on.exit(grDevices::dev.off(), add = TRUE)
+  }
+  do.call(backend, arguments)
+}
+
+.wgcna_call <- function(function_name, arguments) {
+  # WGCNA 1.74 resolves a character `corFnc` from its caller in one path.
+  # Keep the intended weighted implementation visible without attaching WGCNA.
+  cor <- getExportedValue("WGCNA", "cor")
+  do.call(getExportedValue("WGCNA", function_name), arguments)
 }

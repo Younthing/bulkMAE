@@ -12,13 +12,21 @@
 mae_validate <- function(x, experiment = NULL) {
   .assert_mae(x)
 
-  if (!is.null(experiment)) {
+  available <- mae_experiments(x)
+  if (!length(available)) {
+    stop("`x` must contain at least one experiment.", call. = FALSE)
+  }
+
+  if (is.null(experiment)) {
+    selected <- available
+  } else {
     .assert_scalar_character(experiment, "experiment")
-    if (!experiment %in% mae_experiments(x)) {
+    if (!experiment %in% available) {
       stop("Unknown experiment: ", experiment, call. = FALSE)
     }
-    .pull_se(x, experiment)
+    selected <- experiment
   }
+  for (name in selected) .pull_se(x, name)
 
   invisible(x)
 }
@@ -90,6 +98,113 @@ mae_samples <- function(x, experiment) {
   data
 }
 
+#' Add an aligned assay to one experiment
+#'
+#' This pure helper returns a modified copy of `x`. It accepts a matrix, a
+#' single-assay `SummarizedExperiment` such as a DESeq2 transformation, or a
+#' limma `EList` containing an `E` matrix. Feature and sample identifiers are
+#' aligned by name before insertion.
+#'
+#' @inheritParams mae_pull_assay
+#' @param value Matrix-like values, a single-assay `SummarizedExperiment`, or
+#'   an `EList` with an `E` matrix.
+#' @param name Name for the new assay.
+#' @param overwrite Replace an existing assay of the same name.
+#'
+#' @return A `MultiAssayExperiment` copy containing the added assay.
+#' @export
+mae_add_assay <- function(
+    x,
+    experiment,
+    value,
+    name,
+    overwrite = FALSE
+) {
+  mae_validate(x, experiment)
+  se <- MultiAssayExperiment::experiments(x)[[experiment]]
+  .assert_scalar_character(name, "name")
+  if (!is.logical(overwrite) || length(overwrite) != 1L || is.na(overwrite)) {
+    stop("`overwrite` must be TRUE or FALSE.", call. = FALSE)
+  }
+  if (name %in% SummarizedExperiment::assayNames(se) && !overwrite) {
+    stop(
+      "Assay `", name, "` already exists; set `overwrite = TRUE` to replace it.",
+      call. = FALSE
+    )
+  }
+
+  if (methods::is(value, "SummarizedExperiment")) {
+    available <- SummarizedExperiment::assayNames(value)
+    if (length(available) != 1L) {
+      stop(
+        "A `SummarizedExperiment` value must contain exactly one assay.",
+        call. = FALSE
+      )
+    }
+    value <- SummarizedExperiment::assay(value, 1L)
+  } else if (inherits(value, "EList")) {
+    if (is.null(value$E)) {
+      stop("An `EList` value must contain an `E` matrix.", call. = FALSE)
+    }
+    value <- value$E
+  }
+  value <- as.matrix(value)
+  if (!is.numeric(value) && !is.logical(value)) {
+    stop("`value` must contain numeric or logical assay values.", call. = FALSE)
+  }
+  if (is.null(rownames(value)) || is.null(colnames(value))) {
+    stop("`value` must have feature and sample names.", call. = FALSE)
+  }
+  .assert_ids(rownames(value), "`value` feature names")
+  .assert_ids(colnames(value), "`value` sample names")
+  if (
+    !setequal(rownames(value), rownames(se)) ||
+      !setequal(colnames(value), colnames(se))
+  ) {
+    stop(
+      "`value` must describe exactly the experiment features and samples.",
+      call. = FALSE
+    )
+  }
+  value <- value[rownames(se), colnames(se), drop = FALSE]
+  SummarizedExperiment::assay(se, name, withDimnames = FALSE) <- value
+
+  experiment_list <- MultiAssayExperiment::experiments(x)
+  experiment_list[[experiment]] <- se
+  MultiAssayExperiment::experiments(x) <- experiment_list
+  mae_validate(x, experiment)
+  x
+}
+
+#' Subset features in one experiment
+#'
+#' This pure helper returns a modified copy of `x`, leaving all other
+#' experiments and the `sampleMap` unchanged.
+#'
+#' @inheritParams mae_pull_assay
+#' @param features Unique feature names to retain, in the requested order.
+#'
+#' @return A `MultiAssayExperiment` copy with one experiment subset by row.
+#' @export
+mae_subset_features <- function(x, experiment, features) {
+  mae_validate(x, experiment)
+  se <- MultiAssayExperiment::experiments(x)[[experiment]]
+  if (is.null(features)) {
+    stop("`features` must contain feature names to retain.", call. = FALSE)
+  }
+  .select_features(
+    as.matrix(SummarizedExperiment::assay(se, 1L)),
+    features
+  )
+  se <- se[features, , drop = FALSE]
+
+  experiment_list <- MultiAssayExperiment::experiments(x)
+  experiment_list[[experiment]] <- se
+  MultiAssayExperiment::experiments(x) <- experiment_list
+  mae_validate(x, experiment)
+  x
+}
+
 .assert_mae <- function(x) {
   if (!methods::is(x, "MultiAssayExperiment")) {
     stop("`x` must be a MultiAssayExperiment.", call. = FALSE)
@@ -115,6 +230,27 @@ mae_samples <- function(x, experiment) {
   invisible(TRUE)
 }
 
+.with_attached_namespaces <- function(packages, code) {
+  packages <- unique(packages)
+  before <- search()
+  on.exit({
+    added <- setdiff(search(), before)
+    for (name in added[startsWith(added, "package:")]) {
+      if (name %in% search()) {
+        try(detach(name, character.only = TRUE), silent = TRUE)
+      }
+    }
+  }, add = TRUE)
+
+  for (package in packages) {
+    label <- paste0("package:", package)
+    if (!label %in% search()) {
+      suppressPackageStartupMessages(base::attachNamespace(package))
+    }
+  }
+  force(code)
+}
+
 .pull_se <- function(x, experiment) {
   .assert_mae(x)
   .assert_scalar_character(experiment, "experiment")
@@ -123,7 +259,17 @@ mae_samples <- function(x, experiment) {
     stop("Unknown experiment: ", experiment, call. = FALSE)
   }
 
-  se <- MultiAssayExperiment::getWithColData(x, experiment)
+  se <- withCallingHandlers(
+    MultiAssayExperiment::getWithColData(x, experiment),
+    warning = function(condition) {
+      if (startsWith(
+        conditionMessage(condition),
+        "Ignoring redundant column names in 'colData(x)'"
+      )) {
+        invokeRestart("muffleWarning")
+      }
+    }
+  )
   if (!methods::is(se, "SummarizedExperiment")) {
     stop(
       "Experiment `", experiment,
@@ -459,6 +605,12 @@ mae_samples <- function(x, experiment) {
 #' the native result produced by an established analysis backend. It does not
 #' mutate the input object or keep an analysis-status registry.
 #'
+#' Start with [mae_create()] or [import_tximport()], inspect alignment with
+#' [mae_validate()] and [mae_samples()], and then call an analysis family such
+#' as `qc_*`, `de_*`, `enrich_*`, `coexpr_*`, or `surv_*`. Statistical engines
+#' are optional dependencies and are checked only when their adapter is called.
+#'
+#' @seealso `vignette("getting-started", package = "bulkMAE")`
 #' @keywords internal
 #' @aliases bulkMAE-package
 "_PACKAGE"

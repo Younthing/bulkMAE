@@ -1,6 +1,6 @@
 ---
 title: "A stateless bulk transcriptomics workflow with bulkMAE"
-author: "bulkMAE developers"
+author: "Younthing"
 date: "`r Sys.Date()`"
 output: rmarkdown::html_vignette
 vignette: >
@@ -288,6 +288,8 @@ activities <- activity_decouple(
   assay = "vst",
   statistics = c("mlm", "ulm", "wsum"),
   method_args = list(NULL, NULL, NULL),
+  source = "pathway",
+  target = "genesymbol",
   mor = "weight",
   consensus = TRUE
 )

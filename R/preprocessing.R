@@ -21,8 +21,8 @@ normalize_tmm <- function(
 #' Estimate DESeq2 size factors
 #'
 #' @inheritParams mae_pull_assay
-#' @param type Size-factor estimator passed to [DESeq2::estimateSizeFactors()].
-#' @param ... Additional arguments passed to [DESeq2::estimateSizeFactors()].
+#' @param type Size-factor estimator passed to `DESeq2::estimateSizeFactors()`.
+#' @param ... Additional arguments passed to `DESeq2::estimateSizeFactors()`.
 #'
 #' @return A native `DESeqDataSet` with estimated size factors.
 #' @export
@@ -36,6 +36,95 @@ normalize_deseq <- function(
   .require_backend("DESeq2", "to estimate size factors")
   dds <- .make_deseq_dataset(x, experiment, assay, design = ~1)
   DESeq2::estimateSizeFactors(dds, type = type, ...)
+}
+
+#' Convert counts to transcripts per million
+#'
+#' Gene lengths may be supplied directly, read from one `rowData` column, or
+#' read from an aligned assay such as the sample-specific effective-length
+#' assay produced by [import_tximport()]. No external preprocessing step is
+#' required.
+#'
+#' @inheritParams mae_pull_assay
+#' @param lengths A positive numeric vector, a feature-named numeric vector, a
+#'   feature-by-sample matrix, or the name of a `rowData` column or assay.
+#'
+#' @return A finite feature-by-sample TPM matrix whose columns sum to one
+#'   million.
+#' @export
+normalize_tpm <- function(
+    x,
+    experiment,
+    lengths,
+    assay = "counts"
+) {
+  counts <- .as_count_matrix(x, experiment, assay)
+  se <- .pull_se(x, experiment)
+  if (is.character(lengths) && length(lengths) == 1L) {
+    row_data <- as.data.frame(
+      SummarizedExperiment::rowData(se),
+      optional = TRUE
+    )
+    if (lengths %in% names(row_data)) {
+      lengths <- row_data[[lengths]]
+      names(lengths) <- rownames(se)
+    } else if (lengths %in% SummarizedExperiment::assayNames(se)) {
+      lengths <- .pull_matrix(x, experiment, lengths)
+    } else {
+      stop(
+        "Character `lengths` must name a `rowData` column or assay.",
+        call. = FALSE
+      )
+    }
+  }
+
+  if (is.atomic(lengths) && is.null(dim(lengths))) {
+    if (!is.numeric(lengths)) {
+      stop("`lengths` must contain numeric values.", call. = FALSE)
+    }
+    if (!is.null(names(lengths))) {
+      .assert_ids(names(lengths), "Names of `lengths`")
+      if (!setequal(names(lengths), rownames(counts))) {
+        stop("Named `lengths` must contain every feature exactly once.", call. = FALSE)
+      }
+      lengths <- lengths[rownames(counts)]
+    } else if (length(lengths) != nrow(counts)) {
+      stop("`lengths` must contain one value per feature.", call. = FALSE)
+    }
+    lengths <- matrix(
+      lengths,
+      nrow = nrow(counts),
+      ncol = ncol(counts),
+      dimnames = dimnames(counts)
+    )
+  } else {
+    lengths <- as.matrix(lengths)
+    if (!is.numeric(lengths)) {
+      stop("`lengths` must contain numeric values.", call. = FALSE)
+    }
+    if (is.null(rownames(lengths)) || is.null(colnames(lengths))) {
+      stop("Matrix `lengths` must have feature and sample names.", call. = FALSE)
+    }
+    .assert_ids(rownames(lengths), "`lengths` feature names")
+    .assert_ids(colnames(lengths), "`lengths` sample names")
+    if (
+      !setequal(rownames(lengths), rownames(counts)) ||
+        !setequal(colnames(lengths), colnames(counts))
+    ) {
+      stop("Matrix `lengths` must align exactly with the count assay.", call. = FALSE)
+    }
+    lengths <- lengths[rownames(counts), colnames(counts), drop = FALSE]
+  }
+  if (any(!is.finite(lengths)) || any(lengths <= 0)) {
+    stop("`lengths` must contain finite, strictly positive values.", call. = FALSE)
+  }
+
+  reads_per_kilobase <- counts / (lengths / 1000)
+  totals <- colSums(reads_per_kilobase)
+  if (any(!is.finite(totals)) || any(totals <= 0)) {
+    stop("TPM normalization requires positive per-sample scaled totals.", call. = FALSE)
+  }
+  sweep(reads_per_kilobase, 2L, totals / 1e6, "/")
 }
 
 #' Apply the DESeq2 variance-stabilizing transformation
@@ -313,8 +402,24 @@ adjust_sva <- function(
   data <- mae_samples(x, experiment)
   full_model <- .model_matrix(full, data)
   null_model <- .model_matrix(null, data)
+  if (qr(cbind(full_model, null_model))$rank > qr(full_model)$rank) {
+    stop("The `null` model must be nested within the `full` model.", call. = FALSE)
+  }
+  residual_df <- nrow(full_model) - qr(full_model)$rank
   if (is.null(n_surrogates)) {
     n_surrogates <- sva::num.sv(matrix, full_model, method = "leek")
+  }
+  if (
+    !is.numeric(n_surrogates) || length(n_surrogates) != 1L ||
+      is.na(n_surrogates) || !is.finite(n_surrogates) ||
+      n_surrogates != trunc(n_surrogates) || n_surrogates < 0L ||
+      n_surrogates > residual_df
+  ) {
+    stop(
+      "`n_surrogates` must be an integer from zero through the full-model ",
+      "residual degrees of freedom (", residual_df, ").",
+      call. = FALSE
+    )
   }
 
   sva::sva(
@@ -346,6 +451,39 @@ adjust_ruv <- function(
 ) {
   .require_backend("RUVSeq", "to estimate unwanted factors")
   counts <- .as_count_matrix(x, experiment, assay)
+  if (is.character(controls)) {
+    if (
+      !length(controls) || anyNA(controls) || any(!nzchar(controls)) ||
+        anyDuplicated(controls)
+    ) {
+      stop("Character `controls` must contain unique feature names.", call. = FALSE)
+    }
+    missing <- setdiff(controls, rownames(counts))
+    if (length(missing)) {
+      stop(
+        "Unknown control features: ",
+        paste(utils::head(missing, 10L), collapse = ", "),
+        call. = FALSE
+      )
+    }
+  } else if (is.logical(controls)) {
+    if (length(controls) != nrow(counts) || anyNA(controls) || !any(controls)) {
+      stop("Logical `controls` must select at least one assay feature.", call. = FALSE)
+    }
+  } else if (
+    !is.numeric(controls) || !length(controls) || anyNA(controls) ||
+      any(!is.finite(controls)) || any(controls != trunc(controls)) ||
+      any(controls < 1L) || any(controls > nrow(counts)) ||
+      anyDuplicated(controls)
+  ) {
+    stop("Numeric `controls` must be unique valid feature indices.", call. = FALSE)
+  }
+  if (
+    !is.numeric(k) || length(k) != 1L || is.na(k) || !is.finite(k) ||
+      k != trunc(k) || k < 1L || k >= ncol(counts)
+  ) {
+    stop("`k` must be a positive integer smaller than the sample count.", call. = FALSE)
+  }
   RUVSeq::RUVg(counts, cIdx = controls, k = k, ...)
 }
 
@@ -421,9 +559,29 @@ de_variance <- function(x, experiment, formula, assay, ...) {
   se <- .pull_se(x, experiment)
   txi <- .tximport_list(se, assay)
   if (!is.null(txi)) {
-    return(edgeR::DGEListFromTximport(txi))
+    if ("DGEListFromTximport" %in% getNamespaceExports("edgeR")) {
+      constructor <- getExportedValue("edgeR", "DGEListFromTximport")
+      return(constructor(txi))
+    }
+    return(.dge_list_from_tximport(txi))
   }
   edgeR::DGEList(counts = .as_count_matrix(x, experiment, assay))
+}
+
+.dge_list_from_tximport <- function(txi) {
+  y <- edgeR::DGEList(counts = txi$counts)
+  mode <- txi$countsFromAbundance %||% "no"
+  if (!identical(mode, "no")) {
+    return(y)
+  }
+
+  length_factors <- txi$length /
+    exp(rowMeans(log(txi$length)))
+  normalized_counts <- txi$counts / length_factors
+  effective_libraries <- edgeR::normLibSizes(normalized_counts) *
+    colSums(normalized_counts)
+  offsets <- log(sweep(length_factors, 2L, effective_libraries, "*"))
+  edgeR::scaleOffset(y, offsets)
 }
 
 .assert_multiple_batches <- function(batch, argument) {

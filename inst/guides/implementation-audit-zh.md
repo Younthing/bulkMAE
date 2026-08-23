@@ -93,28 +93,31 @@ set 混成同一个概念。
 包含全部方法的巨大环境。
 
 MuSiC、immunedeconv 和 BayesPrism 已作为可选依赖声明，但不在每个标准
-CRAN/Bioconductor 仓库中可用。使用它们时应从维护者官方仓库安装，
-并用 `renv` 或容器记录 commit/release。正式提交 Bioconductor 前还需确认
-构建系统能否解析这些可选依赖，否则应将其拆到 companion package。
+CRAN/Bioconductor 仓库中可用。标准后端与三个官方 GitHub 后端统一按
+[pak 依赖安装指南](dependency-installation-zh.md) 安装，并在项目锁文件或容器
+中记录 commit/release。正式提交 Bioconductor 前还需确认构建系统能否解析
+这些可选依赖，否则应将其拆到 companion package。
 
 `import_tximport()` 会把 `counts`、`abundance`、`length` 和
 `countsFromAbundance` 模式保留在 SE 中。DESeq2 与 edgeR 包装器分别重建官方
 要求的 tximport 列表并调用 `DESeqDataSetFromTximport()` 或
 `DGEListFromTximport()`，不会把 estimated counts 冒充普通整数计数。
 
-## 5. 当前验证状态
+## 5. 发布验证要求
 
-当前执行环境没有 R/Rscript，因此没有声称完成 `R CMD check` 或后端运行测试。
-已完成的静态验证包括：
+本节定义发布门槛，不报告某一次工作目录或临时环境的通过状态。每个候选发布
+必须在干净、版本互相兼容的 R/Bioconductor 库中按
+[依赖安装指南](dependency-installation-zh.md) 重建环境，并保存可复核的日志。
 
-- 规定的十个 `R/` 文件均存在；
-- 导出函数有随源码交付的临时聚合 Rd 索引；有 R 的发布环境应先
-  删除 `man/bulkMAE-api.Rd`，再用 roxygen2 重建并审核每函数 `man/` 文档和
-  `NAMESPACE`；
-- R 源文件的字符串和圆/方/花括号边界平衡；
-- R 源码行宽不超过 100 字符；
-- 已加入 MAE 基础访问、显式 `sampleMap`、数据契约和条件后端测试。
+发布记录至少应包含：
 
-发布前必须按 [review-checklist.md](review-checklist.md) 在当前 Bioconductor 容器中
-重建文档、
-执行测试和检查，并用每个后端的官方小数据集完成一次烟雾测试。
+- roxygen 文档和 `NAMESPACE` 的重建差异；
+- testthat、`R CMD check --as-cran` 和 `BiocCheck` 的完整日志；
+- R、Bioconductor、所有实际运行后端以及 GitHub commit 的版本信息；
+- 每个离线后端的小型模拟数据成功路径；
+- 使用官方示例数据完成的后端烟雾测试；
+- 在线、授权或外部数据库测试的执行日期、资源版本以及运行/跳过状态。
+
+只有发布记录中存在对应日志时，才能声明某个检查或后端已经通过。缺少依赖、
+网络、凭据或授权导致的跳过必须明确列出，不能合并计入通过数量。具体项目按
+[review-checklist.md](review-checklist.md) 执行。
