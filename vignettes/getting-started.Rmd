@@ -1,0 +1,466 @@
+---
+title: "A stateless bulk transcriptomics workflow with bulkMAE"
+author: "bulkMAE developers"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{A stateless bulk transcriptomics workflow with bulkMAE}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
+```
+
+Most sections are a cookbook and remain unevaluated because they require
+optional backends or external resources. The construction and local QC chunks
+below are deliberately executable during vignette builds.
+
+## 1. Data contract
+
+`bulkMAE` uses a `MultiAssayExperiment` as the public input because it already
+defines the three relationships needed by bulk studies:
+
+1. `experiments()` stores `SummarizedExperiment` leaves;
+2. `colData()` stores primary subject/sample metadata;
+3. `sampleMap()` relates assay columns to primary samples, including replicated
+   measurements or assay-specific names.
+
+The wrappers call `getWithColData()` before analysis. Consequently, a backend
+sees an ordinary assay and metadata table whose rows and columns are aligned.
+No result is written back to the MAE.
+
+Public functions use `<family>_<method>()` or `<family>_<operation>()` names.
+Thus `de_`, `enrich_`, `score_`, `activity_`, `coexpr_`, and `surv_` each form
+one discoverable autocomplete family. The complete 0.3-to-0.4 rename table is
+installed as `inst/guides/naming-migration-zh.md`.
+
+## 2. Construct an MAE
+
+```{r construct, eval=TRUE}
+library(bulkMAE)
+
+set.seed(1)
+counts <- matrix(
+  rnbinom(1000, mu = 100, size = 1 / 0.2),
+  nrow = 100,
+  dimnames = list(
+    paste0("gene", seq_len(100)),
+    paste0("sample", seq_len(10))
+  )
+)
+
+sample_table <- data.frame(
+  condition = rep(c("control", "treated"), each = 5),
+  batch = rep(c("A", "B"), 5),
+  subject_id = rep(paste0("subject", seq_len(5)), 2),
+  time = seq(100, 1000, length.out = 10),
+  event = rep(c(0, 1), 5),
+  age = seq(45, 63, by = 2),
+  stage = rep(c("I", "II"), 5),
+  molecular_subtype = rep(c("A", "B"), each = 5),
+  risk_score = seq(-1, 1, length.out = 10),
+  row.names = colnames(counts)
+)
+
+rna <- mae_create_experiment(
+  assays = list(
+    counts = counts,
+    log_expression = log2(counts + 1)
+  ),
+  col_data = sample_table
+)
+mae <- mae_create(list(rna = rna), sample_table)
+
+mae_validate(mae, "rna")
+mae_assays(mae, "rna")
+```
+
+For Salmon, kallisto, or RSEM estimates, use `import_tximport()` to create the
+leaf. Do not round abundance-scaled values and pass them to DESeq2 unless the
+DESeq2/tximport documentation explicitly supports that construction.
+
+## 3. Quality control
+
+Use a transformed, approximately homoscedastic assay for distances and sample
+correlations. Use raw counts for library depth and expression filtering.
+
+```{r local-qc, eval=TRUE}
+metrics <- qc_library(mae, "rna", assay = "counts")
+pca_local <- reduce_pca(mae, "rna", assay = "log_expression", top_n = 50)
+
+head(metrics)
+head(pca_local$x[, seq_len(2), drop = FALSE])
+```
+
+```{r qc}
+keep <- filter_expr(
+  mae,
+  "rna",
+  group = "condition"
+)
+
+qc_library(mae, "rna")
+
+vst <- transform_vst(mae, "rna", blind = TRUE)
+vst_mae <- mae_create(
+  list(
+    rna = mae_create_experiment(
+      assays = list(vst = SummarizedExperiment::assay(vst)),
+      col_data = sample_table
+    )
+  ),
+  sample_table
+)
+
+pca <- reduce_pca(vst_mae, "rna", "vst", top_n = 50)
+qc_outliers(pca)
+```
+
+`qc_outliers()` is only a review aid. It must not be used as an automatic
+sample-removal rule. Investigate library metrics, metadata, and experimental
+records before excluding a sample or relabelling it.
+
+## 4. Differential expression
+
+### DESeq2
+
+```{r deseq2}
+dds <- de_deseq2(
+  mae,
+  "rna",
+  design = ~ batch + condition
+)
+
+de <- de_deseq2_results(
+  dds,
+  contrast = c("condition", "treated", "control")
+)
+```
+
+### edgeR quasi-likelihood
+
+```{r edger}
+edge_test <- de_edger(
+  mae,
+  "rna",
+  formula = ~ batch + condition,
+  coef = "conditiontreated"
+)
+```
+
+### limma-voom
+
+```{r limma}
+design <- model.matrix(~ batch + condition, sample_table)
+contrast <- limma::makeContrasts(conditiontreated, levels = design)
+
+limma_fit <- de_voom(
+  mae,
+  "rna",
+  formula = ~ batch + condition,
+  contrasts = contrast
+)
+```
+
+### Repeated measurements
+
+```{r dream}
+dream_fit <- de_dream(
+  mae,
+  "rna",
+  formula = ~ condition + (1 | subject_id)
+)
+```
+
+Time, dose, interaction, and paired designs are model-formula problems. The
+wrapper does not convert strings such as “paired” into hidden design matrices;
+write the intended formula and inspect its coefficients.
+
+## 5. Batch and unwanted variation
+
+ComBat and ComBat-seq produce corrected matrices for visualization or methods
+that explicitly need corrected input. For differential expression, modelling a
+known batch in the design is usually more transparent than replacing counts.
+
+```{r batch}
+combat <- adjust_combat(
+  vst_mae,
+  "rna",
+  assay = "vst",
+  batch = "batch",
+  preserve = ~ condition
+)
+
+sv <- adjust_sva(
+  vst_mae,
+  "rna",
+  assay = "vst",
+  full = ~ batch + condition,
+  null = ~ batch
+)
+```
+
+Surrogate variables and RUV factors must be added explicitly to the downstream
+design. `bulkMAE` does not silently refit a model.
+
+## 6. Functional interpretation
+
+```{r enrichment}
+ranks <- setNames(de$stat, rownames(de))
+ranks <- ranks[is.finite(ranks)]
+
+fgsea_result <- enrich_fgsea(ranks, hallmark_sets)
+go_result <- enrich_go(
+  genes = significant_entrez_ids,
+  method = "ora",
+  org_db = org.Hs.eg.db,
+  universe = tested_entrez_ids
+)
+
+goseq_result <- enrich_goseq(
+  selected = setNames(rownames(de) %in% significant_gene_ids, rownames(de)),
+  genome = "hg38",
+  id = "ensGene",
+  bias = tested_gene_lengths,
+  plot_fit = FALSE
+)
+
+gsva_scores <- score_gsva(
+  vst_mae,
+  "rna",
+  gene_sets = hallmark_sets,
+  assay = "vst"
+)
+
+pathway_activity <- activity_progeny(vst_mae, "rna", assay = "vst")
+tf_activity <- activity_tf(vst_mae, "rna", assay = "vst")
+```
+
+The gene universe for ORA should be the set of genes that could have been
+selected after filtering, not every gene in an annotation database.
+
+### Choosing among gene-set tests
+
+Use ORA for a selected gene list, preranked GSEA for a genome-wide statistic,
+CAMERA/FRY/mroast when the expression matrix and design should remain in the
+test, and GSVA/ssGSEA/singscore for per-sample scores.
+
+```{r gene-set-tests}
+camera_result <- enrich_camera(
+  vst_mae,
+  "rna",
+  gene_sets = hallmark_sets,
+  formula = ~ batch + condition,
+  contrast = contrast[, 1],
+  assay = "vst"
+)
+
+reactome_result <- enrich_reactome(
+  ranks = ranks,
+  method = "gsea",
+  organism = "human"
+)
+sample_scores <- score_singscore(
+  vst_mae,
+  "rna",
+  up_set = interferon_up,
+  down_set = interferon_down,
+  assay = "vst"
+)
+```
+
+### decoupleR is a multi-method engine
+
+`activity_decouple()` is not limited to transcription factors. The official engine
+also exposes enrichment-style algorithms and network-aware activity methods.
+The network remains an explicit input so its direction and weights are visible.
+
+```{r decouple}
+activity_methods()
+
+resource <- activity_resource("PROGENy", organism = "human")
+activities <- activity_decouple(
+  vst_mae,
+  "rna",
+  network = resource,
+  assay = "vst",
+  statistics = c("mlm", "ulm", "wsum"),
+  method_args = list(NULL, NULL, NULL),
+  mor = "weight",
+  consensus = TRUE
+)
+```
+
+Use `statistics = c("aucell", "fgsea", "gsva", "ora")` only when those
+statistics match the question and input scale. Use `mlm`, `ulm`, `viper`,
+`wmean`, or `wsum` when regulator-target signs or weights are part of the
+scientific model. Confirm current names with `activity_methods()` because the
+backend, rather than bulkMAE, owns the method registry.
+
+## 7. Networks and subtypes
+
+```{r systems}
+nmf_fit <- cluster_nmf(mae, "rna", assay = "log_expression", rank = 2:6)
+
+consensus_fit <- cluster_consensus(
+  vst_mae,
+  "rna",
+  assay = "vst",
+  max_k = 6,
+  repetitions = 1000,
+  plot = NULL
+)
+consensus_diagnostics <- cluster_consensus_diagnostics(
+  consensus_fit,
+  plot = NULL
+)
+classes_k3 <- cluster_consensus_classes(consensus_fit, k = 3)
+
+wgcna_fit <- coexpr_wgcna(
+  vst_mae,
+  "rna",
+  assay = "vst",
+  power = 6,
+  top_n = 5000
+)
+
+genie_weights <- network_genie3(
+  vst_mae,
+  "rna",
+  assay = "vst",
+  regulators = transcription_factors
+)
+genie_edges <- network_genie3_links(genie_weights, top = 1000)
+```
+
+Choose WGCNA's soft threshold from the study data; the example value is not a
+universal default. Likewise, decide the number of molecular subtypes using
+stability and biological/clinical validation rather than a single index.
+`coexpr_wgcna()` follows `goodSamplesGenes()`: unusable samples and features are
+removed automatically, a warning lists the change, and the returned native
+WGCNA result retains the quality object and removed names for audit.
+
+### Differential co-expression (DCA)
+
+In this package DCA means differential co-expression analysis. It asks whether
+gene-gene correlations differ between two groups; it is distinct from
+differential expression.
+
+```{r dca}
+dca <- coexpr_differential(
+  vst_mae,
+  "rna",
+  group = "condition",
+  contrast = c("control", "treated"),
+  assay = "vst",
+  features = highly_variable_genes
+)
+```
+
+Correlation testing scales roughly with the square of the feature count. Apply
+a biologically defensible, outcome-independent feature filter before DCA and
+report all correlation and FDR thresholds.
+
+### Time courses and differential usage
+
+`de_masigpro()` is the specialized path for multi-group polynomial time-course
+or dose-response models. Its `edesign` must follow maSigPro's documented
+`Time`, `Replicates`, and group-indicator layout. `dtu_diffsplice()` operates
+after a native edgeR or limma exon/transcript-level fit.
+
+```{r specialized-differential}
+time_result <- de_masigpro(
+  time_mae,
+  "rna",
+  edesign = time_design,
+  assay = "counts",
+  degree = 2,
+  counts = TRUE
+)
+
+splice_result <- dtu_diffsplice(
+  exon_fit,
+  gene_id = exon_annotation$gene_id,
+  feature_id = exon_annotation$exon_id
+)
+```
+
+## 8. Tissue deconvolution
+
+```{r deconvolution}
+fractions <- deconv(
+  tpm_mae,
+  "rna",
+  assay = "tpm",
+  method = "quantiseq"
+)
+
+music_fit <- deconv_music(
+  mae,
+  "rna",
+  assay = "counts",
+  sc_reference = reference_sce,
+  clusters = "cell_type",
+  samples = "donor"
+)
+
+cibersortx_table <- deconv_cibersortx_input(tpm_mae, "rna")
+```
+
+The CIBERSORTx helper stops at input preparation because execution occurs in an
+external service or container. Check data-governance requirements before any
+upload. BayesPrism and MuSiC require an appropriate single-cell reference; the
+MAE holds the bulk data, not the reference-specific modelling choices.
+
+## 9. Clinical models and drug reversal
+
+Feature selection must occur inside each resampling fold. Selecting genes on
+the full cohort before cross-validation leaks outcome information.
+
+```{r clinical}
+cox_fit <- surv_cox(
+  vst_mae,
+  "rna",
+  formula = survival::Surv(time, event) ~ age + stage
+)
+
+km_fit <- surv_km(
+  vst_mae,
+  "rna",
+  formula = survival::Surv(time, event) ~ molecular_subtype
+)
+
+roc_fit <- surv_roc(
+  vst_mae,
+  "rna",
+  time = "time",
+  event = "event",
+  marker = "risk_score",
+  times = c(300, 600, 900)
+)
+
+penalized <- surv_penalized(
+  vst_mae,
+  "rna",
+  time = "time",
+  event = "event",
+  assay = "vst",
+  folds = 5
+)
+
+query <- drug_query(ranks, n = 150)
+lincs_result <- drug_lincs(query, reference_database = lincs_path)
+```
+
+For disease reversal, prioritize negative connectivity scores. Interpret them
+with cell line, dose, time, mechanism, toxicity, and external validation; a
+connectivity score is not clinical evidence.
+
+## 10. Reproducibility
+
+Record the MAE creation code, package versions, design formulas, contrasts,
+feature filters, gene identifier release, pathway database release, random
+seeds, and the exact external reference used for deconvolution or LINCS. The
+package stays stateless so these choices remain visible in the analysis script.

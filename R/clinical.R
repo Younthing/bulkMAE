@@ -1,0 +1,564 @@
+#' Score a gene-expression signature
+#'
+#' @inheritParams mae_pull_assay
+#' @param weights Named numeric feature weights, or an unweighted character
+#'   vector of feature names.
+#' @param center,scale Either a logical value, or a named numeric vector of
+#'   training-set feature centers/scales. `TRUE` estimates values from the
+#'   current cohort and is therefore unsuitable for locked external
+#'   validation; supply frozen training values instead.
+#' @param na_rm Remove missing values when summing scores.
+#'
+#' @return A named numeric vector with one score per sample.
+#' @export
+score_signature <- function(
+    x,
+    experiment,
+    weights,
+    assay,
+    center = FALSE,
+    scale = FALSE,
+    na_rm = FALSE
+) {
+  matrix <- .pull_matrix(x, experiment, assay)
+  if (!is.logical(na_rm) || length(na_rm) != 1L || is.na(na_rm)) {
+    stop("`na_rm` must be `TRUE` or `FALSE`.", call. = FALSE)
+  }
+  if (is.character(weights)) {
+    features <- unique(weights)
+    if (!length(features) || anyNA(features) || any(!nzchar(features))) {
+      stop("`weights` must contain non-missing feature identifiers.", call. = FALSE)
+    }
+    weights <- stats::setNames(rep(1 / length(features), length(features)), features)
+  } else {
+    .assert_named_numeric(weights, "weights")
+    features <- names(weights)
+  }
+  matrix <- .select_features(matrix, features)
+  if (any(is.infinite(matrix)) || (!na_rm && anyNA(matrix))) {
+    stop(
+      "Signature features must be finite; set `na_rm = TRUE` only to ignore NA values.",
+      call. = FALSE
+    )
+  }
+  matrix <- .standardize_signature(matrix, center, scale, na_rm)
+  score <- colSums(matrix * weights[rownames(matrix)], na.rm = na_rm)
+  if (any(!is.finite(score))) {
+    stop("Signature scoring produced non-finite values.", call. = FALSE)
+  }
+  stats::setNames(score, colnames(matrix))
+}
+
+#' Fit Kaplan-Meier survival curves
+#'
+#' @inheritParams mae_samples
+#' @param formula Survival formula evaluated against aligned sample metadata.
+#' @param ... Additional arguments passed to [survival::survfit()].
+#'
+#' @return A native `survfit` object.
+#' @export
+surv_km <- function(x, experiment, formula, ...) {
+  .require_backend("survival", "to fit Kaplan-Meier curves")
+  data <- mae_samples(x, experiment)
+  .validate_survival_formula(formula, data)
+  survival::survfit(formula = formula, data = data, ...)
+}
+
+#' Calculate time-dependent ROC curves
+#'
+#' @inheritParams mae_samples
+#' @param time,event Metadata columns containing follow-up time and event.
+#' @param marker Metadata column or numeric marker vector.
+#' @param times Evaluation times.
+#' @param cause Event code treated as the outcome of interest.
+#' @param ... Additional arguments passed to [timeROC::timeROC()].
+#'
+#' @return A native `timeROC` object.
+#' @export
+surv_roc <- function(
+    x,
+    experiment,
+    time,
+    event,
+    marker,
+    times,
+    cause = 1,
+    ...
+) {
+  .require_backend("timeROC", "to calculate time-dependent ROC curves")
+  data <- mae_samples(x, experiment)
+  .assert_metadata_column(data, time, "time")
+  .assert_metadata_column(data, event, "event")
+  if (identical(time, event)) {
+    stop("`time` and `event` must name different metadata columns.", call. = FALSE)
+  }
+  marker <- .column_or_vector(marker, data, "marker")
+  .assert_finite_numeric(data[[time]], "time")
+  .assert_finite_numeric(data[[event]], "event")
+  .assert_finite_numeric(marker, "marker")
+  .assert_finite_numeric(times, "times")
+  if (any(data[[time]] < 0) || any(times <= 0)) {
+    stop("Follow-up `time` must be non-negative and `times` must be positive.", call. = FALSE)
+  }
+  if (length(cause) != 1L || is.na(cause) || !cause %in% data[[event]]) {
+    stop("`cause` must be one observed event code.", call. = FALSE)
+  }
+  if (any(times > max(data[[time]]))) {
+    warning("Some evaluation `times` exceed the observed follow-up range.", call. = FALSE)
+  }
+  timeROC::timeROC(
+    T = data[[time]],
+    delta = data[[event]],
+    marker = marker,
+    cause = cause,
+    times = times,
+    ...
+  )
+}
+
+#' Fit a Cox proportional-hazards model
+#'
+#' @inheritParams mae_pull_assay
+#' @param formula Cox model formula. Clinical variables are read from MAE
+#'   sample metadata.
+#' @param features Optional expression features appended to the model data.
+#' @param ... Additional arguments passed to [survival::coxph()].
+#'
+#' @return A native `coxph` fit.
+#' @export
+surv_cox <- function(x, experiment, formula, assay = NULL, features = NULL, ...) {
+  .require_backend("survival", "to fit a Cox model")
+  data <- mae_samples(x, experiment)
+  if (!is.null(features)) {
+    if (is.null(assay)) {
+      stop("`assay` is required when `features` are supplied.", call. = FALSE)
+    }
+    matrix <- .select_features(.pull_matrix(x, experiment, assay), features)
+    expression <- as.data.frame(t(matrix), check.names = FALSE)
+    duplicates <- intersect(names(data), names(expression))
+    if (length(duplicates)) {
+      stop(
+        "Feature names duplicate clinical columns: ",
+        paste(duplicates, collapse = ", "),
+        call. = FALSE
+      )
+    }
+    data <- cbind(data, expression)
+  }
+  .validate_survival_formula(formula, data)
+  survival::coxph(formula = formula, data = data, ...)
+}
+
+#' Fit a cross-validated penalized Cox model
+#'
+#' @inheritParams mae_pull_assay
+#' @param time,event Metadata columns containing follow-up time and event.
+#' @param features Optional expression feature subset.
+#' @param alpha Elastic-net mixing parameter.
+#' @param folds Number of cross-validation folds.
+#' @param seed Optional local random seed used while constructing folds.
+#' @param ... Additional arguments passed to [glmnet::cv.glmnet()].
+#'
+#' @return A native `cv.glmnet` object.
+#' @export
+surv_penalized <- function(
+    x,
+    experiment,
+    time,
+    event,
+    assay,
+    features = NULL,
+    alpha = 1,
+    folds = 10,
+    seed = NULL,
+    ...
+) {
+  .require_backend("survival", "to construct a survival response")
+  .require_backend("glmnet", "to fit a penalized Cox model")
+  data <- mae_samples(x, experiment)
+  .assert_metadata_column(data, time, "time")
+  .assert_metadata_column(data, event, "event")
+  if (identical(time, event)) {
+    stop("`time` and `event` must name different metadata columns.", call. = FALSE)
+  }
+  predictors <- t(.select_features(.pull_matrix(x, experiment, assay), features))
+  .assert_finite_matrix(predictors, "The predictor matrix")
+  .assert_finite_numeric(data[[time]], "time")
+  .assert_finite_numeric(data[[event]], "event")
+  if (any(data[[time]] < 0)) {
+    stop("`time` must be non-negative.", call. = FALSE)
+  }
+  event_count <- .count_survival_events(data[[event]])
+  if (event_count < 2L) {
+    stop("At least two events are required for penalized Cox modelling.", call. = FALSE)
+  }
+  .assert_alpha(alpha)
+  .assert_folds(folds, nrow(predictors), event_count)
+  response <- survival::Surv(data[[time]], data[[event]])
+  .with_seed(
+    seed,
+    glmnet::cv.glmnet(
+      x = predictors,
+      y = response,
+      family = "cox",
+      alpha = alpha,
+      nfolds = folds,
+      ...
+    )
+  )
+}
+
+#' Fit a cross-validated glmnet prediction model
+#'
+#' @inheritParams surv_penalized
+#' @param outcome Metadata column containing the outcome.
+#' @param family glmnet model family.
+#'
+#' @return A native `cv.glmnet` object.
+#' @export
+ml_glmnet <- function(
+    x,
+    experiment,
+    outcome,
+    assay,
+    features = NULL,
+    family = "binomial",
+    alpha = 1,
+    folds = 10,
+    seed = NULL,
+    ...
+) {
+  .require_backend("glmnet", "to fit a prediction model")
+  data <- mae_samples(x, experiment)
+  .assert_metadata_column(data, outcome, "outcome")
+  predictors <- t(.select_features(.pull_matrix(x, experiment, assay), features))
+  response <- data[[outcome]]
+  .assert_finite_matrix(predictors, "The predictor matrix")
+  if (anyNA(response)) {
+    stop("`outcome` must not contain missing values.", call. = FALSE)
+  }
+  if (!is.character(family) || length(family) != 1L || is.na(family)) {
+    stop("`family` must name one glmnet model family.", call. = FALSE)
+  }
+  if (is.numeric(response)) {
+    .assert_finite_numeric(response, "outcome")
+  }
+  .assert_alpha(alpha)
+  fold_limit <- nrow(predictors)
+  if (family %in% c("binomial", "multinomial")) {
+    class_sizes <- table(response)
+    if (length(class_sizes) < 2L) {
+      stop("Classification requires at least two outcome classes.", call. = FALSE)
+    }
+    fold_limit <- min(class_sizes)
+  }
+  .assert_folds(folds, nrow(predictors), fold_limit)
+  .with_seed(
+    seed,
+    glmnet::cv.glmnet(
+      x = predictors,
+      y = response,
+      family = family,
+      alpha = alpha,
+      nfolds = folds,
+      ...
+    )
+  )
+}
+
+#' Fit a univariate or meta-regression model
+#'
+#' @param effects Numeric effect estimates.
+#' @param standard_errors Numeric standard errors.
+#' @param moderators Optional moderator matrix or formula accepted by
+#'   [metafor::rma.uni()].
+#' @param method Meta-analysis estimator.
+#' @param ... Additional arguments passed to [metafor::rma.uni()].
+#'
+#' @return A native `rma.uni` fit.
+#' @export
+meta_effect <- function(
+    effects,
+    standard_errors,
+    moderators = NULL,
+    method = "REML",
+    ...
+) {
+  .require_backend("metafor", "to fit a meta-analysis model")
+  .assert_finite_numeric(effects, "effects")
+  .assert_finite_numeric(standard_errors, "standard_errors")
+  if (length(effects) != length(standard_errors)) {
+    stop("`effects` and `standard_errors` must have equal lengths.", call. = FALSE)
+  }
+  if (any(standard_errors <= 0)) {
+    stop("`standard_errors` must be strictly positive.", call. = FALSE)
+  }
+  if (is.matrix(moderators)) {
+    if (nrow(moderators) != length(effects)) {
+      stop("`moderators` must have one row per effect estimate.", call. = FALSE)
+    }
+    .assert_finite_matrix(moderators, "Numeric moderators")
+  } else if (is.data.frame(moderators)) {
+    if (nrow(moderators) != length(effects)) {
+      stop("`moderators` must have one row per effect estimate.", call. = FALSE)
+    }
+    numeric_columns <- vapply(moderators, is.numeric, logical(1))
+    if (any(numeric_columns)) {
+      values <- as.matrix(moderators[, numeric_columns, drop = FALSE])
+      .assert_finite_matrix(values, "Numeric moderators")
+    }
+  }
+  metafor::rma.uni(
+    yi = effects,
+    sei = standard_errors,
+    mods = moderators,
+    method = method,
+    ...
+  )
+}
+
+#' Prepare an up/down query for LINCS or CMap
+#'
+#' @param statistics Named numeric differential-expression statistics.
+#' @param n Maximum number of genes selected separately from the positive and
+#'   negative statistics.
+#'
+#' @return A list with `upset` and `downset` gene identifiers.
+#'
+#' @examples
+#' statistic <- c(gene1 = 3, gene2 = 2, gene3 = -1, gene4 = -4)
+#' drug_query(statistic, n = 2)
+#' @export
+drug_query <- function(statistics, n = 150) {
+  .assert_named_numeric(statistics, "statistics")
+  if (
+    length(n) != 1L || !is.numeric(n) || !is.finite(n) || n < 1L ||
+      n != as.integer(n)
+  ) {
+    stop("`n` must be a positive integer.", call. = FALSE)
+  }
+  up <- names(sort(statistics[statistics > 0], decreasing = TRUE))
+  down <- names(sort(statistics[statistics < 0], decreasing = FALSE))
+  if (!length(up) || !length(down)) {
+    stop(
+      "LINCS queries require at least one positive and one negative statistic.",
+      call. = FALSE
+    )
+  }
+  n <- as.integer(n)
+  list(
+    upset = utils::head(up, n),
+    downset = utils::head(down, n)
+  )
+}
+
+#' Search a LINCS reference database for connected signatures
+#'
+#' @param query A list with `upset` and `downset`, usually from
+#'   [drug_query()].
+#' @param reference_database Path or identifier accepted by
+#'   [signatureSearch::qSig()].
+#' @param workers Number of workers.
+#' @param sort_by LINCS score used to rank results.
+#' @param tau Calculate the standardized Tau score.
+#' @param annotations Add compound annotations when available.
+#' @param ... Additional arguments passed to [signatureSearch::gess_lincs()].
+#'
+#' @return A native `gessResult` object.
+#' @export
+drug_lincs <- function(
+    query,
+    reference_database,
+    workers = 1,
+    sort_by = "NCS",
+    tau = FALSE,
+    annotations = TRUE,
+    ...
+) {
+  .require_backend("signatureSearch", "to search a LINCS reference database")
+  if (!is.list(query) || !all(c("upset", "downset") %in% names(query))) {
+    stop("`query` must contain `upset` and `downset`.", call. = FALSE)
+  }
+  upset <- .clean_query_set(query$upset, "upset")
+  downset <- .clean_query_set(query$downset, "downset")
+  if (length(intersect(upset, downset))) {
+    stop("LINCS `upset` and `downset` must be disjoint.", call. = FALSE)
+  }
+  query <- list(upset = upset, downset = downset)
+  if (
+    !is.numeric(workers) || length(workers) != 1L || !is.finite(workers) ||
+      workers < 1L || workers != as.integer(workers)
+  ) {
+    stop("`workers` must be a positive integer.", call. = FALSE)
+  }
+  if (
+    !is.logical(tau) || length(tau) != 1L || is.na(tau) ||
+      !is.logical(annotations) || length(annotations) != 1L ||
+      is.na(annotations)
+  ) {
+    stop("`tau` and `annotations` must be `TRUE` or `FALSE`.", call. = FALSE)
+  }
+  qsig <- signatureSearch::qSig(
+    query = query,
+    gess_method = "LINCS",
+    refdb = reference_database
+  )
+  signatureSearch::gess_lincs(
+    qSig = qsig,
+    sortby = sort_by,
+    tau = tau,
+    workers = workers,
+    addAnnotations = annotations,
+    ...
+  )
+}
+
+.assert_metadata_column <- function(data, column, argument) {
+  if (
+    !is.character(column) || length(column) != 1L || is.na(column) ||
+      !nzchar(column) || !column %in% names(data)
+  ) {
+    stop(
+      "`", argument, "` must name exactly one metadata column.",
+      call. = FALSE
+    )
+  }
+  invisible(column)
+}
+
+.standardize_signature <- function(matrix, center, scale, na_rm) {
+  centers <- .signature_parameter(
+    center,
+    matrix,
+    "center",
+    function(value) rowMeans(value, na.rm = na_rm)
+  )
+  scales <- .signature_parameter(
+    scale,
+    matrix,
+    "scale",
+    function(value) apply(value, 1L, stats::sd, na.rm = na_rm)
+  )
+  if (!is.null(centers)) {
+    matrix <- sweep(matrix, 1L, centers, FUN = "-")
+  }
+  if (!is.null(scales)) {
+    if (any(scales <= 0)) {
+      stop("Signature scales must be strictly positive.", call. = FALSE)
+    }
+    matrix <- sweep(matrix, 1L, scales, FUN = "/")
+  }
+  matrix
+}
+
+.signature_parameter <- function(value, matrix, argument, estimate) {
+  if (is.logical(value) && length(value) == 1L && !is.na(value)) {
+    if (!value) {
+      return(NULL)
+    }
+    warning(
+      "`", argument, " = TRUE` estimates feature ", argument,
+      " values in the current cohort. Use named values frozen from the ",
+      "training cohort for external validation.",
+      call. = FALSE
+    )
+    result <- estimate(matrix)
+    names(result) <- rownames(matrix)
+  } else {
+    .assert_named_numeric(value, argument)
+    missing <- setdiff(rownames(matrix), names(value))
+    if (length(missing)) {
+      stop(
+        "`", argument, "` is missing signature features: ",
+        paste(utils::head(missing, 10L), collapse = ", "),
+        call. = FALSE
+      )
+    }
+    result <- value[rownames(matrix)]
+  }
+  if (any(!is.finite(result))) {
+    stop("Signature `", argument, "` values must be finite.", call. = FALSE)
+  }
+  result
+}
+
+.validate_survival_formula <- function(formula, data) {
+  if (!inherits(formula, "formula")) {
+    stop("`formula` must be a formula.", call. = FALSE)
+  }
+  frame <- stats::model.frame(
+    formula,
+    data = data,
+    na.action = stats::na.fail
+  )
+  for (column in frame) {
+    if (is.numeric(column) && any(!is.finite(column))) {
+      stop("Numeric survival-model variables must be finite.", call. = FALSE)
+    }
+  }
+  invisible(frame)
+}
+
+.assert_finite_numeric <- function(value, argument) {
+  if (!is.numeric(value) || !length(value) || any(!is.finite(value))) {
+    stop("`", argument, "` must contain finite numeric values.", call. = FALSE)
+  }
+  invisible(value)
+}
+
+.assert_finite_matrix <- function(value, label) {
+  if (
+    !is.matrix(value) || !is.numeric(value) || !length(value) ||
+      any(!is.finite(value))
+  ) {
+    stop(label, " must contain finite numeric values.", call. = FALSE)
+  }
+  invisible(value)
+}
+
+.assert_alpha <- function(alpha) {
+  if (
+    !is.numeric(alpha) || length(alpha) != 1L || !is.finite(alpha) ||
+      alpha < 0 || alpha > 1
+  ) {
+    stop("`alpha` must be one finite number between zero and one.", call. = FALSE)
+  }
+  invisible(alpha)
+}
+
+.assert_folds <- function(folds, n_samples, effective_limit = n_samples) {
+  limit <- min(n_samples, effective_limit)
+  if (
+    !is.numeric(folds) || length(folds) != 1L || !is.finite(folds) ||
+      folds != as.integer(folds) || folds < 3L || folds > limit
+  ) {
+    stop(
+      "`folds` must be an integer from 3 through ", limit,
+      " for the available samples/events/classes.",
+      call. = FALSE
+    )
+  }
+  invisible(as.integer(folds))
+}
+
+.count_survival_events <- function(status) {
+  observed <- sort(unique(status))
+  if (all(observed %in% c(0, 1))) {
+    return(sum(status == 1))
+  }
+  if (all(observed %in% c(1, 2))) {
+    return(sum(status == 2))
+  }
+  stop("Cox `event` must use either 0/1 or 1/2 status coding.", call. = FALSE)
+}
+
+.clean_query_set <- function(value, argument) {
+  if (!is.atomic(value) || is.list(value)) {
+    stop("`", argument, "` must be a vector of gene identifiers.", call. = FALSE)
+  }
+  value <- unique(as.character(value))
+  if (!length(value) || anyNA(value) || any(!nzchar(value))) {
+    stop("`", argument, "` must contain non-missing identifiers.", call. = FALSE)
+  }
+  value
+}

@@ -1,0 +1,74 @@
+Package: bulkMAE
+Type: Package
+Title: Stateless Bulk Transcriptomics with MultiAssayExperiment
+Version: 0.4.0
+Authors@R: c(
+    person(
+      given = "bulkMAE",
+      family = "Developers",
+      role = c("aut", "cre"),
+      email = "maintainer@example.org"
+    )
+  )
+Description: Provides small, stateless adapters from MultiAssayExperiment
+    objects with SummarizedExperiment leaves to established bulk
+    transcriptomics methods. The package standardizes data access, identifier
+    validation, and sample alignment while leaving statistical modelling and
+    result classes to their native backend packages.
+biocViews: RNASeq, GeneExpression, DifferentialExpression, DifferentialSplicing,
+    GeneSetEnrichment, NetworkInference, Clustering, TimeCourse,
+    Classification, Survival
+License: Artistic-2.0
+Encoding: UTF-8
+LazyData: false
+Depends:
+    R (>= 4.6.0)
+Imports:
+    methods,
+    MultiAssayExperiment,
+    S4Vectors,
+    SummarizedExperiment,
+    stats,
+    utils
+Suggests:
+    AnnotationDbi,
+    BayesPrism,
+    biomaRt,
+    clusterProfiler,
+    ConsensusClusterPlus,
+    decoupleR (>= 2.0.0),
+    DESeq2,
+    diffcoexp,
+    edgeR (>= 4.10.0),
+    fgsea,
+    GENIE3,
+    glmnet,
+    goseq,
+    GSVA (>= 2.0.0),
+    immunedeconv,
+    knitr,
+    lme4,
+    limma,
+    maSigPro,
+    metafor,
+    MuSiC,
+    NMF,
+    RUVSeq,
+    ReactomePA,
+    rmarkdown,
+    Rtsne,
+    signatureSearch,
+    singscore,
+    STRINGdb,
+    survival,
+    sva,
+    testthat (>= 3.0.0),
+    tximport,
+    timeROC,
+    uwot,
+    variancePartition,
+    WGCNA
+VignetteBuilder: knitr
+Config/testthat/edition: 3
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
