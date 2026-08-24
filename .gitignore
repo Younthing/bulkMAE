@@ -3,6 +3,8 @@ bulkMAE_*.tar.gz
 Rplots.pdf
 tests/testthat/Rplots.pdf
 omnipathr-log/
-docs/
+docs/*
+!docs/agents/
+!docs/agents/**
 .Rhistory
 .RData
