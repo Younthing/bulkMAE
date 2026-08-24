@@ -31,20 +31,44 @@ result <- analysis_function(
 - samples are aligned with `MultiAssayExperiment::getWithColData()`.
 - transformed data and model fits are returned; they are not written back.
 
+## Input completeness
+
+Starting from a feature-by-sample matrix and aligned sample metadata, the
+public API can construct an MAE (`mae_from_matrix()`), add assays, experiments,
+sample covariates, and feature annotations, and convert native DE results into
+ranks, selections, or effect tables. `mae_simulate()` supplies an installed,
+fully synthetic MAE for examples and offline smoke tests.
+
+The package also provides the bridges that previously forced users to assemble
+backend objects by hand: `de_design()`/`de_contrast()`,
+`de_masigpro_design()`, `adjust_covariates()`, `gene_sets_prepare()`,
+`annotation_orgdb()`, `annotate_rekey()`, `deconv_reference()`,
+`surv_formula()`, and native-result accessors such as `de_table()` and
+`coexpr_modules()`.
+
+Expression and sample metadata alone cannot determine study facts or reference
+biology. Real survival outcomes, pairing/time semantics, RUV negative controls,
+locked signature parameters, transcript/effective lengths, a tissue-matched
+single-cell reference, validation cohorts, and cross-study effect estimates
+must come from the study or a declared reference. BioMart, KEGG, STRING,
+OmniPath/MSigDB, and LINCS are online or cache-backed; CIBERSORTx execution is
+external. These are explicit input/resource boundaries, not values that
+`bulkMAE` silently guesses or replaces with simulation.
+
 ## Coverage
 
 | Layer | Main functions | Native backends |
 |---|---|---|
-| Access/import | `mae_pull_experiment()`, `mae_create()`, `import_tximport()` | MAE, SE, tximport |
-| Annotation/QC | `annotate_ids()`, `filter_expr()`, `reduce_pca()`, `reduce_umap()` | AnnotationDbi, edgeR, limma, uwot |
+| Access/import | `mae_from_matrix()`, `mae_add_experiment()`, `mae_add_sample_data()`, `import_tximport()` | MAE, SE, tximport |
+| Annotation/QC | `annotation_orgdb()`, `annotate_rekey()`, `annotate_gene_lengths()`, `filter_expr()`, `reduce_pca()` | AnnotationDbi, biomaRt, edgeR, limma |
 | Preprocessing | `normalize_tmm()`, `transform_vst()`, `adjust_combat()`, `adjust_batch()` | edgeR, DESeq2, sva, limma |
 | Differential | `de_deseq2()`, `de_edger()`, `de_limma()`, `de_dream()`, `de_masigpro()` | DESeq2, edgeR, limma, dream, maSigPro |
 | Splicing/co-expression | `dtu_diffsplice()`, `coexpr_differential()` | limma, edgeR, diffcoexp |
-| Gene sets/pathways | `enrich_ora()`, `enrich_goseq()`, `enrich_fgsea()`, `enrich_camera()`, `score_gsva()`, `score_singscore()` | clusterProfiler, goseq, fgsea, limma, GSVA, singscore |
+| Gene sets/pathways | `gene_sets_prepare()`, `gene_sets_read_gmt()`, `gene_sets_msigdb()`, `enrich_fgsea()`, `score_gsva()` | msigdbr, clusterProfiler, goseq, fgsea, GSVA |
 | Regulatory activity | `activity_decouple()`, `activity_progeny()`, `activity_tf()` | decoupleR |
 | Systems/subtypes | `cluster_consensus()`, `cluster_nmf()`, `coexpr_wgcna()`, `coexpr_preservation()`, `network_genie3()` | ConsensusClusterPlus, NMF, WGCNA, GENIE3 |
-| Deconvolution | `deconv()`, `deconv_music()`, `deconv_bayesprism()` | immunedeconv, MuSiC, BayesPrism |
-| Clinical | `score_signature()`, `surv_cox()`, `surv_roc()`, `ml_glmnet()`, `meta_effect()`, `drug_lincs()` | survival, glmnet, timeROC, metafor, signatureSearch |
+| Deconvolution | `deconv_reference()`, `deconv()`, `deconv_music()`, `deconv_bayesprism()` | SingleCellExperiment, immunedeconv, MuSiC, BayesPrism |
+| Clinical | `score_signature()`, `surv_formula()`, `surv_cox()`, `meta_collect()`, `meta_effect()`, `drug_lincs()` | survival, glmnet, timeROC, metafor, signatureSearch |
 
 `activity_decouple()` is intentionally cross-cutting. Its `statistics` argument can
 select enrichment-style algorithms (`aucell`, `fgsea`, `gsva`, `ora`) or
@@ -82,13 +106,13 @@ feature_data <- data.frame(
   row.names = rownames(counts)
 )
 
-rna <- mae_create_experiment(
-  assays = counts,
-  col_data = sample_data,
+mae <- mae_from_matrix(
+  expression = counts,
+  samples = sample_data,
   row_data = feature_data,
-  assay_name = "counts"
+  experiment = "rna",
+  assay = "counts"
 )
-mae <- mae_create(list(rna = rna), sample_data)
 
 tpm <- normalize_tpm(mae, "rna", lengths = "gene_length")
 mae_with_tpm <- mae_add_assay(mae, "rna", tpm, name = "tpm")
@@ -108,7 +132,8 @@ These helpers return modified copies: `mae` remains the raw-count input, while
 
 Read the [complete walkthrough](vignettes/getting-started.Rmd), the
 [method-selection guide](inst/guides/expanded-methods-zh.md), and the
-[implementation-to-documentation audit map](inst/guides/official-sources.md).
+[input-completeness and resource-boundary audit](inst/guides/input-completeness-zh.md),
+plus the [implementation-to-documentation audit map](inst/guides/official-sources.md).
 Users upgrading from 0.3 or earlier should also read the
 [0.4 naming migration map](inst/guides/naming-migration-zh.md).
 After installation, the audit files are also available under

@@ -64,6 +64,63 @@ surv_km <- function(x, experiment, formula, ...) {
   survival::survfit(formula = formula, data = data, ...)
 }
 
+#' Construct a namespace-safe survival formula
+#'
+#' This convenience helper lets users name MAE metadata columns without first
+#' attaching or calling the `survival` package. More complex time-dependent or
+#' stratified formulas can still be supplied directly to [surv_km()] and
+#' [surv_cox()].
+#'
+#' @param time,event Metadata column names containing follow-up time and event.
+#' @param predictors Optional right-hand-side variable names. These must be
+#'   sample-metadata columns for [surv_km()]. For [surv_cox()], expression
+#'   features are also available when the same names are supplied through its
+#'   `features` argument.
+#'
+#' @return A formula with a `survival::Surv()` response.
+#' @export
+surv_formula <- function(time, event, predictors = NULL) {
+  .assert_scalar_character(time, "time")
+  .assert_scalar_character(event, "event")
+  if (identical(time, event)) {
+    stop("`time` and `event` must name different columns.", call. = FALSE)
+  }
+  if (!is.null(predictors)) {
+    if (
+      !is.character(predictors) || !length(predictors) || anyNA(predictors) ||
+        any(!nzchar(predictors)) || anyDuplicated(predictors)
+    ) {
+      stop("`predictors` must contain unique, non-empty names.", call. = FALSE)
+    }
+    if (any(predictors %in% c(time, event))) {
+      stop("Predictors must differ from `time` and `event`.", call. = FALSE)
+    }
+    if (any(predictors == ".")) {
+      stop(
+        "`.` is a formula expansion operator, not a supported predictor name; ",
+        "supply explicit metadata columns or a formula directly.",
+        call. = FALSE
+      )
+    }
+  }
+  survival_call <- call(
+    "::",
+    as.name("survival"),
+    as.name("Surv")
+  )
+  response <- as.call(c(list(survival_call), as.name(time), as.name(event)))
+  right_hand_side <- if (is.null(predictors)) {
+    1
+  } else {
+    Reduce(
+      function(left, right) call("+", left, as.name(right)),
+      predictors[-1L],
+      init = as.name(predictors[[1L]])
+    )
+  }
+  stats::as.formula(call("~", response, right_hand_side), env = parent.frame())
+}
+
 #' Calculate time-dependent ROC curves
 #'
 #' @inheritParams mae_samples
@@ -297,8 +354,11 @@ ml_glmnet <- function(
 
 #' Fit a univariate or meta-regression model
 #'
-#' @param effects Numeric effect estimates.
-#' @param standard_errors Numeric standard errors.
+#' @param effects Numeric effect estimates, or a data frame containing
+#'   `effect` and `standard_error` columns, such as the output of
+#'   [meta_collect()].
+#' @param standard_errors Numeric standard errors. Leave `NULL` when `effects`
+#'   is a data frame.
 #' @param moderators Optional moderator matrix or formula accepted by
 #'   [metafor::rma.uni()].
 #' @param method Meta-analysis estimator.
@@ -308,12 +368,32 @@ ml_glmnet <- function(
 #' @export
 meta_effect <- function(
     effects,
-    standard_errors,
+    standard_errors = NULL,
     moderators = NULL,
     method = "REML",
     ...
 ) {
   .require_backend("metafor", "to fit a meta-analysis model")
+  model_data <- NULL
+  if (is.data.frame(effects)) {
+    if (!is.null(standard_errors)) {
+      stop(
+        "Do not supply `standard_errors` when `effects` is a data frame.",
+        call. = FALSE
+      )
+    }
+    required <- c("effect", "standard_error")
+    if (!all(required %in% names(effects))) {
+      stop(
+        "A data-frame `effects` input must contain `effect` and ",
+        "`standard_error` columns.",
+        call. = FALSE
+      )
+    }
+    model_data <- effects
+    standard_errors <- model_data$standard_error
+    effects <- model_data$effect
+  }
   .assert_finite_numeric(effects, "effects")
   .assert_finite_numeric(standard_errors, "standard_errors")
   if (length(effects) != length(standard_errors)) {
@@ -345,7 +425,97 @@ meta_effect <- function(
     ...
   )
   if (!is.null(moderators)) arguments$mods <- moderators
+  if (!is.null(model_data) && inherits(moderators, "formula")) {
+    missing_moderators <- setdiff(all.vars(moderators), names(model_data))
+    if (length(missing_moderators)) {
+      stop(
+        "Moderator formula refers to missing data-frame columns: ",
+        paste(missing_moderators, collapse = ", "),
+        ".",
+        call. = FALSE
+      )
+    }
+    arguments$data <- model_data
+  }
   do.call(metafor::rma.uni, arguments)
+}
+
+#' Collect one feature's effect estimates across differential analyses
+#'
+#' @param results A named list of inputs accepted by [de_table()].
+#' @param feature One feature identifier present in every result.
+#' @param coef Optional coefficient shared by all results, or a list with one
+#'   coefficient per result.
+#'
+#' @return A data frame with `study`, `feature_id`, `effect`, and
+#'   `standard_error`, accepted directly by [meta_effect()].
+#' @export
+meta_collect <- function(results, feature, coef = NULL) {
+  if (
+    !is.list(results) || !length(results) || is.null(names(results)) ||
+      anyNA(names(results)) || any(!nzchar(names(results))) ||
+      anyDuplicated(names(results))
+  ) {
+    stop("`results` must be a uniquely named, non-empty list.", call. = FALSE)
+  }
+  .assert_scalar_character(feature, "feature")
+  coefficients <- if (is.list(coef)) {
+    if (length(coef) != length(results)) {
+      stop("A list `coef` must contain one value per result.", call. = FALSE)
+    }
+    coefficient_names <- names(coef)
+    if (!is.null(coefficient_names) && any(nzchar(coefficient_names))) {
+      if (
+        anyNA(coefficient_names) || any(!nzchar(coefficient_names)) ||
+          anyDuplicated(coefficient_names) ||
+          !setequal(coefficient_names, names(results))
+      ) {
+        stop(
+          "A named `coef` list must have exactly the same unique names as ",
+          "`results`.",
+          call. = FALSE
+        )
+      }
+      coef[names(results)]
+    } else {
+      coef
+    }
+  } else {
+    rep(list(coef), length(results))
+  }
+
+  rows <- lapply(seq_along(results), function(index) {
+    table <- de_table(results[[index]], coef = coefficients[[index]])
+    match_index <- match(feature, table$feature_id)
+    if (is.na(match_index)) {
+      stop(
+        "Feature `", feature, "` is absent from result `", names(results)[[index]],
+        "`.",
+        call. = FALSE
+      )
+    }
+    effect <- table$effect[[match_index]]
+    standard_error <- table$standard_error[[match_index]]
+    if (
+      !is.finite(effect) || !is.finite(standard_error) || standard_error <= 0
+    ) {
+      stop(
+        "Result `", names(results)[[index]], "` lacks a finite positive ",
+        "standard error for `", feature, "`.",
+        call. = FALSE
+      )
+    }
+    data.frame(
+      study = names(results)[[index]],
+      feature_id = feature,
+      effect = effect,
+      standard_error = standard_error,
+      stringsAsFactors = FALSE
+    )
+  })
+  result <- do.call(rbind, rows)
+  rownames(result) <- NULL
+  result
 }
 
 #' Prepare an up/down query for LINCS or CMap

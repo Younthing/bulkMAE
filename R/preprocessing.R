@@ -48,6 +48,8 @@ normalize_deseq <- function(
 #' @inheritParams mae_pull_assay
 #' @param lengths A positive numeric vector, a feature-named numeric vector, a
 #'   feature-by-sample matrix, or the name of a `rowData` column or assay.
+#'   When `NULL`, an assay named `length` (as produced by
+#'   [import_tximport()]) is used.
 #'
 #' @return A finite feature-by-sample TPM matrix whose columns sum to one
 #'   million.
@@ -55,11 +57,21 @@ normalize_deseq <- function(
 normalize_tpm <- function(
     x,
     experiment,
-    lengths,
+    lengths = NULL,
     assay = "counts"
 ) {
   counts <- .as_count_matrix(x, experiment, assay)
   se <- .pull_se(x, experiment)
+  if (is.null(lengths)) {
+    if ("length" %in% SummarizedExperiment::assayNames(se)) {
+      lengths <- "length"
+    } else {
+      stop(
+        "`lengths` is required unless the experiment contains a `length` assay.",
+        call. = FALSE
+      )
+    }
+  }
   if (is.character(lengths) && length(lengths) == 1L) {
     row_data <- as.data.frame(
       SummarizedExperiment::rowData(se),
@@ -422,7 +434,7 @@ adjust_sva <- function(
     )
   }
 
-  sva::sva(
+  result <- sva::sva(
     dat = matrix,
     mod = full_model,
     mod0 = null_model,
@@ -430,6 +442,15 @@ adjust_sva <- function(
     method = method,
     ...
   )
+  if (!is.null(result$sv)) {
+    result$sv <- as.matrix(result$sv)
+    rownames(result$sv) <- colnames(matrix)
+    if (is.null(colnames(result$sv))) {
+      colnames(result$sv) <- paste0("SV", seq_len(ncol(result$sv)))
+    }
+  }
+  attr(result, "bulkMAE_sample_names") <- colnames(matrix)
+  result
 }
 
 #' Estimate unwanted factors with RUVg

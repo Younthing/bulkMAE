@@ -38,12 +38,89 @@ deconv <- function(x, experiment, method, assay = "tpm", ...) {
   )
 }
 
+#' Construct a single-cell deconvolution reference
+#'
+#' Builds the canonical `SingleCellExperiment` reference accepted directly by
+#' [deconv_music()] and [deconv_bayesprism()]. This helper only standardizes a
+#' user-supplied single-cell count matrix and its metadata; it does not provide
+#' or simulate a biological reference.
+#'
+#' @param counts Raw integer count matrix with genes in rows and cells in
+#'   columns. Dense matrices and sparse `Matrix` objects are accepted without
+#'   densifying the latter. Complete, unique gene and cell names are required.
+#' @param cell_data Cell-level metadata with row names containing every count
+#'   matrix cell name exactly once. Rows are aligned by cell name.
+#' @param cell_type,sample A column name in `cell_data`, or a named vector with
+#'   one non-missing label per cell. Values are stored in the canonical
+#'   `cell_type` and `sample_id` columns.
+#' @param cell_state Optional cell-state column name or named vector. When
+#'   supplied, values are stored in the canonical `cell_state` column.
+#' @param assay_name Name used for the raw-count assay.
+#'
+#' @return A `SingleCellExperiment` with aligned cell metadata.
+#' @export
+deconv_reference <- function(
+    counts,
+    cell_data,
+    cell_type,
+    sample,
+    cell_state = NULL,
+    assay_name = "counts"
+) {
+  .require_backend(
+    "SingleCellExperiment",
+    "to construct a single-cell deconvolution reference"
+  )
+  .assert_scalar_character(assay_name, "assay_name")
+  counts <- .as_reference_count_matrix(
+    counts,
+    "Single-cell `counts`",
+    preserve_sparse = TRUE
+  )
+  .assert_identifier_vector(
+    rownames(counts),
+    "Single-cell reference gene identifiers"
+  )
+  cells <- colnames(counts)
+  .assert_identifier_vector(cells, "Single-cell reference cell identifiers")
+  cell_data <- .align_reference_cell_data(cell_data, cells)
+  cell_data$cell_type <- .resolve_builder_annotation(
+    cell_type,
+    cell_data,
+    cells,
+    "cell_type"
+  )
+  cell_data$sample_id <- .resolve_builder_annotation(
+    sample,
+    cell_data,
+    cells,
+    "sample"
+  )
+  if (!is.null(cell_state)) {
+    cell_data$cell_state <- .resolve_builder_annotation(
+      cell_state,
+      cell_data,
+      cells,
+      "cell_state"
+    )
+  }
+
+  SingleCellExperiment::SingleCellExperiment(
+    assays = stats::setNames(list(counts), assay_name),
+    colData = S4Vectors::DataFrame(cell_data, check.names = FALSE)
+  )
+}
+
 #' Deconvolve bulk counts with MuSiC
 #'
 #' @inheritParams mae_pull_assay
 #' @param sc_reference Single-cell reference accepted by `MuSiC::music_prop()`.
-#' @param clusters Cell-type annotation column in the reference.
-#' @param samples Sample identifier column in the reference.
+#' @param clusters Cell-type annotation column in the reference. The default
+#'   matches the canonical column created by [deconv_reference()].
+#' @param samples Sample identifier column in the reference. The default
+#'   matches the canonical column created by [deconv_reference()].
+#' @param reference_assay Raw-count assay in `sc_reference`. `NULL` selects
+#'   `counts`, or the sole assay when no `counts` assay is present.
 #' @param ... Additional arguments passed to `MuSiC::music_prop()`.
 #'
 #' @return The native MuSiC result list. Its weighted estimates are cell-type
@@ -53,10 +130,11 @@ deconv_music <- function(
     x,
     experiment,
     sc_reference,
-    clusters,
-    samples,
+    clusters = "cell_type",
+    samples = "sample_id",
     assay = "counts",
-    ...
+    ...,
+    reference_assay = NULL
 ) {
   .require_backend("MuSiC", "to run MuSiC deconvolution")
   if (
@@ -68,6 +146,25 @@ deconv_music <- function(
   }
   if (!methods::is(sc_reference, "SingleCellExperiment")) {
     stop("`sc_reference` must be a SingleCellExperiment.", call. = FALSE)
+  }
+  reference_assay <- .resolve_reference_assay(
+    sc_reference,
+    reference_assay,
+    "sc_reference"
+  )
+  reference_counts <- .as_reference_count_matrix(
+    SummarizedExperiment::assay(sc_reference, reference_assay),
+    "MuSiC reference assay",
+    preserve_sparse = TRUE
+  )
+  .assert_deconvolution_ids(reference_counts, "MuSiC reference")
+  music_reference <- sc_reference
+  if (!identical(reference_assay, "counts")) {
+    SummarizedExperiment::assay(
+      music_reference,
+      "counts",
+      withDimnames = FALSE
+    ) <- reference_counts
   }
   reference_data <- as.data.frame(
     SummarizedExperiment::colData(sc_reference),
@@ -90,9 +187,28 @@ deconv_music <- function(
   if (length(unique(reference_data[[clusters]])) < 2L) {
     stop("MuSiC requires at least two reference cell types.", call. = FALSE)
   }
+  sample_values <- as.character(reference_data[[samples]])
+  cluster_values <- as.character(reference_data[[clusters]])
+  if (length(unique(sample_values)) < 2L) {
+    stop("MuSiC requires at least two reference biological samples.", call. = FALSE)
+  }
+  samples_per_cluster <- vapply(
+    split(sample_values, cluster_values),
+    function(value) length(unique(value)),
+    integer(1)
+  )
+  if (any(samples_per_cluster < 2L)) {
+    stop(
+      "Every MuSiC reference cell type must occur in at least two biological ",
+      "samples; insufficient: ",
+      paste(names(samples_per_cluster)[samples_per_cluster < 2L], collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
   matrix <- .as_count_matrix(x, experiment, assay)
   .assert_deconvolution_ids(matrix, "MuSiC bulk input")
-  reference_ids <- rownames(sc_reference)
+  reference_ids <- rownames(reference_counts)
   .assert_identifier_vector(reference_ids, "MuSiC reference feature names")
   overlap <- intersect(rownames(matrix), reference_ids)
   if (!length(overlap)) {
@@ -111,7 +227,7 @@ deconv_music <- function(
   arguments <- c(
     list(
       bulk.mtx = matrix,
-      sc.sce = sc_reference,
+      sc.sce = music_reference,
       clusters = clusters,
       samples = samples
     ),
@@ -163,9 +279,14 @@ deconv_cibersortx_input <- function(
 #' supplied reference layout; no orientation is inferred from dimensions.
 #'
 #' @inheritParams mae_pull_assay
-#' @param reference Raw reference count matrix.
-#' @param cell_type_labels Cell-type label for each reference cell.
+#' @param reference Raw reference count matrix, or a `SingleCellExperiment`
+#'   created by [deconv_reference()].
+#' @param cell_type_labels Cell-type label for each reference cell. For a
+#'   `SingleCellExperiment`, `NULL` uses its `cell_type` column and a single
+#'   string names another `colData` column.
 #' @param cell_state_labels Optional cell-state label for each reference cell.
+#'   For a `SingleCellExperiment`, `NULL` uses `cell_state` when that column is
+#'   present and a single string names another `colData` column.
 #' @param reference_orientation Layout of `reference`. The default preserves
 #'   the package's documented gene-by-cell input, while `cells_by_genes`
 #'   accepts BayesPrism's native layout directly.
@@ -175,6 +296,9 @@ deconv_cibersortx_input <- function(
 #' @param update_gibbs Run the final Gibbs update.
 #' @param gibbs_control,opt_control Named control lists passed to
 #'   [BayesPrism::run.prism()].
+#' @param reference_assay Raw-count assay used when `reference` is a
+#'   `SingleCellExperiment`. `NULL` selects `counts`, or the sole assay when no
+#'   `counts` assay is present.
 #' @param ... Additional arguments passed to `BayesPrism::new.prism()`.
 #'
 #' @return The native object returned by `BayesPrism::run.prism()`.
@@ -183,7 +307,7 @@ deconv_bayesprism <- function(
     x,
     experiment,
     reference,
-    cell_type_labels,
+    cell_type_labels = NULL,
     assay = "counts",
     reference_orientation = c("genes_by_cells", "cells_by_genes"),
     cell_state_labels = NULL,
@@ -193,7 +317,8 @@ deconv_bayesprism <- function(
     update_gibbs = TRUE,
     gibbs_control = list(),
     opt_control = list(),
-    ...
+    ...,
+    reference_assay = NULL
 ) {
   .require_backend("BayesPrism", "to run BayesPrism deconvolution")
   reference_orientation <- match.arg(reference_orientation)
@@ -201,32 +326,76 @@ deconv_bayesprism <- function(
   .assert_integerish_counts(mixture, "BayesPrism mixture")
   .assert_deconvolution_ids(mixture, "BayesPrism mixture")
   mixture_sample_names <- colnames(mixture)
-  reference <- .as_reference_count_matrix(reference)
-  .assert_nonnegative_matrix(reference, "BayesPrism reference")
-  if (reference_orientation == "genes_by_cells") {
+
+  reference_is_sce <- methods::is(reference, "SingleCellExperiment")
+  if (reference_is_sce) {
+    if (!identical(reference_orientation, "genes_by_cells")) {
+      stop(
+        "A `SingleCellExperiment` reference always uses genes-by-cells ",
+        "orientation; do not set `reference_orientation = \"cells_by_genes\"`.",
+        call. = FALSE
+      )
+    }
+    reference_assay <- .resolve_reference_assay(
+      reference,
+      reference_assay,
+      "reference"
+    )
+    reference_data <- as.data.frame(
+      SummarizedExperiment::colData(reference),
+      optional = TRUE
+    )
+    reference <- .as_reference_count_matrix(
+      SummarizedExperiment::assay(reference, reference_assay)
+    )
     .assert_deconvolution_ids(reference, "BayesPrism reference")
     cell_names <- colnames(reference)
+    cell_type_labels <- .resolve_sce_reference_labels(
+      cell_type_labels,
+      reference_data,
+      cell_names,
+      "cell_type_labels",
+      default_column = "cell_type",
+      optional = FALSE
+    )
+    cell_state_labels <- .resolve_sce_reference_labels(
+      cell_state_labels,
+      reference_data,
+      cell_names,
+      "cell_state_labels",
+      default_column = "cell_state",
+      optional = TRUE
+    )
     reference <- t(reference)
   } else {
-    .assert_identifier_vector(colnames(reference), "BayesPrism reference genes")
-    if (anyDuplicated(rownames(reference))) {
-      stop("BayesPrism reference cell names must be unique.", call. = FALSE)
+    reference <- .as_reference_count_matrix(reference)
+    if (reference_orientation == "genes_by_cells") {
+      .assert_deconvolution_ids(reference, "BayesPrism reference")
+      cell_names <- colnames(reference)
+      reference <- t(reference)
+    } else {
+      .assert_identifier_vector(colnames(reference), "BayesPrism reference genes")
+      if (anyDuplicated(rownames(reference))) {
+        stop("BayesPrism reference cell names must be unique.", call. = FALSE)
+      }
+      cell_names <- rownames(reference)
     }
-    cell_names <- rownames(reference)
-  }
-  .assert_identifier_vector(cell_names, "BayesPrism reference cell names")
-  cell_type_labels <- .align_reference_labels(
-    cell_type_labels,
-    cell_names,
-    "cell_type_labels"
-  )
-  if (!is.null(cell_state_labels)) {
-    cell_state_labels <- .align_reference_labels(
-      cell_state_labels,
+    .assert_identifier_vector(cell_names, "BayesPrism reference cell names")
+    cell_type_labels <- .align_reference_labels(
+      cell_type_labels,
       cell_names,
-      "cell_state_labels"
+      "cell_type_labels"
     )
+    if (!is.null(cell_state_labels)) {
+      cell_state_labels <- .align_reference_labels(
+        cell_state_labels,
+        cell_names,
+        "cell_state_labels"
+      )
+    }
   }
+  .assert_nonnegative_matrix(reference, "BayesPrism reference")
+  .assert_identifier_vector(cell_names, "BayesPrism reference cell names")
 
   mixture <- t(mixture)
   common_genes <- intersect(colnames(mixture), colnames(reference))
@@ -332,23 +501,79 @@ deconv_bayesprism <- function(
   invisible(matrix)
 }
 
-.as_reference_count_matrix <- function(reference) {
-  reference <- as.matrix(reference)
-  if (!is.numeric(reference)) {
-    stop("BayesPrism `reference` must contain numeric raw counts.", call. = FALSE)
+.as_reference_count_matrix <- function(
+    reference,
+    label = "BayesPrism `reference`",
+    preserve_sparse = FALSE
+) {
+  is_sparse_matrix <- methods::is(reference, "sparseMatrix")
+  numeric_sparse_matrix <- is_sparse_matrix && any(vapply(
+    c("dMatrix", "iMatrix", "lMatrix", "nMatrix"),
+    function(class_name) methods::is(reference, class_name),
+    logical(1)
+  ))
+  is_numeric_matrix <- is.matrix(reference) && is.numeric(reference)
+  if (is_sparse_matrix && !numeric_sparse_matrix) {
+    stop(label, " must contain numeric raw counts.", call. = FALSE)
   }
-  storage.mode(reference) <- "double"
+  if (!is_sparse_matrix && !is_numeric_matrix) {
+    reference <- as.matrix(reference)
+    is_numeric_matrix <- is.numeric(reference)
+  }
+  if (!is_sparse_matrix && !is_numeric_matrix) {
+    stop(label, " must contain numeric raw counts.", call. = FALSE)
+  }
+  if (is_sparse_matrix && !preserve_sparse) {
+    reference <- as.matrix(reference)
+    is_sparse_matrix <- FALSE
+  }
+  if (!is_sparse_matrix) storage.mode(reference) <- "double"
   if (is.null(rownames(reference)) || is.null(colnames(reference))) {
-    stop("BayesPrism `reference` must have row and column names.", call. = FALSE)
+    stop(label, " must have row and column names.", call. = FALSE)
+  }
+  values <- if (is_sparse_matrix) {
+    if ("x" %in% methods::slotNames(reference)) {
+      methods::slot(reference, "x")
+    } else {
+      # Pattern sparse matrices store only positions; every stored value is 1.
+      1
+    }
+  } else {
+    reference
   }
   if (
-    any(!is.finite(reference)) || any(reference < 0) ||
-      any(abs(reference - round(reference)) > sqrt(.Machine$double.eps)) ||
-      any(reference > .Machine$integer.max)
+    any(!is.finite(values)) || any(values < 0) ||
+      any(abs(values - round(values)) > sqrt(.Machine$double.eps)) ||
+      any(values > .Machine$integer.max)
   ) {
-    stop("BayesPrism `reference` must contain raw integer counts.", call. = FALSE)
+    stop(label, " must contain raw integer counts.", call. = FALSE)
   }
   reference
+}
+
+.resolve_reference_assay <- function(reference, requested, argument) {
+  available <- SummarizedExperiment::assayNames(reference)
+  if (!length(available)) {
+    stop("`", argument, "` contains no assays.", call. = FALSE)
+  }
+  if (is.null(requested)) {
+    if ("counts" %in% available) return("counts")
+    if (length(available) == 1L) return(available[[1L]])
+    stop(
+      "`reference_assay` is required when `", argument,
+      "` has multiple assays and none is named `counts`.",
+      call. = FALSE
+    )
+  }
+  .assert_scalar_character(requested, "reference_assay")
+  if (!requested %in% available) {
+    stop(
+      "Unknown reference assay `", requested, "`. Available assays: ",
+      paste(available, collapse = ", "),
+      call. = FALSE
+    )
+  }
+  requested
 }
 
 .assert_integerish_counts <- function(value, label) {
@@ -356,6 +581,98 @@ deconv_bayesprism <- function(
     stop(label, " must contain raw integer counts.", call. = FALSE)
   }
   invisible(value)
+}
+
+.align_reference_cell_data <- function(cell_data, cells) {
+  if (!is.data.frame(cell_data) && !methods::is(cell_data, "DataFrame")) {
+    stop("`cell_data` must be a data frame with cell names as row names.", call. = FALSE)
+  }
+  cell_data <- as.data.frame(cell_data, optional = TRUE)
+  cell_names <- rownames(cell_data)
+  if (
+    is.null(cell_names) || length(cell_names) != nrow(cell_data) ||
+      anyNA(cell_names) || any(!nzchar(cell_names)) || anyDuplicated(cell_names) ||
+      !setequal(cell_names, cells)
+  ) {
+    stop(
+      "`cell_data` row names must contain every count-matrix cell name exactly once.",
+      call. = FALSE
+    )
+  }
+  cell_data[cells, , drop = FALSE]
+}
+
+.resolve_builder_annotation <- function(value, cell_data, cells, argument) {
+  if (
+    is.character(value) && length(value) == 1L && !is.na(value) &&
+      nzchar(value) && value %in% names(cell_data)
+  ) {
+    labels <- cell_data[[value]]
+  } else {
+    value_names <- names(value)
+    if (
+      (!is.atomic(value) && !is.factor(value)) || is.null(value_names) ||
+        length(value_names) != length(value) || anyNA(value_names) ||
+        any(!nzchar(value_names))
+    ) {
+      stop(
+        "`", argument,
+        "` must name one `cell_data` column or be a named vector.",
+        call. = FALSE
+      )
+    }
+    labels <- .align_reference_labels(value, cells, argument)
+  }
+  .validate_reference_annotation(labels, cells, argument)
+}
+
+.resolve_sce_reference_labels <- function(
+    labels,
+    reference_data,
+    cells,
+    argument,
+    default_column,
+    optional
+) {
+  if (is.null(labels)) {
+    if (default_column %in% names(reference_data)) {
+      labels <- reference_data[[default_column]]
+    } else if (optional) {
+      return(NULL)
+    } else {
+      stop(
+        "SingleCellExperiment reference metadata is missing the default `",
+        default_column, "` column; supply `", argument, "` explicitly.",
+        call. = FALSE
+      )
+    }
+  } else if (
+    is.character(labels) && length(labels) == 1L && !is.na(labels) &&
+      nzchar(labels)
+  ) {
+    if (!labels %in% names(reference_data)) {
+      stop(
+        "`", argument, "` names an unknown reference metadata column: ",
+        labels, ".",
+        call. = FALSE
+      )
+    }
+    labels <- reference_data[[labels]]
+  }
+  .align_reference_labels(labels, cells, argument)
+}
+
+.validate_reference_annotation <- function(labels, cells, argument) {
+  if (
+    (!is.atomic(labels) && !is.factor(labels)) || length(labels) != length(cells) ||
+      anyNA(labels) || any(!nzchar(as.character(labels)))
+  ) {
+    stop(
+      "`", argument, "` must provide one non-missing label per reference cell.",
+      call. = FALSE
+    )
+  }
+  unname(labels)
 }
 
 .align_reference_labels <- function(labels, cells, argument) {

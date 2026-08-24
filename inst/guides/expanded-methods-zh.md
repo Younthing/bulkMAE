@@ -9,12 +9,12 @@
 | 问题 | 函数 | 后端 | 主要输入 |
 |---|---|---|---|
 | 一致性分型 | `cluster_consensus()`、`cluster_consensus_diagnostics()`、`cluster_consensus_classes()` | ConsensusClusterPlus | 连续、已变换的基因 × 样本矩阵 |
-| 非负分解分型 | `cluster_nmf()` | NMF | 非负连续矩阵 |
+| 非负分解分型 | `cluster_nmf()`、`cluster_nmf_classes()` | NMF | 非负连续矩阵 |
 | 差异共表达（DCA） | `coexpr_differential()` | diffcoexp | 两组连续表达矩阵 |
-| 模块保守性 | `coexpr_preservation()` | WGCNA | reference/test 两个可比 assay 和参考模块 |
+| 模块保守性 | `coexpr_modules()`、`coexpr_preservation()` | WGCNA | reference/test 两个可比 assay 和参考模块 |
 | 连续表达差异 | `de_limma()` | limma | log-expression、芯片或通路分数 |
 | 差异剪接/使用 | `dtu_diffsplice()` | limma 或 edgeR | 已拟合的 exon/transcript 模型 |
-| 时间/剂量反应 | `de_masigpro()` | maSigPro | 表达矩阵和官方格式 `edesign` |
+| 时间/剂量反应 | `de_masigpro_design()`、`de_masigpro()` | maSigPro | 表达矩阵和真实 time/replicate/group 元数据 |
 | 去批次可视化 | `adjust_batch()` | limma | 连续表达矩阵和显式保留设计 |
 | 非线性样本嵌入 | `reduce_umap()`、`reduce_tsne()` | uwot、Rtsne | 变换后表达矩阵 |
 | 偏倚校正 ORA | `enrich_goseq()` | goseq | 全部受检基因的 DE 二元向量和长度/丰度 |
@@ -72,7 +72,8 @@ mor 列和物种。调用加权/有符号方法时，用 `mor = "weight"`（或�
 
 模块保守性使用两个显式 MAE。包装器取 reference assay、test
 assay 和已命名的参考模块颜色的三方基因交集，统一顺序后构造 WGCNA
-multi-set 输入。reference/test 角色和参考模块颜色仍由调用者决定。
+multi-set 输入。`coexpr_modules()` 可从 reference 拟合中提取具名模块颜色；
+reference/test 角色和真实独立队列仍由调用者决定。
 
 `coexpr_wgcna()` 遵循 `goodSamplesGenes()` 的质控结果：不合格的样本和特征会
 自动剔除，不要求中途交互确认。函数发出警告，并在返回的 WGCNA 原生
@@ -98,4 +99,5 @@ list 中附加质控对象及被剔除的样本/特征名，便于事后审核�
 每个实现对应的官方文档、版本审查日期和参数映射见
 [official-sources.md](official-sources.md)；发布前操作见
 [review-checklist.md](review-checklist.md)。0.3 及更早版本升级时另见
-[naming-migration-zh.md](naming-migration-zh.md)。
+[naming-migration-zh.md](naming-migration-zh.md)。逐函数输入可达性及在线/外部边界见
+[input-completeness-zh.md](input-completeness-zh.md)。

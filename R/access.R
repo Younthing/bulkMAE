@@ -262,10 +262,11 @@ mae_subset_features <- function(x, experiment, features) {
   se <- withCallingHandlers(
     MultiAssayExperiment::getWithColData(x, experiment),
     warning = function(condition) {
-      if (startsWith(
-        conditionMessage(condition),
-        "Ignoring redundant column names in 'colData(x)'"
-      )) {
+      message <- conditionMessage(condition)
+      if (
+        startsWith(message, "Ignoring redundant column names in 'colData(x)'") ||
+          identical(message, "'experiments' dropped; see 'drops()'")
+      ) {
         invokeRestart("muffleWarning")
       }
     }

@@ -19,15 +19,23 @@
 | 文件 | 职责 | 主要后端 |
 |---|---|---|
 | `access.R` | MAE 校验、样本映射、assay/metadata 提取、内部断言 | MAE、SE |
+| `workflow-inputs.R` | matrix 入口、sample/feature metadata、新 experiment、SVA/RUV 协变量桥接 | MAE、SE、Biobase |
 | `import.R` | 构建 SE/MAE、导入转录本定量 | tximport |
 | `annotation.R` | ID 去版本、注释映射、Ensembl 查询 | AnnotationDbi、biomaRt |
+| `resources.R` | OrgDb 入口、ID 重键、GMT/MSigDB、活动/LINCS 资源目录 | AnnotationDbi、msigdbr、decoupleR |
 | `qc.R` | 低表达过滤、library 指标、相关性、PCA/MDS/UMAP/t-SNE、离群筛查 | edgeR、limma、uwot、Rtsne |
 | `preprocessing.R` | TMM、size factor、VST/rlog/voom、ComBat、SVA、RUV、方差分解 | edgeR、DESeq2、sva、limma、RUVSeq、variancePartition |
 | `differential.R` | 常规和复杂设计、连续表达、差异剪接、时间序列/剂量反应 | DESeq2、edgeR、limma、dream、maSigPro |
+| `result-inputs.R` | 设计/contrast、DE 下游表/排序/选择、activity/WGCNA/NMF 原生结果桥接 | limma、NMF |
 | `enrichment.R` | ORA/GSEA、GO/KEGG/Reactome、竞争/旋转检验、样本打分、调控活性 | clusterProfiler、fgsea、ReactomePA、limma、GSVA、singscore、decoupleR |
 | `network.R` | 一致性聚类、差异共表达、NMF、WGCNA/模块保守性、调控网络、PPI | ConsensusClusterPlus、diffcoexp、NMF、WGCNA、GENIE3、STRINGdb |
 | `deconvolution.R` | 免疫去卷积、参考单细胞去卷积、外部输入准备 | immunedeconv、MuSiC、BayesPrism、CIBERSORTx |
 | `clinical.R` | signature、KM/Cox、惩罚模型、time ROC、meta-analysis、LINCS | survival、glmnet、timeROC、metafor、signatureSearch |
+| `simulate.R` | 安装后可用、无生物学含义的 MAE 模拟数据入口 | MAE、SE |
+
+完整的逐函数 A/B/C/D 输入边界、在线/缓存资源和公开 API 串联示例见
+[input-completeness-zh.md](input-completeness-zh.md)。这里的“完整”是格式、名称对齐和
+后端输入可达，不表示软件会从表达值中创造临床结局、研究设计或参考生物学。
 
 ## 3. 原需求覆盖判断
 
@@ -51,8 +59,9 @@
 
 配对、多因素、交互和线性连续变量不需要分别创建函数。
 它们由 `design`/`formula` 和显式 contrast 表达；重复测量由 `de_dream()` 的
-随机效应公式处理。多组时间序列和剂量反应另有 `de_masigpro()`，其设计表
-必须按 maSigPro 官方规范显式提供。
+随机效应公式处理。多组时间序列和剂量反应另有 `de_masigpro()`；
+`de_masigpro_design()` 可从对齐的真实 time/replicate/group 元数据构造
+maSigPro 官方设计表。
 
 ### decoupleR 的归类
 
@@ -81,8 +90,8 @@ set 混成同一个概念。
 - `coexpr_wgcna()` 自动应用 `goodSamplesGenes()` 的剔除结果，以警告和
   返回 list 中的剔除名单保留审计线索，不进行中途交互。
 - `coexpr_preservation()` 负责 reference、test 和模块标签的三方
-  基因对齐并调用 WGCNA；reference/test 角色及参考模块标签仍必须
-  显式传入。
+  基因对齐并调用 WGCNA；`coexpr_modules()` 可提取拟合得到的具名标签，但
+  reference/test 角色和真实独立队列仍必须显式提供。
 - 外部验证不是单个拟合函数。当前提供固定权重 signature 和原生模型对象，
   训练/验证队列边界应保留在研究脚本中。
 

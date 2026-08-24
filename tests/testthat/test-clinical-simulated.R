@@ -103,6 +103,10 @@ test_that("survival wrappers fit native Kaplan-Meier and Cox models", {
     ),
     "assay.*required"
   )
+  expect_error(
+    surv_formula("time", "event", predictors = "."),
+    "formula expansion operator"
+  )
 })
 
 test_that("surv_roc returns a native timeROC result", {
@@ -227,6 +231,19 @@ test_that("meta_effect fits native models and rejects invalid standard errors", 
   expect_true(is.finite(as.numeric(fit$b)))
   expect_error(meta_effect(effects, standard_errors[-1L]), "equal lengths")
   expect_error(meta_effect(effects, replace(standard_errors, 1L, 0)), "strictly positive")
+
+  meta_data <- data.frame(
+    effect = effects,
+    standard_error = standard_errors,
+    age = seq_along(effects)
+  )
+  regression <- meta_effect(meta_data, moderators = ~ age, method = "FE")
+  expect_s3_class(regression, "rma.uni")
+  expect_true("age" %in% rownames(regression$b))
+  expect_error(
+    meta_effect(meta_data, moderators = ~ missing_column),
+    "missing data-frame columns"
+  )
 })
 
 test_that("drug_query selects the strongest disjoint up and down genes", {

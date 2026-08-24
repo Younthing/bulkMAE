@@ -36,6 +36,7 @@ cran_backends <- c(
   "cran::glmnet",
   "cran::lme4",
   "cran::metafor",
+  "cran::msigdbr",
   "cran::NMF",
   "cran::Rtsne",
   "cran::survival",
@@ -46,6 +47,7 @@ cran_backends <- c(
 
 bioc_backends <- c(
   "bioc::AnnotationDbi",
+  "bioc::Biobase",
   "bioc::biomaRt",
   "bioc::clusterProfiler",
   "bioc::ConsensusClusterPlus",
@@ -59,6 +61,7 @@ bioc_backends <- c(
   "bioc::GSVA",
   "bioc::limma",
   "bioc::maSigPro",
+  "bioc::OmnipathR",
   "bioc::ReactomePA",
   "bioc::RUVSeq",
   "bioc::signatureSearch",
@@ -72,8 +75,8 @@ bioc_backends <- c(
 pak::pkg_install(c(cran_backends, bioc_backends))
 ```
 
-`annotate_ids()` 和 GO 富集还需要与物种匹配的本地 `OrgDb` 数据包。例如人和
-小鼠项目可分别安装：
+`annotation_orgdb()`、`annotate_ids()` 和 GO 富集还需要与物种匹配的本地
+`OrgDb` 数据包。例如人和小鼠项目可分别安装：
 
 ```r
 pak::pkg_install(c("bioc::org.Hs.eg.db", "bioc::org.Mm.eg.db"))
@@ -139,9 +142,15 @@ pak::pkg_status()
 
 - `import_tximport()` 需要 Salmon、kallisto 或 RSEM 等工具已经生成的定量文件；
 - `annotate_biomart()` 使用 Ensembl 服务；
-- KEGG、STRINGdb 和部分 decoupleR 资源函数会访问远程服务或下载缓存；
+- `annotate_gene_lengths()` 使用 Ensembl，并且返回的是注释转录本长度汇总，
+  不是定量工具给出的样本特异 effective length；
+- `gene_sets_msigdb()` 首次取得指定 MSigDB 集合时可能下载并缓存资源；
+- KEGG、STRINGdb 和通过 OmniPathR 获取的 decoupleR 资源会访问远程服务或
+  下载缓存；
 - MuSiC 和 BayesPrism 需要与 bulk 数据匹配的单细胞参考；
-- `drug_lincs()` 需要 signatureSearch 可读取的 LINCS 参考数据库；
+- `drug_lincs()` 可用 `cmap`、`lincs`、`lincs2` 等标识让 signatureSearch
+  通过 ExperimentHub 下载并缓存参考库，也可使用显式本地数据库；预构建库
+  要求 human Entrez ID，可用 `drug_lincs_databases()` 查询；
 - CIBERSORT 系列方法需要其许可范围内的外部文件。
 
 默认离线测试不应以这些服务当时可用为前提。在线或授权资源测试应独立运行，

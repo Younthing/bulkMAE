@@ -18,7 +18,10 @@ annotate_ids(ids, database, from, to, multi_values = "first")
 \item{multi_values}{Policy passed to \code{multiVals}.}
 }
 \value{
-A data frame with \code{source_id} and \code{target_id} columns.
+A long data frame with atomic \code{source_id} and \code{target_id} columns.
+When \code{multi_values} returns a list or \code{CharacterList}, one-to-many mappings
+are expanded to repeated source rows so the result can be passed directly
+to \code{\link[=annotate_rekey]{annotate_rekey()}}.
 }
 \description{
 This is a thin wrapper around \code{\link[AnnotationDbi:AnnotationDb-class]{AnnotationDbi::mapIds()}}. It deliberately

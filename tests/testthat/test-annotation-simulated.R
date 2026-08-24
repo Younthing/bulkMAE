@@ -31,6 +31,23 @@ test_that("annotate_ids maps stable human symbols with a local OrgDb", {
     annotate_ids("TP53", database, from = "", to = "ENTREZID"),
     "from.*non-empty string"
   )
+
+  expanded <- suppressMessages(annotate_ids(
+    c("TP53", "EGFR"),
+    database = database,
+    from = "SYMBOL",
+    to = "ALIAS",
+    multi_values = "CharacterList"
+  ))
+  expect_false(is.list(expanded$target_id))
+  expect_true(anyDuplicated(expanded$source_id) > 0L)
+  rekeyed <- annotate_rekey(
+    c(TP53 = 2, EGFR = -3),
+    expanded,
+    duplicates = "max_abs"
+  )
+  expect_true(length(rekeyed) > 2L)
+  expect_true(all(is.finite(rekeyed)))
 })
 
 test_that("annotate_biomart rejects invalid local inputs before any query", {

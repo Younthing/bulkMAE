@@ -8,10 +8,11 @@ deconv_music(
   x,
   experiment,
   sc_reference,
-  clusters,
-  samples,
+  clusters = "cell_type",
+  samples = "sample_id",
   assay = "counts",
-  ...
+  ...,
+  reference_assay = NULL
 )
 }
 \arguments{
@@ -21,13 +22,18 @@ deconv_music(
 
 \item{sc_reference}{Single-cell reference accepted by \code{MuSiC::music_prop()}.}
 
-\item{clusters}{Cell-type annotation column in the reference.}
+\item{clusters}{Cell-type annotation column in the reference. The default
+matches the canonical column created by \code{\link[=deconv_reference]{deconv_reference()}}.}
 
-\item{samples}{Sample identifier column in the reference.}
+\item{samples}{Sample identifier column in the reference. The default
+matches the canonical column created by \code{\link[=deconv_reference]{deconv_reference()}}.}
 
 \item{assay}{Assay name or one-based assay index.}
 
 \item{...}{Additional arguments passed to \code{MuSiC::music_prop()}.}
+
+\item{reference_assay}{Raw-count assay in \code{sc_reference}. \code{NULL} selects
+\code{counts}, or the sole assay when no \code{counts} assay is present.}
 }
 \value{
 The native MuSiC result list. Its weighted estimates are cell-type

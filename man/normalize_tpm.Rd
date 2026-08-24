@@ -4,7 +4,7 @@
 \alias{normalize_tpm}
 \title{Convert counts to transcripts per million}
 \usage{
-normalize_tpm(x, experiment, lengths, assay = "counts")
+normalize_tpm(x, experiment, lengths = NULL, assay = "counts")
 }
 \arguments{
 \item{x}{A \code{MultiAssayExperiment} object.}
@@ -12,7 +12,9 @@ normalize_tpm(x, experiment, lengths, assay = "counts")
 \item{experiment}{Optional experiment name.}
 
 \item{lengths}{A positive numeric vector, a feature-named numeric vector, a
-feature-by-sample matrix, or the name of a \code{rowData} column or assay.}
+feature-by-sample matrix, or the name of a \code{rowData} column or assay.
+When \code{NULL}, an assay named \code{length} (as produced by
+\code{\link[=import_tximport]{import_tximport()}}) is used.}
 
 \item{assay}{Assay name or one-based assay index.}
 }

@@ -4,12 +4,21 @@
 \alias{meta_effect}
 \title{Fit a univariate or meta-regression model}
 \usage{
-meta_effect(effects, standard_errors, moderators = NULL, method = "REML", ...)
+meta_effect(
+  effects,
+  standard_errors = NULL,
+  moderators = NULL,
+  method = "REML",
+  ...
+)
 }
 \arguments{
-\item{effects}{Numeric effect estimates.}
+\item{effects}{Numeric effect estimates, or a data frame containing
+\code{effect} and \code{standard_error} columns, such as the output of
+\code{\link[=meta_collect]{meta_collect()}}.}
 
-\item{standard_errors}{Numeric standard errors.}
+\item{standard_errors}{Numeric standard errors. Leave \code{NULL} when \code{effects}
+is a data frame.}
 
 \item{moderators}{Optional moderator matrix or formula accepted by
 \code{\link[metafor:rma.uni]{metafor::rma.uni()}}.}

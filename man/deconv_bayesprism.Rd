@@ -8,7 +8,7 @@ deconv_bayesprism(
   x,
   experiment,
   reference,
-  cell_type_labels,
+  cell_type_labels = NULL,
   assay = "counts",
   reference_orientation = c("genes_by_cells", "cells_by_genes"),
   cell_state_labels = NULL,
@@ -18,7 +18,8 @@ deconv_bayesprism(
   update_gibbs = TRUE,
   gibbs_control = list(),
   opt_control = list(),
-  ...
+  ...,
+  reference_assay = NULL
 )
 }
 \arguments{
@@ -26,9 +27,12 @@ deconv_bayesprism(
 
 \item{experiment}{Optional experiment name.}
 
-\item{reference}{Raw reference count matrix.}
+\item{reference}{Raw reference count matrix, or a \code{SingleCellExperiment}
+created by \code{\link[=deconv_reference]{deconv_reference()}}.}
 
-\item{cell_type_labels}{Cell-type label for each reference cell.}
+\item{cell_type_labels}{Cell-type label for each reference cell. For a
+\code{SingleCellExperiment}, \code{NULL} uses its \code{cell_type} column and a single
+string names another \code{colData} column.}
 
 \item{assay}{Assay name or one-based assay index.}
 
@@ -36,7 +40,9 @@ deconv_bayesprism(
 the package's documented gene-by-cell input, while \code{cells_by_genes}
 accepts BayesPrism's native layout directly.}
 
-\item{cell_state_labels}{Optional cell-state label for each reference cell.}
+\item{cell_state_labels}{Optional cell-state label for each reference cell.
+For a \code{SingleCellExperiment}, \code{NULL} uses \code{cell_state} when that column is
+present and a single string names another \code{colData} column.}
 
 \item{key}{Optional malignant/tumour key accepted by BayesPrism.}
 
@@ -50,6 +56,10 @@ accepts BayesPrism's native layout directly.}
 \code{\link[BayesPrism:run.prism]{BayesPrism::run.prism()}}.}
 
 \item{...}{Additional arguments passed to \code{BayesPrism::new.prism()}.}
+
+\item{reference_assay}{Raw-count assay used when \code{reference} is a
+\code{SingleCellExperiment}. \code{NULL} selects \code{counts}, or the sole assay when no
+\code{counts} assay is present.}
 }
 \value{
 The native object returned by \code{BayesPrism::run.prism()}.

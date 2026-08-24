@@ -13,9 +13,10 @@ vignette: >
 knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
 ```
 
-Most sections are a cookbook and remain unevaluated because they require
-optional backends or external resources. The construction and local QC chunks
-below are deliberately executable during vignette builds.
+Most backend-specific sections remain an unevaluated cookbook because the
+engines are optional and several resources are online or cache-backed. The
+construction and local QC chunks are deliberately executable during vignette
+builds; the package test suite executes the complete offline public-API chains.
 
 ## 1. Data contract
 
@@ -41,37 +42,16 @@ installed as `inst/guides/naming-migration-zh.md`.
 ```{r construct, eval=TRUE}
 library(bulkMAE)
 
-set.seed(1)
-counts <- matrix(
-  rnbinom(1000, mu = 100, size = 1 / 0.2),
-  nrow = 100,
-  dimnames = list(
-    paste0("gene", seq_len(100)),
-    paste0("sample", seq_len(10))
-  )
-)
+mae <- mae_simulate(n_features = 100, n_samples = 12, seed = 1)
 
-sample_table <- data.frame(
-  condition = rep(c("control", "treated"), each = 5),
-  batch = rep(c("A", "B"), 5),
-  subject_id = rep(paste0("subject", seq_len(5)), 2),
-  time = seq(100, 1000, length.out = 10),
-  event = rep(c(0, 1), 5),
-  age = seq(45, 63, by = 2),
-  stage = rep(c("I", "II"), 5),
-  molecular_subtype = rep(c("A", "B"), each = 5),
-  risk_score = seq(-1, 1, length.out = 10),
-  row.names = colnames(counts)
+# The same public constructor accepts a user's matrix and aligned metadata.
+from_matrix <- mae_from_matrix(
+  expression = mae_pull_assay(mae, "rna", "counts"),
+  samples = mae_samples(mae, "rna"),
+  row_data = mae_feature_data(mae, "rna"),
+  experiment = "rna",
+  assay = "counts"
 )
-
-rna <- mae_create_experiment(
-  assays = list(
-    counts = counts,
-    log_expression = log2(counts + 1)
-  ),
-  col_data = sample_table
-)
-mae <- mae_create(list(rna = rna), sample_table)
 
 mae_validate(mae, "rna")
 mae_assays(mae, "rna")
@@ -104,15 +84,7 @@ keep <- filter_expr(
 qc_library(mae, "rna")
 
 vst <- transform_vst(mae, "rna", blind = TRUE)
-vst_mae <- mae_create(
-  list(
-    rna = mae_create_experiment(
-      assays = list(vst = SummarizedExperiment::assay(vst)),
-      col_data = sample_table
-    )
-  ),
-  sample_table
-)
+vst_mae <- mae_add_assay(mae, "rna", value = vst, name = "vst")
 
 pca <- reduce_pca(vst_mae, "rna", "vst", top_n = 50)
 qc_outliers(pca)
@@ -153,8 +125,13 @@ edge_test <- de_edger(
 ### limma-voom
 
 ```{r limma}
-design <- model.matrix(~ batch + condition, sample_table)
-contrast <- limma::makeContrasts(conditiontreated, levels = design)
+design <- de_design(mae, "rna", ~ batch + condition)
+contrast <- de_contrast(
+  mae,
+  "rna",
+  ~ batch + condition,
+  contrasts = "conditiontreated"
+)
 
 limma_fit <- de_voom(
   mae,
@@ -200,27 +177,73 @@ sv <- adjust_sva(
   full = ~ batch + condition,
   null = ~ batch
 )
+
+sv_columns <- adjust_covariates(sv)
+adjusted_mae <- mae_add_sample_data(vst_mae, "rna", sv_columns)
 ```
 
-Surrogate variables and RUV factors must be added explicitly to the downstream
-design. `bulkMAE` does not silently refit a model.
+Surrogate variables and RUV factors are added explicitly to a returned MAE copy
+before they are named in a downstream formula. `bulkMAE` does not silently
+refit a model or invent control genes.
 
 ## 6. Functional interpretation
 
 ```{r enrichment}
-ranks <- setNames(de$stat, rownames(de))
-ranks <- ranks[is.finite(ranks)]
+ranks <- de_ranks(de)
+selected <- de_selected(de, fdr = 0.05, min_abs_effect = 1)
 
-fgsea_result <- enrich_fgsea(ranks, hallmark_sets)
-go_result <- enrich_go(
-  genes = significant_entrez_ids,
-  method = "ora",
-  org_db = org.Hs.eg.db,
-  universe = tested_entrez_ids
+# A fully offline synthetic set for this simulated MAE.
+ranked_ids <- names(ranks)
+synthetic_sets <- gene_sets_prepare(list(
+  leading = head(ranked_ids, 25),
+  trailing = tail(ranked_ids, 25)
+))
+fgsea_result <- enrich_fgsea(ranks, synthetic_sets)
+
+# For a real human dataset, this online/cache-backed helper retrieves MSigDB.
+hallmark_sets <- gene_sets_msigdb(
+  species = "human",
+  collection = "H",
+  id_type = "gene_symbol"
 )
 
+# The following mapping is likewise for real Ensembl-keyed results.
+org_db <- annotation_orgdb("human")
+id_mapping <- annotate_ids(
+  names(selected),
+  database = org_db,
+  from = "ENSEMBL",
+  to = "ENTREZID",
+  multi_values = "CharacterList"
+)
+selected_entrez <- annotate_rekey(
+  names(selected)[selected],
+  id_mapping,
+  source = "source_id",
+  target = "target_id",
+  duplicates = "first"
+)
+tested_entrez <- annotate_rekey(
+  names(selected),
+  id_mapping,
+  source = "source_id",
+  target = "target_id",
+  duplicates = "first"
+)
+go_result <- enrich_go(
+  genes = selected_entrez,
+  method = "ora",
+  org_db = org_db,
+  universe = tested_entrez
+)
+
+feature_data <- mae_feature_data(mae, "rna")
+tested_gene_lengths <- setNames(
+  feature_data$gene_length,
+  rownames(feature_data)
+)
 goseq_result <- enrich_goseq(
-  selected = setNames(rownames(de) %in% significant_gene_ids, rownames(de)),
+  selected = selected,
   genome = "hg38",
   id = "ensGene",
   bias = tested_gene_lengths,
@@ -230,8 +253,15 @@ goseq_result <- enrich_goseq(
 gsva_scores <- score_gsva(
   vst_mae,
   "rna",
-  gene_sets = hallmark_sets,
+  gene_sets = synthetic_sets,
   assay = "vst"
+)
+pathway_mae <- mae_add_experiment(
+  vst_mae,
+  value = gsva_scores,
+  name = "pathway",
+  assay_name = "score",
+  source_experiment = "rna"
 )
 
 pathway_activity <- activity_progeny(vst_mae, "rna", assay = "vst")
@@ -251,7 +281,7 @@ test, and GSVA/ssGSEA/singscore for per-sample scores.
 camera_result <- enrich_camera(
   vst_mae,
   "rna",
-  gene_sets = hallmark_sets,
+  gene_sets = synthetic_sets,
   formula = ~ batch + condition,
   contrast = contrast[, 1],
   assay = "vst"
@@ -305,6 +335,7 @@ backend, rather than bulkMAE, owns the method registry.
 
 ```{r systems}
 nmf_fit <- cluster_nmf(mae, "rna", assay = "log_expression", rank = 2:6)
+nmf_classes <- cluster_nmf_classes(nmf_fit, what = "samples")
 
 consensus_fit <- cluster_consensus(
   vst_mae,
@@ -327,6 +358,7 @@ wgcna_fit <- coexpr_wgcna(
   power = 6,
   top_n = 5000
 )
+module_colors <- coexpr_modules(wgcna_fit)
 
 genie_weights <- network_genie3(
   vst_mae,
@@ -376,7 +408,13 @@ after a native edgeR or limma exon/transcript-level fit.
 time_result <- de_masigpro(
   time_mae,
   "rna",
-  edesign = time_design,
+  edesign = de_masigpro_design(
+    time_mae,
+    "rna",
+    time = "timepoint",
+    replicate = "replicate",
+    group = "condition"
+  ),
   assay = "counts",
   degree = 2,
   counts = TRUE
@@ -384,14 +422,21 @@ time_result <- de_masigpro(
 
 splice_result <- dtu_diffsplice(
   exon_fit,
-  gene_id = exon_annotation$gene_id,
-  feature_id = exon_annotation$exon_id
+  gene_id = mae_feature_data(exon_mae, "rna")$gene_id,
+  feature_id = rownames(mae_feature_data(exon_mae, "rna"))
 )
 ```
 
 ## 8. Tissue deconvolution
 
 ```{r deconvolution}
+reference_sce <- deconv_reference(
+  counts = single_cell_counts,
+  cell_data = single_cell_metadata,
+  cell_type = "cell_type",
+  sample = "donor"
+)
+
 fractions <- deconv(
   tpm_mae,
   "rna",
@@ -405,7 +450,7 @@ music_fit <- deconv_music(
   assay = "counts",
   sc_reference = reference_sce,
   clusters = "cell_type",
-  samples = "donor"
+  samples = "sample_id"
 )
 
 cibersortx_table <- deconv_cibersortx_input(tpm_mae, "rna")
@@ -425,19 +470,27 @@ the full cohort before cross-validation leaks outcome information.
 cox_fit <- surv_cox(
   vst_mae,
   "rna",
-  formula = survival::Surv(time, event) ~ age + stage
+  formula = surv_formula(
+    time = "survival_time",
+    event = "event",
+    predictors = c("age", "risk_score")
+  )
 )
 
 km_fit <- surv_km(
   vst_mae,
   "rna",
-  formula = survival::Surv(time, event) ~ molecular_subtype
+  formula = surv_formula(
+    time = "survival_time",
+    event = "event",
+    predictors = "condition"
+  )
 )
 
 roc_fit <- surv_roc(
   vst_mae,
   "rna",
-  time = "time",
+  time = "survival_time",
   event = "event",
   marker = "risk_score",
   times = c(300, 600, 900)
@@ -446,14 +499,22 @@ roc_fit <- surv_roc(
 penalized <- surv_penalized(
   vst_mae,
   "rna",
-  time = "time",
+  time = "survival_time",
   event = "event",
   assay = "vst",
   folds = 5
 )
 
-query <- drug_query(ranks, n = 150)
-lincs_result <- drug_lincs(query, reference_database = lincs_path)
+entrez_ranks <- annotate_rekey(
+  ranks,
+  id_mapping,
+  source = "source_id",
+  target = "target_id",
+  duplicates = "max_abs"
+)
+query <- drug_query(entrez_ranks, n = 150)
+drug_lincs_databases()
+lincs_result <- drug_lincs(query, reference_database = "lincs2")
 ```
 
 For disease reversal, prioritize negative connectivity scores. Interpret them
