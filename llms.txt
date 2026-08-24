@@ -1,0 +1,443 @@
+# bulkMAE
+
+[![R-CMD-check](https://github.com/Younthing/bulkMAE/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/Younthing/bulkMAE/actions/workflows/R-CMD-check.yaml)
+[![Full backend
+check](https://github.com/Younthing/bulkMAE/actions/workflows/full-backend-check.yaml/badge.svg)](https://github.com/Younthing/bulkMAE/actions/workflows/full-backend-check.yaml)
+[![Codecov test
+coverage](https://codecov.io/gh/Younthing/bulkMAE/graph/badge.svg)](https://app.codecov.io/gh/Younthing/bulkMAE)
+[![pkgdown](https://github.com/Younthing/bulkMAE/actions/workflows/pkgdown.yaml/badge.svg)](https://younthing.github.io/bulkMAE/)
+
+`bulkMAE` is a deliberately small adapter layer for bulk transcriptomics
+in R. Every assay-level workflow starts from a `MultiAssayExperiment`
+(MAE), selects one `SummarizedExperiment` leaf, aligns it with primary
+sample metadata through `sampleMap`, and calls an established backend
+package.
+
+The public API is organized as `<family>_<method>()` or
+`<family>_<operation>()`. For example, typing `de_`, `enrich_`,
+`score_`, `coexpr_`, or `surv_` exposes one coherent analysis family in
+autocomplete.
+
+The package does **not** keep analysis history, mutate the input MAE,
+invent a result registry, or wrap backend result objects in a new class.
+DESeq2 returns a `DESeqDataSet`, edgeR returns its native fit/test
+object, limma returns an `MArrayLM`, and so on.
+
+## Contract
+
+``` r
+
+result <- analysis_function(
+  x = mae,
+  experiment = "rna",
+  assay = "counts",
+  ...
+)
+```
+
+- `x` is always the MAE containing samples and assays.
+- `experiment` is explicit; hidden “active assays” are not used.
+- `assay` is explicit whenever more than one scale is plausible.
+- samples are aligned with
+  [`MultiAssayExperiment::getWithColData()`](https://github.com/waldronlab/MultiAssayExperiment/reference/MultiAssayExperiment-helpers.html).
+- transformed data and model fits are returned; they are not written
+  back.
+
+## Input completeness
+
+Starting from a feature-by-sample matrix and aligned sample metadata,
+the public API can construct an MAE
+([`mae_from_matrix()`](https://younthing.github.io/bulkMAE/reference/mae_from_matrix.md)),
+add assays, experiments, sample covariates, and feature annotations, and
+convert native DE results into ranks, selections, or effect tables.
+[`mae_simulate()`](https://younthing.github.io/bulkMAE/reference/mae_simulate.md)
+supplies an installed, fully synthetic MAE for examples and offline
+smoke tests.
+
+The package also provides the bridges that previously forced users to
+assemble backend objects by hand:
+[`de_design()`](https://younthing.github.io/bulkMAE/reference/de_design.md)/[`de_contrast()`](https://younthing.github.io/bulkMAE/reference/de_contrast.md),
+[`de_masigpro_design()`](https://younthing.github.io/bulkMAE/reference/de_masigpro_design.md),
+[`adjust_covariates()`](https://younthing.github.io/bulkMAE/reference/adjust_covariates.md),
+[`gene_sets_prepare()`](https://younthing.github.io/bulkMAE/reference/gene_sets_prepare.md),
+[`annotation_orgdb()`](https://younthing.github.io/bulkMAE/reference/annotation_orgdb.md),
+[`annotate_rekey()`](https://younthing.github.io/bulkMAE/reference/annotate_rekey.md),
+[`deconv_reference()`](https://younthing.github.io/bulkMAE/reference/deconv_reference.md),
+[`surv_formula()`](https://younthing.github.io/bulkMAE/reference/surv_formula.md),
+and native-result accessors such as
+[`de_table()`](https://younthing.github.io/bulkMAE/reference/de_table.md)
+and
+[`coexpr_modules()`](https://younthing.github.io/bulkMAE/reference/coexpr_modules.md).
+
+Expression and sample metadata alone cannot determine study facts or
+reference biology. Real survival outcomes, pairing/time semantics, RUV
+negative controls, locked signature parameters, transcript/effective
+lengths, a tissue-matched single-cell reference, validation cohorts, and
+cross-study effect estimates must come from the study or a declared
+reference. BioMart, KEGG, STRING, OmniPath/MSigDB, and LINCS are online
+or cache-backed; CIBERSORTx execution is external. These are explicit
+input/resource boundaries, not values that `bulkMAE` silently guesses or
+replaces with simulation.
+
+## Coverage
+
+| Layer | Main functions | Native backends |
+|----|----|----|
+| Access/import | [`mae_from_matrix()`](https://younthing.github.io/bulkMAE/reference/mae_from_matrix.md), [`mae_add_experiment()`](https://younthing.github.io/bulkMAE/reference/mae_add_experiment.md), [`mae_add_sample_data()`](https://younthing.github.io/bulkMAE/reference/mae_add_sample_data.md), [`import_tximport()`](https://younthing.github.io/bulkMAE/reference/import_tximport.md) | MAE, SE, tximport |
+| Annotation/QC | [`annotation_orgdb()`](https://younthing.github.io/bulkMAE/reference/annotation_orgdb.md), [`annotate_rekey()`](https://younthing.github.io/bulkMAE/reference/annotate_rekey.md), [`annotate_gene_lengths()`](https://younthing.github.io/bulkMAE/reference/annotate_gene_lengths.md), [`filter_expr()`](https://younthing.github.io/bulkMAE/reference/filter_expr.md), [`reduce_pca()`](https://younthing.github.io/bulkMAE/reference/reduce_pca.md) | AnnotationDbi, biomaRt, edgeR, limma |
+| Preprocessing | [`normalize_tmm()`](https://younthing.github.io/bulkMAE/reference/normalize_tmm.md), [`transform_vst()`](https://younthing.github.io/bulkMAE/reference/transform_vst.md), [`adjust_combat()`](https://younthing.github.io/bulkMAE/reference/adjust_combat.md), [`adjust_batch()`](https://younthing.github.io/bulkMAE/reference/adjust_batch.md) | edgeR, DESeq2, sva, limma |
+| Differential | [`de_deseq2()`](https://younthing.github.io/bulkMAE/reference/de_deseq2.md), [`de_edger()`](https://younthing.github.io/bulkMAE/reference/de_edger.md), [`de_limma()`](https://younthing.github.io/bulkMAE/reference/de_limma.md), [`de_dream()`](https://younthing.github.io/bulkMAE/reference/de_dream.md), [`de_masigpro()`](https://younthing.github.io/bulkMAE/reference/de_masigpro.md) | DESeq2, edgeR, limma, dream, maSigPro |
+| Splicing/co-expression | [`dtu_diffsplice()`](https://younthing.github.io/bulkMAE/reference/dtu_diffsplice.md), [`coexpr_differential()`](https://younthing.github.io/bulkMAE/reference/coexpr_differential.md) | limma, edgeR, diffcoexp |
+| Gene sets/pathways | [`gene_sets_prepare()`](https://younthing.github.io/bulkMAE/reference/gene_sets_prepare.md), [`gene_sets_read_gmt()`](https://younthing.github.io/bulkMAE/reference/gene_sets_read_gmt.md), [`gene_sets_msigdb()`](https://younthing.github.io/bulkMAE/reference/gene_sets_msigdb.md), [`enrich_fgsea()`](https://younthing.github.io/bulkMAE/reference/enrich_fgsea.md), [`score_gsva()`](https://younthing.github.io/bulkMAE/reference/score_gsva.md) | msigdbr, clusterProfiler, goseq, fgsea, GSVA |
+| Regulatory activity | [`activity_decouple()`](https://younthing.github.io/bulkMAE/reference/activity_decouple.md), [`activity_progeny()`](https://younthing.github.io/bulkMAE/reference/activity_progeny.md), [`activity_tf()`](https://younthing.github.io/bulkMAE/reference/activity_tf.md) | decoupleR |
+| Systems/subtypes | [`cluster_consensus()`](https://younthing.github.io/bulkMAE/reference/cluster_consensus.md), [`cluster_nmf()`](https://younthing.github.io/bulkMAE/reference/cluster_nmf.md), [`coexpr_wgcna()`](https://younthing.github.io/bulkMAE/reference/coexpr_wgcna.md), [`coexpr_preservation()`](https://younthing.github.io/bulkMAE/reference/coexpr_preservation.md), [`network_genie3()`](https://younthing.github.io/bulkMAE/reference/network_genie3.md) | ConsensusClusterPlus, NMF, WGCNA, GENIE3 |
+| Deconvolution | [`deconv_reference()`](https://younthing.github.io/bulkMAE/reference/deconv_reference.md), [`deconv()`](https://younthing.github.io/bulkMAE/reference/deconv.md), [`deconv_music()`](https://younthing.github.io/bulkMAE/reference/deconv_music.md), [`deconv_bayesprism()`](https://younthing.github.io/bulkMAE/reference/deconv_bayesprism.md) | SingleCellExperiment, immunedeconv, MuSiC, BayesPrism |
+| Clinical | [`score_signature()`](https://younthing.github.io/bulkMAE/reference/score_signature.md), [`surv_formula()`](https://younthing.github.io/bulkMAE/reference/surv_formula.md), [`surv_cox()`](https://younthing.github.io/bulkMAE/reference/surv_cox.md), [`meta_collect()`](https://younthing.github.io/bulkMAE/reference/meta_collect.md), [`meta_effect()`](https://younthing.github.io/bulkMAE/reference/meta_effect.md), [`drug_lincs()`](https://younthing.github.io/bulkMAE/reference/drug_lincs.md) | survival, glmnet, timeROC, metafor, signatureSearch |
+
+[`activity_decouple()`](https://younthing.github.io/bulkMAE/reference/activity_decouple.md)
+is intentionally cross-cutting. Its `statistics` argument can select
+enrichment-style algorithms (`aucell`, `fgsea`, `gsva`, `ora`) or
+network-aware activity estimators (`mlm`, `ulm`, `viper`, `wmean`,
+`wsum`), and can ask decoupleR for a consensus. Use
+[`activity_methods()`](https://younthing.github.io/bulkMAE/reference/activity_methods.md)
+to inspect the methods supported by the installed decoupleR release. For
+signed or weighted methods, map the resource’s weight column explicitly
+with `mor = "weight"` (or the corresponding column name).
+
+[`coexpr_wgcna()`](https://younthing.github.io/bulkMAE/reference/coexpr_wgcna.md)
+automatically applies `goodSamplesGenes()` filtering. It warns when
+samples or features are removed and appends their names plus the native
+quality result to the returned WGCNA list; it does not pause for
+confirmation.
+
+## Minimal example
+
+``` r
+
+library(bulkMAE)
+
+set.seed(1)
+sample_data <- data.frame(
+  condition = factor(rep(c("control", "treated"), each = 4)),
+  batch = factor(rep(c("A", "B"), times = 4)),
+  row.names = sprintf("sample%02d", seq_len(8))
+)
+counts <- matrix(
+  rnbinom(120 * 8, mu = 100, size = 5),
+  nrow = 120,
+  dimnames = list(
+    sprintf("gene%03d", seq_len(120)),
+    rownames(sample_data)
+  )
+)
+feature_data <- data.frame(
+  gene_length = seq(500, 2500, length.out = nrow(counts)),
+  row.names = rownames(counts)
+)
+
+mae <- mae_from_matrix(
+  expression = counts,
+  samples = sample_data,
+  row_data = feature_data,
+  experiment = "rna",
+  assay = "counts"
+)
+
+tpm <- normalize_tpm(mae, "rna", lengths = "gene_length")
+mae_with_tpm <- mae_add_assay(mae, "rna", tpm, name = "tpm")
+mae_small <- mae_subset_features(
+  mae_with_tpm,
+  "rna",
+  features = rownames(counts)[seq_len(50)]
+)
+
+mae_assays(mae_with_tpm, "rna")
+dim(mae_pull_assay(mae_small, "rna", "tpm"))
+colSums(mae_pull_assay(mae_with_tpm, "rna", "tpm"))
+```
+
+These helpers return modified copies: `mae` remains the raw-count input,
+while `mae_with_tpm` and `mae_small` make each added or filtered data
+state explicit.
+
+Read the [complete
+walkthrough](https://younthing.github.io/bulkMAE/articles/getting-started.html),
+the [method-selection
+guide](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/expanded-methods-zh.md),
+and the [input-completeness and resource-boundary
+audit](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/input-completeness-zh.md),
+plus the [implementation-to-documentation audit
+map](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/official-sources.md).
+Users upgrading from 0.3 or earlier should also read the [0.4 naming
+migration
+map](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/naming-migration-zh.md).
+After installation, the audit files are also available under
+`system.file("guides", package = "bulkMAE")`.
+
+## Continuous integration
+
+Pull requests and the default branch run a cross-platform R CMD check
+against the package’s hard dependencies. A separate Ubuntu job installs
+every optional offline analysis backend with `pak`, while the coverage
+workflow exercises the same full backend set. Network-backed tests
+remain opt-in so transient failures from BioMart, KEGG, STRING,
+OmniPath, or LINCS do not block ordinary changes.
+
+The [pkgdown website](https://younthing.github.io/bulkMAE/) is rebuilt
+from `main` and published from the generated `gh-pages` branch.
+
+## Dependency policy
+
+Only MAE/SE infrastructure is imported. Analysis engines are optional
+and checked when their wrapper is called. This lets users install only
+the methods needed for a project instead of forcing one large,
+conflict-prone environment.
+
+MuSiC, immunedeconv, and BayesPrism are declared optional dependencies
+but are not available from every standard Bioconductor/CRAN repository.
+Their wrappers resolve the installed backend only when called and
+restore any temporary search path compatibility changes; install them
+from their official repositories and record the commit or release in the
+project lockfile.
+
+See the [Chinese pak dependency installation
+guide](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/dependency-installation-zh.md)
+for the complete CRAN/Bioconductor backend list, verified GitHub package
+specifications, and notes about resources that package installation
+cannot provide.
+
+# Package index
+
+## All functions
+
+- [`activity_decouple()`](https://younthing.github.io/bulkMAE/reference/activity_decouple.md)
+  : Run one or more decoupleR methods
+- [`activity_matrix()`](https://younthing.github.io/bulkMAE/reference/activity_matrix.md)
+  : Convert long-format activity results to a source-by-sample matrix
+- [`activity_methods()`](https://younthing.github.io/bulkMAE/reference/activity_methods.md)
+  : List methods available through decoupleR
+- [`activity_progeny()`](https://younthing.github.io/bulkMAE/reference/activity_progeny.md)
+  : Infer pathway activity with PROGENy and decoupleR
+- [`activity_resource()`](https://younthing.github.io/bulkMAE/reference/activity_resource.md)
+  : Retrieve a network or gene-set resource through decoupleR
+- [`activity_resources()`](https://younthing.github.io/bulkMAE/reference/activity_resources.md)
+  : List molecular resources available through decoupleR
+- [`activity_tf()`](https://younthing.github.io/bulkMAE/reference/activity_tf.md)
+  : Infer transcription-factor activity with decoupleR
+- [`adjust_batch()`](https://younthing.github.io/bulkMAE/reference/adjust_batch.md)
+  : Remove batch effects from continuous expression data with limma
+- [`adjust_combat()`](https://younthing.github.io/bulkMAE/reference/adjust_combat.md)
+  : Adjust a continuous assay with ComBat
+- [`adjust_combatseq()`](https://younthing.github.io/bulkMAE/reference/adjust_combatseq.md)
+  : Adjust integer counts with ComBat-seq
+- [`adjust_covariates()`](https://younthing.github.io/bulkMAE/reference/adjust_covariates.md)
+  : Extract aligned adjustment covariates
+- [`adjust_ruv()`](https://younthing.github.io/bulkMAE/reference/adjust_ruv.md)
+  : Estimate unwanted factors with RUVg
+- [`adjust_sva()`](https://younthing.github.io/bulkMAE/reference/adjust_sva.md)
+  : Estimate surrogate variables with sva
+- [`annotate_biomart()`](https://younthing.github.io/bulkMAE/reference/annotate_biomart.md)
+  : Query Ensembl through biomaRt
+- [`annotate_ensembl()`](https://younthing.github.io/bulkMAE/reference/annotate_ensembl.md)
+  : Remove Ensembl version suffixes
+- [`annotate_gene_lengths()`](https://younthing.github.io/bulkMAE/reference/annotate_gene_lengths.md)
+  : Retrieve representative transcript lengths from Ensembl
+- [`annotate_ids()`](https://younthing.github.io/bulkMAE/reference/annotate_ids.md)
+  : Map feature identifiers with an AnnotationDbi database
+- [`annotate_rekey()`](https://younthing.github.io/bulkMAE/reference/annotate_rekey.md)
+  : Apply an identifier mapping to common gene-level values
+- [`annotation_orgdb()`](https://younthing.github.io/bulkMAE/reference/annotation_orgdb.md)
+  : Resolve a local organism annotation database
+- [`cluster_consensus()`](https://younthing.github.io/bulkMAE/reference/cluster_consensus.md)
+  : Run consensus clustering
+- [`cluster_consensus_classes()`](https://younthing.github.io/bulkMAE/reference/cluster_consensus_classes.md)
+  : Extract sample classes from a consensus-clustering solution
+- [`cluster_consensus_diagnostics()`](https://younthing.github.io/bulkMAE/reference/cluster_consensus_diagnostics.md)
+  : Calculate consensus-clustering stability diagnostics
+- [`cluster_nmf()`](https://younthing.github.io/bulkMAE/reference/cluster_nmf.md)
+  : Run non-negative matrix factorization
+- [`cluster_nmf_classes()`](https://younthing.github.io/bulkMAE/reference/cluster_nmf_classes.md)
+  : Extract sample or feature classes from an NMF fit
+- [`coexpr_differential()`](https://younthing.github.io/bulkMAE/reference/coexpr_differential.md)
+  : Test differential co-expression between two groups
+- [`coexpr_modules()`](https://younthing.github.io/bulkMAE/reference/coexpr_modules.md)
+  : Extract named WGCNA module labels
+- [`coexpr_pick_power()`](https://younthing.github.io/bulkMAE/reference/coexpr_pick_power.md)
+  : Evaluate candidate WGCNA soft-thresholding powers
+- [`coexpr_preservation()`](https://younthing.github.io/bulkMAE/reference/coexpr_preservation.md)
+  : Test preservation of reference WGCNA modules in another cohort
+- [`coexpr_wgcna()`](https://younthing.github.io/bulkMAE/reference/coexpr_wgcna.md)
+  : Detect co-expression modules with WGCNA
+- [`de_contrast()`](https://younthing.github.io/bulkMAE/reference/de_contrast.md)
+  : Construct limma-compatible contrasts from MAE sample metadata
+- [`de_deseq2()`](https://younthing.github.io/bulkMAE/reference/de_deseq2.md)
+  : Fit a DESeq2 differential-expression model
+- [`de_deseq2_results()`](https://younthing.github.io/bulkMAE/reference/de_deseq2_results.md)
+  : Extract DESeq2 results
+- [`de_design()`](https://younthing.github.io/bulkMAE/reference/de_design.md)
+  : Construct a model design matrix from MAE sample metadata
+- [`de_dream()`](https://younthing.github.io/bulkMAE/reference/de_dream.md)
+  : Fit a repeated-measures model with dream
+- [`de_edger()`](https://younthing.github.io/bulkMAE/reference/de_edger.md)
+  : Fit an edgeR quasi-likelihood model
+- [`de_limma()`](https://younthing.github.io/bulkMAE/reference/de_limma.md)
+  : Fit a limma model to continuous expression or score data
+- [`de_masigpro()`](https://younthing.github.io/bulkMAE/reference/de_masigpro.md)
+  : Fit a maSigPro time-course or dose-response model
+- [`de_masigpro_design()`](https://younthing.github.io/bulkMAE/reference/de_masigpro_design.md)
+  : Build a maSigPro experimental-design table from sample metadata
+- [`de_ranks()`](https://younthing.github.io/bulkMAE/reference/de_ranks.md)
+  : Extract finite named ranks from differential-expression results
+- [`de_selected()`](https://younthing.github.io/bulkMAE/reference/de_selected.md)
+  : Select differential features as a named logical vector
+- [`de_table()`](https://younthing.github.io/bulkMAE/reference/de_table.md)
+  : Convert native differential-expression results to a stable table
+- [`de_variance()`](https://younthing.github.io/bulkMAE/reference/de_variance.md)
+  : Partition expression variance among model terms
+- [`de_voom()`](https://younthing.github.io/bulkMAE/reference/de_voom.md)
+  : Fit a limma-voom differential-expression model
+- [`deconv()`](https://younthing.github.io/bulkMAE/reference/deconv.md)
+  : Deconvolve bulk expression with immunedeconv
+- [`deconv_bayesprism()`](https://younthing.github.io/bulkMAE/reference/deconv_bayesprism.md)
+  : Deconvolve bulk counts with BayesPrism
+- [`deconv_cibersortx_input()`](https://younthing.github.io/bulkMAE/reference/deconv_cibersortx_input.md)
+  : Prepare a CIBERSORTx mixture table
+- [`deconv_music()`](https://younthing.github.io/bulkMAE/reference/deconv_music.md)
+  : Deconvolve bulk counts with MuSiC
+- [`deconv_reference()`](https://younthing.github.io/bulkMAE/reference/deconv_reference.md)
+  : Construct a single-cell deconvolution reference
+- [`drug_lincs()`](https://younthing.github.io/bulkMAE/reference/drug_lincs.md)
+  : Search a LINCS reference database for connected signatures
+- [`drug_lincs_databases()`](https://younthing.github.io/bulkMAE/reference/drug_lincs_databases.md)
+  : List supported signatureSearch reference databases
+- [`drug_query()`](https://younthing.github.io/bulkMAE/reference/drug_query.md)
+  : Prepare an up/down query for LINCS or CMap
+- [`dtu_diffsplice()`](https://younthing.github.io/bulkMAE/reference/dtu_diffsplice.md)
+  : Test differential exon or transcript usage from a fitted limma/edgeR
+  model
+- [`enrich_camera()`](https://younthing.github.io/bulkMAE/reference/enrich_camera.md)
+  : Run CAMERA competitive gene-set testing
+- [`enrich_fgsea()`](https://younthing.github.io/bulkMAE/reference/enrich_fgsea.md)
+  : Run preranked gene-set enrichment with fgsea
+- [`enrich_fry()`](https://younthing.github.io/bulkMAE/reference/enrich_fry.md)
+  : Run FRY rotation gene-set testing
+- [`enrich_go()`](https://younthing.github.io/bulkMAE/reference/enrich_go.md)
+  : Run Gene Ontology enrichment
+- [`enrich_goseq()`](https://younthing.github.io/bulkMAE/reference/enrich_goseq.md)
+  : Run selection-bias-aware enrichment with goseq
+- [`enrich_gsea()`](https://younthing.github.io/bulkMAE/reference/enrich_gsea.md)
+  : Run preranked enrichment against arbitrary gene sets with
+  clusterProfiler
+- [`enrich_kegg()`](https://younthing.github.io/bulkMAE/reference/enrich_kegg.md)
+  : Run KEGG enrichment
+- [`enrich_ora()`](https://younthing.github.io/bulkMAE/reference/enrich_ora.md)
+  : Run over-representation analysis against arbitrary gene sets
+- [`enrich_reactome()`](https://younthing.github.io/bulkMAE/reference/enrich_reactome.md)
+  : Run Reactome enrichment
+- [`enrich_roast()`](https://younthing.github.io/bulkMAE/reference/enrich_roast.md)
+  : Run mroast rotation gene-set testing
+- [`filter_expr()`](https://younthing.github.io/bulkMAE/reference/filter_expr.md)
+  : Filter lowly expressed features with edgeR
+- [`gene_sets_msigdb()`](https://younthing.github.io/bulkMAE/reference/gene_sets_msigdb.md)
+  : Retrieve MSigDB gene sets through msigdbr
+- [`gene_sets_prepare()`](https://younthing.github.io/bulkMAE/reference/gene_sets_prepare.md)
+  : Standardize gene sets as a named list
+- [`gene_sets_read_gmt()`](https://younthing.github.io/bulkMAE/reference/gene_sets_read_gmt.md)
+  : Read gene sets from a GMT file
+- [`import_tximport()`](https://younthing.github.io/bulkMAE/reference/import_tximport.md)
+  : Import transcript abundance estimates with tximport
+- [`mae_add_assay()`](https://younthing.github.io/bulkMAE/reference/mae_add_assay.md)
+  : Add an aligned assay to one experiment
+- [`mae_add_experiment()`](https://younthing.github.io/bulkMAE/reference/mae_add_experiment.md)
+  : Add an experiment while preserving the MAE sample map
+- [`mae_add_feature_data()`](https://younthing.github.io/bulkMAE/reference/mae_add_feature_data.md)
+  : Add aligned feature metadata to one experiment
+- [`mae_add_sample_data()`](https://younthing.github.io/bulkMAE/reference/mae_add_sample_data.md)
+  : Add aligned sample metadata to one experiment
+- [`mae_assays()`](https://younthing.github.io/bulkMAE/reference/mae_assays.md)
+  : List assays in one experiment
+- [`mae_create()`](https://younthing.github.io/bulkMAE/reference/mae_create.md)
+  : Construct a MultiAssayExperiment
+- [`mae_create_experiment()`](https://younthing.github.io/bulkMAE/reference/mae_create_experiment.md)
+  : Construct a SummarizedExperiment leaf
+- [`mae_experiments()`](https://younthing.github.io/bulkMAE/reference/mae_experiments.md)
+  : List experiments in a MultiAssayExperiment
+- [`mae_feature_data()`](https://younthing.github.io/bulkMAE/reference/mae_feature_data.md)
+  : Extract feature metadata from one experiment
+- [`mae_from_matrix()`](https://younthing.github.io/bulkMAE/reference/mae_from_matrix.md)
+  : Construct a one-experiment MAE from a matrix
+- [`mae_pull_assay()`](https://younthing.github.io/bulkMAE/reference/mae_pull_assay.md)
+  : Extract an assay matrix
+- [`mae_pull_experiment()`](https://younthing.github.io/bulkMAE/reference/mae_pull_experiment.md)
+  : Extract an experiment aligned to primary sample data
+- [`mae_samples()`](https://younthing.github.io/bulkMAE/reference/mae_samples.md)
+  : Extract aligned sample metadata
+- [`mae_simulate()`](https://younthing.github.io/bulkMAE/reference/mae_simulate.md)
+  : Simulate a self-contained bulk-transcriptomics MAE
+- [`mae_subset_features()`](https://younthing.github.io/bulkMAE/reference/mae_subset_features.md)
+  : Subset features in one experiment
+- [`mae_validate()`](https://younthing.github.io/bulkMAE/reference/mae_validate.md)
+  : Validate the package's MultiAssayExperiment contract
+- [`meta_collect()`](https://younthing.github.io/bulkMAE/reference/meta_collect.md)
+  : Collect one feature's effect estimates across differential analyses
+- [`meta_effect()`](https://younthing.github.io/bulkMAE/reference/meta_effect.md)
+  : Fit a univariate or meta-regression model
+- [`ml_glmnet()`](https://younthing.github.io/bulkMAE/reference/ml_glmnet.md)
+  : Fit a cross-validated glmnet prediction model
+- [`network_genie3()`](https://younthing.github.io/bulkMAE/reference/network_genie3.md)
+  : Infer a gene regulatory network with GENIE3
+- [`network_genie3_links()`](https://younthing.github.io/bulkMAE/reference/network_genie3_links.md)
+  : Convert GENIE3 weights to a ranked edge list
+- [`network_string()`](https://younthing.github.io/bulkMAE/reference/network_string.md)
+  : Retrieve STRING interactions for selected assay features
+- [`normalize_deseq()`](https://younthing.github.io/bulkMAE/reference/normalize_deseq.md)
+  : Estimate DESeq2 size factors
+- [`normalize_tmm()`](https://younthing.github.io/bulkMAE/reference/normalize_tmm.md)
+  : Calculate TMM normalization factors
+- [`normalize_tpm()`](https://younthing.github.io/bulkMAE/reference/normalize_tpm.md)
+  : Convert counts to transcripts per million
+- [`qc_correlation()`](https://younthing.github.io/bulkMAE/reference/qc_correlation.md)
+  : Calculate sample-to-sample correlations
+- [`qc_library()`](https://younthing.github.io/bulkMAE/reference/qc_library.md)
+  : Calculate sample-level library metrics
+- [`qc_outliers()`](https://younthing.github.io/bulkMAE/reference/qc_outliers.md)
+  : Flag samples with unusually large robust PCA distances
+- [`reduce_mds()`](https://younthing.github.io/bulkMAE/reference/reduce_mds.md)
+  : Run sample multidimensional scaling
+- [`reduce_pca()`](https://younthing.github.io/bulkMAE/reference/reduce_pca.md)
+  : Run sample principal component analysis
+- [`reduce_tsne()`](https://younthing.github.io/bulkMAE/reference/reduce_tsne.md)
+  : Run t-SNE on samples
+- [`reduce_umap()`](https://younthing.github.io/bulkMAE/reference/reduce_umap.md)
+  : Run UMAP on samples
+- [`score_gsva()`](https://younthing.github.io/bulkMAE/reference/score_gsva.md)
+  : Calculate GSVA scores
+- [`score_signature()`](https://younthing.github.io/bulkMAE/reference/score_signature.md)
+  : Score a gene-expression signature
+- [`score_singscore()`](https://younthing.github.io/bulkMAE/reference/score_singscore.md)
+  : Score samples with rank-based singscore
+- [`score_ssgsea()`](https://younthing.github.io/bulkMAE/reference/score_ssgsea.md)
+  : Calculate single-sample GSEA scores
+- [`surv_cox()`](https://younthing.github.io/bulkMAE/reference/surv_cox.md)
+  : Fit a Cox proportional-hazards model
+- [`surv_formula()`](https://younthing.github.io/bulkMAE/reference/surv_formula.md)
+  : Construct a namespace-safe survival formula
+- [`surv_km()`](https://younthing.github.io/bulkMAE/reference/surv_km.md)
+  : Fit Kaplan-Meier survival curves
+- [`surv_penalized()`](https://younthing.github.io/bulkMAE/reference/surv_penalized.md)
+  : Fit a cross-validated penalized Cox model
+- [`surv_roc()`](https://younthing.github.io/bulkMAE/reference/surv_roc.md)
+  : Calculate time-dependent ROC curves
+- [`transform_rlog()`](https://younthing.github.io/bulkMAE/reference/transform_rlog.md)
+  : Apply the DESeq2 regularized-log transformation
+- [`transform_voom()`](https://younthing.github.io/bulkMAE/reference/transform_voom.md)
+  : Apply limma-voom transformation and precision weighting
+- [`transform_vst()`](https://younthing.github.io/bulkMAE/reference/transform_vst.md)
+  : Apply the DESeq2 variance-stabilizing transformation
+
+# Articles
+
+### All vignettes
+
+- [A stateless bulk transcriptomics workflow with
+  bulkMAE](https://younthing.github.io/bulkMAE/articles/getting-started.md):
