@@ -18,6 +18,9 @@ biocViews: RNASeq, GeneExpression, DifferentialExpression, DifferentialSplicing,
     GeneSetEnrichment, NetworkInference, Clustering, TimeCourse,
     Classification, Survival
 License: Artistic-2.0
+URL: https://younthing.github.io/bulkMAE/,
+    https://github.com/Younthing/bulkMAE
+BugReports: https://github.com/Younthing/bulkMAE/issues
 Encoding: UTF-8
 Depends:
     R (>= 4.4.0)
@@ -33,6 +36,7 @@ Suggests:
     AnnotationDbi,
     BayesPrism,
     Biobase,
+    BiocParallel,
     biomaRt,
     clusterProfiler,
     ConsensusClusterPlus,

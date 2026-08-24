@@ -1,0 +1,9 @@
+url: https://younthing.github.io/bulkMAE/
+
+template:
+  bootstrap: 5
+
+# The package is not published on CRAN or Bioconductor yet. Disabling the
+# auto-generated sidebar keeps site builds from probing those package indexes.
+home:
+  sidebar: false

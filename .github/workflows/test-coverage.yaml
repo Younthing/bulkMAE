@@ -1,0 +1,67 @@
+name: Test coverage
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-coverage:
+    name: Test coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      R_KEEP_PKG_SOURCE: yes
+      BULKMAE_RUN_ONLINE_TESTS: "false"
+      TESTTHAT_PARALLEL: "false"
+
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - uses: r-lib/actions/setup-r@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
+        with:
+          dependencies: '"all"'
+          extra-packages: |
+            any::covr
+            any::xml2
+            any::testthat
+            MuSiC=github::xuranw/MuSiC@f21fe67f5670d5e9fca0ad7550abaae3423eb59c
+            immunedeconv=github::omnideconv/immunedeconv@e625e6c28ed14a30f9f40f159925cc9f0df4fa49
+            BayesPrism=github::Danko-Lab/BayesPrism/BayesPrism@19052052a6f30833b27e2148294459b0ba2f923e
+          needs: coverage
+
+      - name: Calculate test coverage
+        run: |
+          coverage <- covr::package_coverage(quiet = FALSE)
+          print(coverage)
+          covr::to_cobertura(coverage)
+        shell: Rscript {0}
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
+        with:
+          files: ./cobertura.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: coverage-report
+          path: cobertura.xml
+          if-no-files-found: error

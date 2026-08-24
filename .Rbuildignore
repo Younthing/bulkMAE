@@ -5,3 +5,7 @@
 ^Rplots\.pdf$
 ^tests/testthat/Rplots\.pdf$
 ^omnipathr-log$
+^tests/testthat/omnipathr-log$
+^\.github$
+^_pkgdown\.yml$
+^docs$

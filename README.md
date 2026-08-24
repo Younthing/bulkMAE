@@ -1,5 +1,12 @@
 # bulkMAE
 
+<!-- badges: start -->
+[![R-CMD-check](https://github.com/Younthing/bulkMAE/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/Younthing/bulkMAE/actions/workflows/R-CMD-check.yaml)
+[![Full backend check](https://github.com/Younthing/bulkMAE/actions/workflows/full-backend-check.yaml/badge.svg)](https://github.com/Younthing/bulkMAE/actions/workflows/full-backend-check.yaml)
+[![Codecov test coverage](https://codecov.io/gh/Younthing/bulkMAE/graph/badge.svg)](https://app.codecov.io/gh/Younthing/bulkMAE)
+[![pkgdown](https://github.com/Younthing/bulkMAE/actions/workflows/pkgdown.yaml/badge.svg)](https://younthing.github.io/bulkMAE/)
+<!-- badges: end -->
+
 `bulkMAE` is a deliberately small adapter layer for bulk transcriptomics in R.
 Every assay-level workflow starts from a `MultiAssayExperiment` (MAE), selects
 one `SummarizedExperiment` leaf, aligns it with primary sample metadata through
@@ -130,14 +137,25 @@ colSums(mae_pull_assay(mae_with_tpm, "rna", "tpm"))
 These helpers return modified copies: `mae` remains the raw-count input, while
 `mae_with_tpm` and `mae_small` make each added or filtered data state explicit.
 
-Read the [complete walkthrough](vignettes/getting-started.Rmd), the
-[method-selection guide](inst/guides/expanded-methods-zh.md), and the
-[input-completeness and resource-boundary audit](inst/guides/input-completeness-zh.md),
-plus the [implementation-to-documentation audit map](inst/guides/official-sources.md).
+Read the [complete walkthrough](https://younthing.github.io/bulkMAE/articles/getting-started.html), the
+[method-selection guide](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/expanded-methods-zh.md), and the
+[input-completeness and resource-boundary audit](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/input-completeness-zh.md),
+plus the [implementation-to-documentation audit map](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/official-sources.md).
 Users upgrading from 0.3 or earlier should also read the
-[0.4 naming migration map](inst/guides/naming-migration-zh.md).
+[0.4 naming migration map](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/naming-migration-zh.md).
 After installation, the audit files are also available under
 `system.file("guides", package = "bulkMAE")`.
+
+## Continuous integration
+
+Pull requests and the default branch run a cross-platform R CMD check against
+the package's hard dependencies. A separate Ubuntu job installs every optional
+offline analysis backend with `pak`, while the coverage workflow exercises the
+same full backend set. Network-backed tests remain opt-in so transient failures
+from BioMart, KEGG, STRING, OmniPath, or LINCS do not block ordinary changes.
+
+The [pkgdown website](https://younthing.github.io/bulkMAE/) is rebuilt from
+`main` and published from the generated `gh-pages` branch.
 
 ## Dependency policy
 
@@ -151,7 +169,7 @@ resolve the installed backend only when called and restore any temporary search
 path compatibility changes; install them from their official repositories and
 record the commit or release in the project lockfile.
 
-See the [Chinese pak dependency installation guide](inst/guides/dependency-installation-zh.md)
+See the [Chinese pak dependency installation guide](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/dependency-installation-zh.md)
 for the complete CRAN/Bioconductor backend list, verified GitHub package
 specifications, and notes about resources that package installation cannot
 provide.
