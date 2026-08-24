@@ -134,8 +134,7 @@ mae_add_assay <- function(
   }
 
   if (methods::is(value, "SummarizedExperiment")) {
-    available <- SummarizedExperiment::assayNames(value)
-    if (length(available) != 1L) {
+    if (length(SummarizedExperiment::assays(value)) != 1L) {
       stop(
         "A `SummarizedExperiment` value must contain exactly one assay.",
         call. = FALSE

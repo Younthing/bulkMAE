@@ -25,6 +25,7 @@ Encoding: UTF-8
 Depends:
     R (>= 4.4.0)
 Imports:
+    ggplot2 (>= 3.5.0),
     grDevices,
     methods,
     MultiAssayExperiment,
@@ -34,6 +35,7 @@ Imports:
     utils
 Suggests:
     AnnotationDbi,
+    airway,
     BayesPrism,
     Biobase,
     BiocParallel,
@@ -77,6 +79,7 @@ Suggests:
     tximport,
     timeROC,
     uwot,
+    vdiffr,
     variancePartition,
     WGCNA
 VignetteBuilder: knitr

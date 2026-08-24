@@ -296,7 +296,8 @@ de_selected <- function(
   }
   selected <- !is.na(table$adjusted_p_value) &
     table$adjusted_p_value <= fdr &
-    is.finite(table$effect) & abs(table$effect) >= min_abs_effect
+    is.finite(table$effect) & table$effect != 0 &
+    abs(table$effect) >= min_abs_effect
   if (direction == "up") selected <- selected & table$effect > 0
   if (direction == "down") selected <- selected & table$effect < 0
   stats::setNames(selected, table$feature_id)

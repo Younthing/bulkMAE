@@ -1,0 +1,257 @@
+---
+title: "airway：从样本质控到配对差异表达"
+author: "bulkMAE"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    number_sections: true
+vignette: >
+  %\VignetteIndexEntry{airway：从样本质控到配对差异表达}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 4.8,
+  dpi = 120,
+  fig.retina = 2
+)
+set.seed(20260824)
+library(bulkMAE)
+library(ggplot2)
+```
+
+# 目标与数据
+
+这篇教程用真实 RNA-seq 数据完成一条可复现的样本质控（QC）和差异表达流程。数据来自 Bioconductor 的
+[`airway`](https://bioconductor.org/packages/release/data/experiment/html/airway.html)
+ExperimentData 包；安装完成后，本文渲染不访问网络。若尚未安装教学依赖，可以先运行：
+
+```{r install, eval=FALSE}
+BiocManager::install(c("airway", "edgeR", "DESeq2"))
+```
+
+```{r load-data}
+data("airway", package = "airway")
+
+counts <- SummarizedExperiment::assay(airway, "counts")
+sample_data <- as.data.frame(
+  SummarizedExperiment::colData(airway),
+  optional = TRUE
+)
+feature_data <- as.data.frame(
+  SummarizedExperiment::rowData(airway),
+  optional = TRUE
+)[, c("gene_id", "gene_name", "symbol", "gene_biotype"), drop = FALSE]
+
+sample_data$dex <- factor(sample_data$dex, levels = c("untrt", "trt"))
+sample_data$cell <- factor(sample_data$cell)
+feature_data$display_label <- as.character(feature_data$symbol)
+missing_label <- is.na(feature_data$display_label) |
+  !nzchar(feature_data$display_label)
+feature_data$display_label[missing_label] <- feature_data$gene_id[missing_label]
+feature_data$display_label <- make.unique(feature_data$display_label)
+
+mae <- mae_from_matrix(
+  expression = counts,
+  samples = sample_data,
+  row_data = feature_data,
+  experiment = "airway",
+  assay = "counts"
+)
+```
+
+载入对象包含 `r format(nrow(counts), big.mark = ",")` 个基因和
+`r ncol(counts)` 个样本。四个 cell line 各有一份 untreated 与一份 treated 样本，因而处理比较不是
+8 个互相独立样本的简单两组比较。后面的模型使用 `~ cell + dex`：`cell` 吸收细胞系间的基线差异，
+`dex` 估计在四对样本中一致的地塞米松效应。
+
+```{r pairing-table}
+knitr::kable(
+  with(sample_data, table(cell, dex)),
+  caption = "每个 cell line 的 untreated/treated 配对结构"
+)
+```
+
+# 原始计数的文库质控
+
+`qc_library()`只计算透明的样本级汇总；绘图函数返回普通 `ggplot`，所以标题和局部样式仍用 `+` 添加。
+
+```{r library-qc, fig.cap="图 1：原始计数的文库规模、检出基因数和零计数比例。", fig.alt="八个 airway 样本的文库规模、检出基因数与零计数比例分面柱状图。"}
+library_metrics <- qc_library(mae, "airway", "counts")
+plot_qc_library(library_metrics) +
+  labs(title = "Raw-count library QC")
+```
+
+这些量适合发现测序深度或检出率明显不同的样本，但不能单独证明某个样本“错误”，也不能替代对实验记录的核查。
+
+# 过滤与方差稳定化
+
+低计数基因会增加多重检验负担，并可能让样本距离受大量近零值影响。这里按 `dex` 分组调用 edgeR
+`filterByExpr()` 的薄封装；筛选只定义后续分析的特征集合，不修改原始 `mae`。
+
+```{r filter}
+keep <- filter_expr(mae, "airway", group = "dex")
+mae_filtered <- mae_subset_features(mae, "airway", names(keep)[keep])
+```
+
+过滤后保留 `r format(sum(keep), big.mark = ",")` / `r format(length(keep), big.mark = ",")`
+个基因（`r sprintf("%.1f%%", 100 * mean(keep))`）。
+
+方差稳定化用于相关性、PCA 和热图等探索性图形。`blind = FALSE` 让离散度趋势知道设计结构；它不替代原始计数上的差异模型。
+
+```{r vst}
+vst <- transform_vst(
+  mae_filtered,
+  "airway",
+  blind = FALSE,
+  design = ~ cell + dex
+)
+mae_vst <- mae_add_assay(mae_filtered, "airway", vst, name = "vst")
+```
+
+# 样本关系与离群信号
+
+```{r correlation, fig.cap="图 2：VST 表达的样本 Pearson 相关性，按层次聚类重新排序。", fig.alt="八个 airway 样本的 VST 表达 Pearson 相关性热图。"}
+sample_correlation <- qc_correlation(mae_vst, "airway", "vst")
+plot_qc_correlation(sample_correlation, cluster = TRUE) +
+  labs(title = "VST sample correlation")
+```
+
+```{r pca, fig.cap="图 3：VST 表达的前两个主成分；颜色表示处理，形状表示 cell line。", fig.alt="airway 样本的 PCA 散点图，按 dex 着色并按 cell line 设定点形。"}
+pca <- reduce_pca(mae_vst, "airway", "vst")
+plot_embedding(
+  pca,
+  sample_data = mae_samples(mae_vst, "airway"),
+  colour = "dex",
+  shape = "cell",
+  label = "SampleName"
+) +
+  labs(title = "VST principal components")
+```
+
+```{r outliers, fig.cap="图 4：基于前五个主成分的稳健距离及 99% 卡方筛查阈值。", fig.alt="八个 airway 样本的稳健 PCA 距离点图，虚线为筛查阈值。"}
+outlier_metrics <- qc_outliers(pca, components = 1:5, probability = 0.99)
+plot_qc_outliers(outlier_metrics) +
+  labs(title = "Robust PCA distance screen")
+```
+
+稳健距离标记是需要回看原始记录、比对质量和其它 QC 指标的**审查信号**，不是自动删除样本的规则。本流程不会因为该图移除任何样本。
+
+# 配对差异表达
+
+DESeq2 模型沿用 `~ cell + dex`，并显式提取 `trt - untrt`。这使比较方向不会依赖当前因子水平的偶然顺序。
+
+```{r fit-de}
+fit <- de_deseq2(
+  mae_filtered,
+  "airway",
+  design = ~ cell + dex,
+  fitType = "parametric",
+  quiet = TRUE
+)
+de_result <- de_deseq2_results(
+  fit,
+  contrast = c("dex", "trt", "untrt"),
+  alpha = 0.05
+)
+de_results <- de_table(de_result)
+
+fdr_threshold <- 0.05
+effect_threshold <- 1
+selected <- de_selected(
+  de_result,
+  fdr = fdr_threshold,
+  min_abs_effect = effect_threshold
+)
+up_count <- sum(selected & de_results$effect > 0)
+down_count <- sum(selected & de_results$effect < 0)
+```
+
+在 FDR ≤ `r fdr_threshold` 且绝对效应估计 ≥ `r effect_threshold` 的联合阈值下，共有
+`r sum(selected)` 个基因入选，其中 `r up_count` 个上调、`r down_count` 个下调。缺失 adjusted p-value
+按“不显著”处理。
+
+```{r de-table}
+feature_lookup <- mae_feature_data(mae_filtered, "airway")
+top_order <- order(de_results$adjusted_p_value, na.last = NA)
+top_table <- de_results[top_order[seq_len(min(10L, length(top_order)))], , drop = FALSE]
+top_table$symbol <- feature_lookup[top_table$feature_id, "symbol"]
+top_table <- top_table[, c(
+  "feature_id", "symbol", "effect", "standard_error", "p_value",
+  "adjusted_p_value"
+)]
+knitr::kable(top_table, digits = 4, caption = "按 adjusted p-value 排序的前 10 个基因")
+```
+
+# MA、火山图与描述性热图
+
+CRISPLD2（Ensembl `ENSG00000103196`）由原研究预先指定为关注基因，而不是看完当前结果后再挑出的标签。
+
+```{r plotting-inputs}
+crispld2 <- "ENSG00000103196"
+feature_labels <- stats::setNames(
+  feature_lookup$display_label,
+  rownames(feature_lookup)
+)
+feature_labels[crispld2] <- "CRISPLD2"
+```
+
+```{r ma-plot, fig.cap="图 5：DESeq2 平均丰度与处理效应的 MA 图；预先标注 CRISPLD2。", fig.alt="airway 差异表达 MA 图，横轴为对数尺度平均丰度，纵轴为处理效应，并标注 CRISPLD2。"}
+plot_de_ma(
+  de_result,
+  fdr = fdr_threshold,
+  min_abs_effect = effect_threshold,
+  label_features = crispld2,
+  feature_labels = feature_labels
+) +
+  labs(title = "Dexamethasone effect by mean abundance")
+```
+
+```{r volcano-plot, fig.cap="图 6：处理效应与原始 p-value 的火山图；颜色由 FDR 与效应阈值共同决定。", fig.alt="airway 差异表达火山图，蓝色为下调、灰色为不显著、橙红色为上调，并标注 CRISPLD2。"}
+plot_de_volcano(
+  de_result,
+  fdr = fdr_threshold,
+  min_abs_effect = effect_threshold,
+  label_features = crispld2,
+  feature_labels = feature_labels
+) +
+  labs(title = "Dexamethasone differential expression")
+```
+
+最后选择 adjusted p-value 最小的 30 个基因，并在 VST 尺度上按行标准化。这里必须显式传入 feature ID；绘图函数不会暗中选择“最显著”基因。
+
+```{r heatmap, fig.height=7, fig.cap="图 7：adjusted p-value 最小的 30 个基因的 VST 行标准化热图。", fig.alt="三十个差异最显著基因在八个 airway 样本中的 VST 行 z-score 热图，按处理分面。"}
+heatmap_features <- de_results$feature_id[top_order[seq_len(min(30L, length(top_order)))]]
+plot_assay_heatmap(
+  mae_vst,
+  "airway",
+  "vst",
+  features = heatmap_features,
+  scale = "row",
+  cluster_rows = TRUE,
+  cluster_columns = TRUE,
+  column_split = "dex",
+  feature_label = "display_label"
+) +
+  labs(title = "Top 30 genes (descriptive view)")
+```
+
+这张热图在用于拟合和排序的同一批数据上展示，因此只是描述性总结，不是独立验证。确认处理效应仍需要独立队列或有针对性的实验验证。
+
+# 限制、来源与会话信息
+
+本分析只有四个 cell line、每个条件各一次测量；`cell` 配对设计提高了比较效率，但不能估计更广泛人群中的所有变异，也不能证明因果机制。独立过滤、模型假设、基因注释版本和阈值选择都会影响报告结果。
+
+数据来自 airway ExperimentData 包，对应 Himes 等人的研究：*RNA-Seq Transcriptome Profiling Identifies CRISPLD2 as a Glucocorticoid Responsive Gene that Modulates Cytokine Function in Airway Smooth Muscle Cells*（PLoS ONE, 2014；PMID 24926665；GEO GSE52778）。数据包说明见
+[Bioconductor airway 手册](https://bioconductor.org/packages/release/data/experiment/manuals/airway/man/airway.pdf)。
+
+本文使用 bulkMAE `r as.character(utils::packageVersion("bulkMAE"))`。完整会话信息如下，便于记录 R、Bioconductor 和后端版本。
+
+```{r session-info}
+sessionInfo()
+```

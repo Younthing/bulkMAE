@@ -137,7 +137,36 @@ colSums(mae_pull_assay(mae_with_tpm, "rna", "tpm"))
 These helpers return modified copies: `mae` remains the raw-count input, while
 `mae_with_tpm` and `mae_small` make each added or filtered data state explicit.
 
-Read the [complete walkthrough](https://younthing.github.io/bulkMAE/articles/getting-started.html), the
+## Publication-size plots
+
+Every `plot_*()` helper returns a standard ggplot object and carries a
+recommended physical size tuned to that plot family. Continue styling with
+ordinary ggplot2 syntax, then let `plot_save()` export at that final size:
+
+```r
+qc_plot <- plot_qc_library(qc_library(mae, "rna", "counts")) +
+  labs(title = "Library QC") +
+  theme(legend.position = "bottom")
+
+plot_save("library-qc.pdf", qc_plot)
+```
+
+The default is `scale = 1`; PDF output uses Cairo when available. Override
+either dimension explicitly when a journal requires an exact layout:
+
+```r
+plot_save("library-qc.pdf", qc_plot, width = 8.5, height = 11, units = "cm")
+```
+
+`theme_bulkmae()` uses publication-oriented 6 pt base text, and data labels
+drawn by bulkMAE use point units explicitly. A theme controls styling but not
+the physical graphics device: RStudio's plot pane and knitr chunks therefore
+do not read the recommended dimensions. Use `plot_save()` for exact files, and
+set chunk `fig.width` / `fig.height` explicitly when document previews also
+need a fixed aspect ratio.
+
+Read the [API walkthrough](https://younthing.github.io/bulkMAE/articles/getting-started.html), the
+[airway QC and paired differential-expression tutorial](https://younthing.github.io/bulkMAE/articles/airway-qc-de.html), the
 [method-selection guide](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/expanded-methods-zh.md), and the
 [input-completeness and resource-boundary audit](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/input-completeness-zh.md),
 plus the [implementation-to-documentation audit map](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/official-sources.md).
@@ -159,7 +188,7 @@ The [pkgdown website](https://younthing.github.io/bulkMAE/) is rebuilt from
 
 ## Dependency policy
 
-Only MAE/SE infrastructure is imported. Analysis engines are optional and
+Only MAE/SE infrastructure and ggplot2 are imported. Analysis engines are optional and
 checked when their wrapper is called. This lets users install only the methods
 needed for a project instead of forcing one large, conflict-prone environment.
 

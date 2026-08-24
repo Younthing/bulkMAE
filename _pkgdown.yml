@@ -7,3 +7,19 @@ template:
 # auto-generated sidebar keeps site builds from probing those package indexes.
 home:
   sidebar: false
+
+articles:
+  - title: Tutorials
+    navbar: Tutorials
+    contents:
+      - getting-started
+      - airway-qc-de
+
+reference:
+  - title: Plotting
+    desc: Standard ggplot2 views of QC, embeddings, differential expression, and assays.
+    contents:
+      - has_concept("plotting")
+  - title: Functions
+    contents:
+      - lacks_concepts("plotting")
