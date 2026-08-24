@@ -165,7 +165,7 @@ do not read the recommended dimensions. Use `plot_save()` for exact files, and
 set chunk `fig.width` / `fig.height` explicitly when document previews also
 need a fixed aspect ratio.
 
-Read the [API walkthrough](https://younthing.github.io/bulkMAE/articles/getting-started.html), the
+Read the [Chinese executable getting-started guide](https://younthing.github.io/bulkMAE/articles/getting-started.html), the
 [airway QC and paired differential-expression tutorial](https://younthing.github.io/bulkMAE/articles/airway-qc-de.html), the
 [method-selection guide](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/expanded-methods-zh.md), and the
 [input-completeness and resource-boundary audit](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/input-completeness-zh.md),

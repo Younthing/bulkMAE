@@ -1,12 +1,12 @@
 ---
-title: "airway：从样本质控到配对差异表达"
+title: "从样本质控到配对差异表达"
 author: "bulkMAE"
 output:
   rmarkdown::html_vignette:
     toc: true
     number_sections: true
 vignette: >
-  %\VignetteIndexEntry{airway：从样本质控到配对差异表达}
+  %\VignetteIndexEntry{从样本质控到配对差异表达}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---

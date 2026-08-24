@@ -1,529 +1,304 @@
 ---
-title: "A stateless bulk transcriptomics workflow with bulkMAE"
-author: "Younthing"
-date: "`r Sys.Date()`"
-output: rmarkdown::html_vignette
+title: "快速入门：从表达矩阵到 bulkMAE 工作流"
+author: "bulkMAE"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    number_sections: true
 vignette: >
-  %\VignetteIndexEntry{A stateless bulk transcriptomics workflow with bulkMAE}
+  %\VignetteIndexEntry{快速入门：从表达矩阵到 bulkMAE 工作流}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 5.5,
+  fig.height = 4,
+  dpi = 120,
+  fig.retina = 2
+)
+set.seed(20260825)
+library(bulkMAE)
+library(ggplot2)
 ```
 
-Most backend-specific sections remain an unevaluated cookbook because the
-engines are optional and several resources are online or cache-backed. The
-construction and local QC chunks are deliberately executable during vignette
-builds; the package test suite executes the complete offline public-API chains.
+# 本文会完成什么
 
-## 1. Data contract
+这篇教程用一份小型合成数据，在几分钟内完成一条可执行的核心流程：
 
-`bulkMAE` uses a `MultiAssayExperiment` as the public input because it already
-defines the three relationships needed by bulk studies:
+1. 从 feature × sample 表达矩阵构建 `MultiAssayExperiment`（MAE）；
+2. 检查 experiment、assay 和样本元数据是否按标识符对齐；
+3. 在不修改原对象的前提下增加一个用于探索性分析的 assay；
+4. 计算文库 QC、运行 PCA，并用标准 ggplot2 语法定制结果；
+5. 从样本元数据构建设计矩阵，为后续统计后端准备显式模型。
 
-1. `experiments()` stores `SummarizedExperiment` leaves;
-2. `colData()` stores primary subject/sample metadata;
-3. `sampleMap()` relates assay columns to primary samples, including replicated
-   measurements or assay-specific names.
+合成数据只用于教学和复现 bug，没有生物学意义。真实 counts 的过滤、VST、配对 DE、MA/Volcano
+和热图请继续阅读 [airway 配对差异分析教程](airway-qc-de.html)。
 
-The wrappers call `getWithColData()` before analysis. Consequently, a backend
-sees an ordinary assay and metadata table whose rows and columns are aligned.
-No result is written back to the MAE.
+# 先理解三个显式选择
 
-Public functions use `<family>_<method>()` or `<family>_<operation>()` names.
-Thus `de_`, `enrich_`, `score_`, `activity_`, `coexpr_`, and `surv_` each form
-one discoverable autocomplete family. The complete 0.3-to-0.4 rename table is
-installed as `inst/guides/naming-migration-zh.md`.
+大多数 bulkMAE 分析函数都会明确接收三个信息：
 
-## 2. Construct an MAE
+- `x`：保存数据与元数据的 MAE；
+- `experiment`：本次分析使用哪个 `SummarizedExperiment`；
+- `assay`：该 experiment 中使用哪一个数值矩阵。
 
-```{r construct, eval=TRUE}
-library(bulkMAE)
+MAE 的 `experiments()` 保存一个或多个实验或数据模态，每个 `SummarizedExperiment` 内的
+`assays()` 才保存 counts、log-CPM 等数值层；`colData()` 保存主样本元数据，`sampleMap()` 记录
+experiment 列与主样本的对应关系。bulkMAE 在调用分析方法前解析这些关系，让后端看到
+feature × sample 矩阵和顺序一致的样本表。
 
-mae <- mae_simulate(n_features = 100, n_samples = 12, seed = 1)
+包不会维护隐藏的“分析状态”：分析函数返回后端原生结果；`mae_add_*()` 和
+`mae_subset_*()` 等 helper 返回修改后的副本，原对象保持不变。
 
-# The same public constructor accepts a user's matrix and aligned metadata.
-from_matrix <- mae_from_matrix(
-  expression = mae_pull_assay(mae, "rna", "counts"),
-  samples = mae_samples(mae, "rna"),
-  row_data = mae_feature_data(mae, "rna"),
+# 从矩阵构建 MAE
+
+先用 `mae_simulate()` 生成可复现的输入素材，再提取出普通矩阵和两个元数据表。后面的
+`mae_from_matrix()` 与用户导入自己表达矩阵时使用的是同一个入口。
+
+```{r prepare-inputs}
+fixture <- mae_simulate(
+  n_features = 120L,
+  n_samples = 8L,
+  seed = 20260825L
+)
+
+counts <- mae_pull_assay(fixture, "rna", "counts")
+sample_data <- mae_samples(fixture, "rna")
+feature_data <- mae_feature_data(fixture, "rna")
+sample_data$condition <- factor(
+  sample_data$condition,
+  levels = c("control", "treated")
+)
+sample_data$batch <- factor(
+  sample_data$batch,
+  levels = c("batch_a", "batch_b")
+)
+
+knitr::kable(
+  sample_data[, c("condition", "batch"), drop = FALSE],
+  caption = "合成数据的样本设计"
+)
+```
+
+这里显式固定 reference level，因此后面的 `conditiontreated` 表示 treated 相对 control；用户数据
+不能依赖字符排序或上游软件留下的偶然 factor level。
+
+表达矩阵必须有唯一、非缺失的行列名；`sample_data` 的 row name 必须与矩阵列对应，
+`feature_data` 的 row name 必须与矩阵行对应。如果上游表格顺序不同，应先按 ID 显式重排：
+
+```{r construct-mae}
+sample_data <- sample_data[colnames(counts), , drop = FALSE]
+feature_data <- feature_data[rownames(counts), , drop = FALSE]
+
+stopifnot(
+  identical(colnames(counts), rownames(sample_data)),
+  identical(rownames(counts), rownames(feature_data))
+)
+
+mae <- mae_from_matrix(
+  expression = counts,
+  samples = sample_data,
+  row_data = feature_data,
   experiment = "rna",
   assay = "counts"
 )
 
 mae_validate(mae, "rna")
+mae_experiments(mae)
 mae_assays(mae, "rna")
+dim(mae_pull_assay(mae, "rna", "counts"))
 ```
 
-For Salmon, kallisto, or RSEM estimates, use `import_tximport()` to create the
-leaf. Do not round abundance-scaled values and pass them to DESeq2 unless the
-DESeq2/tximport documentation explicitly supports that construction.
+这里创建的是 `r nrow(counts)` features × `r ncol(counts)` samples 的 counts-only MAE。
+`mae_validate()`检查公共结构契约；访问器返回已经按 assay 样本顺序对齐的对象：
 
-## 3. Quality control
+```{r inspect-alignment}
+aligned_counts <- mae_pull_assay(mae, "rna", "counts")
+aligned_samples <- mae_samples(mae, "rna")
+aligned_features <- mae_feature_data(mae, "rna")
 
-Use a transformed, approximately homoscedastic assay for distances and sample
-correlations. Use raw counts for library depth and expression filtering.
+stopifnot(
+  identical(colnames(aligned_counts), rownames(aligned_samples)),
+  identical(rownames(aligned_counts), rownames(aligned_features))
+)
 
-```{r local-qc, eval=TRUE}
-metrics <- qc_library(mae, "rna", assay = "counts")
-pca_local <- reduce_pca(mae, "rna", assay = "log_expression", top_n = 50)
-
-head(metrics)
-head(pca_local$x[, seq_len(2), drop = FALSE])
+list(
+  experiments = mae_experiments(mae),
+  assays = mae_assays(mae, "rna"),
+  sample_columns = names(aligned_samples),
+  feature_columns = names(aligned_features)
+)
 ```
 
-```{r qc}
-keep <- filter_expr(
+# 无状态地增加一个 assay
+
+原始 counts 适合计算文库规模和拟合 count model；样本相关性和 PCA 应使用经过合适处理的连续尺度。
+为了让本教程的分析链不调用可选统计后端，这里计算一个简单的 library-size-scaled log-CPM，
+**仅用于 QC 和可视化**。真实分析的探索性图形应采用与方法相符的变换；DESeq2/edgeR 从 counts
+建模，limma-voom 则使用由 counts 估计的 voom 表达值和精度权重拟合。
+
+```{r add-assay}
+library_size <- colSums(counts)
+stopifnot(all(library_size > 0))
+
+log_cpm <- log2(
+  sweep(counts, 2L, library_size, "/") * 1e6 + 0.5
+)
+
+# 故意打乱输入，展示 mae_add_assay() 会按 feature/sample ID 对齐。
+log_cpm_unordered <- log_cpm[
+  rev(rownames(log_cpm)),
+  rev(colnames(log_cpm)),
+  drop = FALSE
+]
+
+mae_qc <- mae_add_assay(
   mae,
   "rna",
-  group = "condition"
+  value = log_cpm_unordered,
+  name = "log_cpm"
 )
 
-qc_library(mae, "rna")
-
-vst <- transform_vst(mae, "rna", blind = TRUE)
-vst_mae <- mae_add_assay(mae, "rna", value = vst, name = "vst")
-
-pca <- reduce_pca(vst_mae, "rna", "vst", top_n = 50)
-qc_outliers(pca)
-```
-
-`qc_outliers()` is only a review aid. It must not be used as an automatic
-sample-removal rule. Investigate library metrics, metadata, and experimental
-records before excluding a sample or relabelling it.
-
-## 4. Differential expression
-
-### DESeq2
-
-```{r deseq2}
-dds <- de_deseq2(
-  mae,
-  "rna",
-  design = ~ batch + condition
-)
-
-de <- de_deseq2_results(
-  dds,
-  contrast = c("condition", "treated", "control")
-)
-```
-
-### edgeR quasi-likelihood
-
-```{r edger}
-edge_test <- de_edger(
-  mae,
-  "rna",
-  formula = ~ batch + condition,
-  coef = "conditiontreated"
-)
-```
-
-### limma-voom
-
-```{r limma}
-design <- de_design(mae, "rna", ~ batch + condition)
-contrast <- de_contrast(
-  mae,
-  "rna",
-  ~ batch + condition,
-  contrasts = "conditiontreated"
-)
-
-limma_fit <- de_voom(
-  mae,
-  "rna",
-  formula = ~ batch + condition,
-  contrasts = contrast
-)
-```
-
-### Repeated measurements
-
-```{r dream}
-dream_fit <- de_dream(
-  mae,
-  "rna",
-  formula = ~ condition + (1 | subject_id)
-)
-```
-
-Time, dose, interaction, and paired designs are model-formula problems. The
-wrapper does not convert strings such as “paired” into hidden design matrices;
-write the intended formula and inspect its coefficients.
-
-## 5. Batch and unwanted variation
-
-ComBat and ComBat-seq produce corrected matrices for visualization or methods
-that explicitly need corrected input. For differential expression, modelling a
-known batch in the design is usually more transparent than replacing counts.
-
-```{r batch}
-combat <- adjust_combat(
-  vst_mae,
-  "rna",
-  assay = "vst",
-  batch = "batch",
-  preserve = ~ condition
-)
-
-sv <- adjust_sva(
-  vst_mae,
-  "rna",
-  assay = "vst",
-  full = ~ batch + condition,
-  null = ~ batch
-)
-
-sv_columns <- adjust_covariates(sv)
-adjusted_mae <- mae_add_sample_data(vst_mae, "rna", sv_columns)
-```
-
-Surrogate variables and RUV factors are added explicitly to a returned MAE copy
-before they are named in a downstream formula. `bulkMAE` does not silently
-refit a model or invent control genes.
-
-## 6. Functional interpretation
-
-```{r enrichment}
-ranks <- de_ranks(de)
-selected <- de_selected(de, fdr = 0.05, min_abs_effect = 1)
-
-# A fully offline synthetic set for this simulated MAE.
-ranked_ids <- names(ranks)
-synthetic_sets <- gene_sets_prepare(list(
-  leading = head(ranked_ids, 25),
-  trailing = tail(ranked_ids, 25)
+stopifnot(identical(
+  mae_pull_assay(mae_qc, "rna", "log_cpm"),
+  log_cpm
 ))
-fgsea_result <- enrich_fgsea(ranks, synthetic_sets)
 
-# For a real human dataset, this online/cache-backed helper retrieves MSigDB.
-hallmark_sets <- gene_sets_msigdb(
-  species = "human",
-  collection = "H",
-  id_type = "gene_symbol"
-)
-
-# The following mapping is likewise for real Ensembl-keyed results.
-org_db <- annotation_orgdb("human")
-id_mapping <- annotate_ids(
-  names(selected),
-  database = org_db,
-  from = "ENSEMBL",
-  to = "ENTREZID",
-  multi_values = "CharacterList"
-)
-selected_entrez <- annotate_rekey(
-  names(selected)[selected],
-  id_mapping,
-  source = "source_id",
-  target = "target_id",
-  duplicates = "first"
-)
-tested_entrez <- annotate_rekey(
-  names(selected),
-  id_mapping,
-  source = "source_id",
-  target = "target_id",
-  duplicates = "first"
-)
-go_result <- enrich_go(
-  genes = selected_entrez,
-  method = "ora",
-  org_db = org_db,
-  universe = tested_entrez
-)
-
-feature_data <- mae_feature_data(mae, "rna")
-tested_gene_lengths <- setNames(
-  feature_data$gene_length,
-  rownames(feature_data)
-)
-goseq_result <- enrich_goseq(
-  selected = selected,
-  genome = "hg38",
-  id = "ensGene",
-  bias = tested_gene_lengths,
-  plot_fit = FALSE
-)
-
-gsva_scores <- score_gsva(
-  vst_mae,
-  "rna",
-  gene_sets = synthetic_sets,
-  assay = "vst"
-)
-pathway_mae <- mae_add_experiment(
-  vst_mae,
-  value = gsva_scores,
-  name = "pathway",
-  assay_name = "score",
-  source_experiment = "rna"
-)
-
-pathway_activity <- activity_progeny(vst_mae, "rna", assay = "vst")
-tf_activity <- activity_tf(vst_mae, "rna", assay = "vst")
-```
-
-The gene universe for ORA should be the set of genes that could have been
-selected after filtering, not every gene in an annotation database.
-
-### Choosing among gene-set tests
-
-Use ORA for a selected gene list, preranked GSEA for a genome-wide statistic,
-CAMERA/FRY/mroast when the expression matrix and design should remain in the
-test, and GSVA/ssGSEA/singscore for per-sample scores.
-
-```{r gene-set-tests}
-camera_result <- enrich_camera(
-  vst_mae,
-  "rna",
-  gene_sets = synthetic_sets,
-  formula = ~ batch + condition,
-  contrast = contrast[, 1],
-  assay = "vst"
-)
-
-reactome_result <- enrich_reactome(
-  ranks = ranks,
-  method = "gsea",
-  organism = "human"
-)
-sample_scores <- score_singscore(
-  vst_mae,
-  "rna",
-  up_set = interferon_up,
-  down_set = interferon_down,
-  assay = "vst"
-)
-```
-
-### decoupleR is a multi-method engine
-
-`activity_decouple()` is not limited to transcription factors. The official engine
-also exposes enrichment-style algorithms and network-aware activity methods.
-The network remains an explicit input so its direction and weights are visible.
-
-```{r decouple}
-activity_methods()
-
-resource <- activity_resource("PROGENy", organism = "human")
-activities <- activity_decouple(
-  vst_mae,
-  "rna",
-  network = resource,
-  assay = "vst",
-  statistics = c("mlm", "ulm", "wsum"),
-  method_args = list(NULL, NULL, NULL),
-  source = "pathway",
-  target = "genesymbol",
-  mor = "weight",
-  consensus = TRUE
-)
-```
-
-Use `statistics = c("aucell", "fgsea", "gsva", "ora")` only when those
-statistics match the question and input scale. Use `mlm`, `ulm`, `viper`,
-`wmean`, or `wsum` when regulator-target signs or weights are part of the
-scientific model. Confirm current names with `activity_methods()` because the
-backend, rather than bulkMAE, owns the method registry.
-
-## 7. Networks and subtypes
-
-```{r systems}
-nmf_fit <- cluster_nmf(mae, "rna", assay = "log_expression", rank = 2:6)
-nmf_classes <- cluster_nmf_classes(nmf_fit, what = "samples")
-
-consensus_fit <- cluster_consensus(
-  vst_mae,
-  "rna",
-  assay = "vst",
-  max_k = 6,
-  repetitions = 1000,
-  plot = NULL
-)
-consensus_diagnostics <- cluster_consensus_diagnostics(
-  consensus_fit,
-  plot = NULL
-)
-classes_k3 <- cluster_consensus_classes(consensus_fit, k = 3)
-
-wgcna_fit <- coexpr_wgcna(
-  vst_mae,
-  "rna",
-  assay = "vst",
-  power = 6,
-  top_n = 5000
-)
-module_colors <- coexpr_modules(wgcna_fit)
-
-genie_weights <- network_genie3(
-  vst_mae,
-  "rna",
-  assay = "vst",
-  regulators = transcription_factors
-)
-genie_edges <- network_genie3_links(genie_weights, top = 1000)
-```
-
-Choose WGCNA's soft threshold from the study data; the example value is not a
-universal default. Likewise, decide the number of molecular subtypes using
-stability and biological/clinical validation rather than a single index.
-`coexpr_wgcna()` follows `goodSamplesGenes()`: unusable samples and features are
-removed automatically, a warning lists the change, and the returned native
-WGCNA result retains the quality object and removed names for audit.
-
-### Differential co-expression (DCA)
-
-In this package DCA means differential co-expression analysis. It asks whether
-gene-gene correlations differ between two groups; it is distinct from
-differential expression.
-
-```{r dca}
-dca <- coexpr_differential(
-  vst_mae,
-  "rna",
-  group = "condition",
-  contrast = c("control", "treated"),
-  assay = "vst",
-  features = highly_variable_genes
-)
-```
-
-Correlation testing scales roughly with the square of the feature count. Apply
-a biologically defensible, outcome-independent feature filter before DCA and
-report all correlation and FDR thresholds.
-
-### Time courses and differential usage
-
-`de_masigpro()` is the specialized path for multi-group polynomial time-course
-or dose-response models. Its `edesign` must follow maSigPro's documented
-`Time`, `Replicates`, and group-indicator layout. `dtu_diffsplice()` operates
-after a native edgeR or limma exon/transcript-level fit.
-
-```{r specialized-differential}
-time_result <- de_masigpro(
-  time_mae,
-  "rna",
-  edesign = de_masigpro_design(
-    time_mae,
-    "rna",
-    time = "timepoint",
-    replicate = "replicate",
-    group = "condition"
+knitr::kable(
+  data.frame(
+    object = c("mae", "mae_qc"),
+    assays = c(
+      paste(mae_assays(mae, "rna"), collapse = ", "),
+      paste(mae_assays(mae_qc, "rna"), collapse = ", ")
+    )
   ),
-  assay = "counts",
-  degree = 2,
-  counts = TRUE
-)
-
-splice_result <- dtu_diffsplice(
-  exon_fit,
-  gene_id = mae_feature_data(exon_mae, "rna")$gene_id,
-  feature_id = rownames(mae_feature_data(exon_mae, "rna"))
+  caption = "增加 assay 前后的两个独立对象"
 )
 ```
 
-## 8. Tissue deconvolution
+原对象 `mae` 仍然只有 counts；后续使用包含两个 assay 的 `mae_qc`。这种显式副本避免了函数在
+后台改变输入，也让分析脚本能够清楚记录每个数据状态。
 
-```{r deconvolution}
-reference_sce <- deconv_reference(
-  counts = single_cell_counts,
-  cell_data = single_cell_metadata,
-  cell_type = "cell_type",
-  sample = "donor"
+# 在正确尺度上检查样本
+
+## 原始 counts 的文库 QC
+
+`qc_library()` 返回透明的样本级汇总：文库规模、检出 feature 数和零值比例。它们适合发现需要
+回查的样本，但任何一个指标都不能单独证明样本应该被删除。
+
+```{r library-metrics}
+library_metrics <- qc_library(mae_qc, "rna", assay = "counts")
+knitr::kable(
+  library_metrics,
+  digits = 3,
+  caption = "原始 counts 的样本级文库指标"
 )
-
-fractions <- deconv(
-  tpm_mae,
-  "rna",
-  assay = "tpm",
-  method = "quantiseq"
-)
-
-music_fit <- deconv_music(
-  mae,
-  "rna",
-  assay = "counts",
-  sc_reference = reference_sce,
-  clusters = "cell_type",
-  samples = "sample_id"
-)
-
-cibersortx_table <- deconv_cibersortx_input(tpm_mae, "rna")
 ```
 
-The CIBERSORTx helper stops at input preparation because execution occurs in an
-external service or container. Check data-governance requirements before any
-upload. BayesPrism and MuSiC require an appropriate single-cell reference; the
-MAE holds the bulk data, not the reference-specific modelling choices.
-
-## 9. Clinical models and drug reversal
-
-Feature selection must occur inside each resampling fold. Selecting genes on
-the full cohort before cross-validation leaks outcome information.
-
-```{r clinical}
-cox_fit <- surv_cox(
-  vst_mae,
-  "rna",
-  formula = surv_formula(
-    time = "survival_time",
-    event = "event",
-    predictors = c("age", "risk_score")
-  )
-)
-
-km_fit <- surv_km(
-  vst_mae,
-  "rna",
-  formula = surv_formula(
-    time = "survival_time",
-    event = "event",
-    predictors = "condition"
-  )
-)
-
-roc_fit <- surv_roc(
-  vst_mae,
-  "rna",
-  time = "survival_time",
-  event = "event",
-  marker = "risk_score",
-  times = c(300, 600, 900)
-)
-
-penalized <- surv_penalized(
-  vst_mae,
-  "rna",
-  time = "survival_time",
-  event = "event",
-  assay = "vst",
-  folds = 5
-)
-
-entrez_ranks <- annotate_rekey(
-  ranks,
-  id_mapping,
-  source = "source_id",
-  target = "target_id",
-  duplicates = "max_abs"
-)
-query <- drug_query(entrez_ranks, n = 150)
-drug_lincs_databases()
-lincs_result <- drug_lincs(query, reference_database = "lincs2")
+```{r library-plot, fig.width=3.35, fig.height=4.53, fig.cap="图 1：合成数据中各样本的文库规模、检出 feature 数和零值比例。", fig.alt="八个合成样本的三层分面柱状图，依次展示文库规模、检出 feature 数和零值比例。"}
+library_plot <- plot_qc_library(library_metrics) +
+  labs(title = "Library-level quality metrics")
+library_plot
 ```
 
-For disease reversal, prioritize negative connectivity scores. Interpret them
-with cell line, dose, time, mechanism, toxicity, and external validation; a
-connectivity score is not clinical evidence.
+## 连续尺度上的 PCA
 
-## 10. Reproducibility
+`reduce_pca()` 返回原生 `prcomp` 对象，不打开图形设备。这里按 log-CPM 方差选择前 80 个
+features；颜色和形状所用的元数据由样本 ID 连接，而不是按行位置猜测。
 
-Record the MAE creation code, package versions, design formulas, contrasts,
-feature filters, gene identifier release, pathway database release, random
-seeds, and the exact external reference used for deconvolution or LINCS. The
-package stays stateless so these choices remain visible in the analysis script.
+```{r pca}
+pca <- reduce_pca(
+  mae_qc,
+  "rna",
+  assay = "log_cpm",
+  top_n = 80L
+)
+
+pca_plot <- plot_embedding(
+  pca,
+  sample_data = mae_samples(mae_qc, "rna"),
+  colour = "condition",
+  shape = "batch"
+) +
+  labs(title = "PCA of simulated samples") +
+  theme(legend.position = "top")
+```
+
+```{r pca-plot, fig.width=3.35, fig.height=2.76, fig.cap="图 2：log-CPM 上方差最高的 80 个 features 的 PCA；颜色表示 condition，形状表示 batch。", fig.alt="八个合成样本的 PCA 散点图，按 control 和 treated 着色，并用点形区分两个 batch。"}
+pca_plot
+```
+
+PCA 只描述当前数据中的主要变异方向，不能代替设计矩阵、统计模型或批次诊断。真实样本的相关性、
+稳健离群距离和审查原则在 airway 教程中有完整示例。
+
+# 在拟合前检查设计矩阵
+
+bulkMAE 不会把“paired”或“batch-corrected”等字符串转换成隐藏模型。公式直接针对已经对齐的
+样本元数据求值；`de_design()`只构建设计矩阵，不调用任何 DE 后端。
+
+```{r design-matrix}
+design <- de_design(mae_qc, "rna", ~ batch + condition)
+knitr::kable(
+  design,
+  digits = 0,
+  caption = "由 ~ batch + condition 生成的设计矩阵"
+)
+```
+
+设计矩阵的 `r nrow(design)` 行与 assay 样本一致，列为
+`r paste(colnames(design), collapse = ", ")`。真正拟合时，应显式记录 formula、coefficient 或
+contrast；`de_deseq2()`、`de_edger()`、`de_limma()` 和 `de_dream()` 继续返回各后端的原生对象。
+
+# ggplot 定制与最终尺寸
+
+所有图形构造函数都返回普通 `ggplot`，因此可以继续使用 `+ labs()`、`+ theme()` 和
+`+ scale_*()`。对象同时携带建议的最终厘米尺寸：
+
+```{r plot-contract}
+inherits(pca_plot, "ggplot")
+attr(pca_plot, "bulkmae_dimensions")
+```
+
+`theme_bulkmae()` 默认使用 6 pt 文字，但主题不能控制图形设备宽高。本文通过 chunk 的
+`fig.width`/`fig.height` 控制嵌入预览；在自己的项目中，用 `plot_save()` 按建议尺寸写出最终文件：
+
+```r
+custom_pca <- pca_plot +
+  theme_classic(base_size = 6) +
+  theme(legend.position = "bottom") +
+  scale_colour_manual(values = c(
+    control = "#0072B2",
+    treated = "#D55E00"
+  ))
+
+plot_save("pca.pdf", custom_pca)
+```
+
+上面的导出示例会写文件，因此不在 vignette 构建时执行。`plot_save()` 默认 `scale = 1`；期刊指定
+宽高时再显式传入 `width`、`height` 和 `units`。
+
+# 下一步
+
+快速入门只覆盖稳定的输入、访问、QC、设计和绘图契约。其它分析按研究问题进入对应接口：
+
+| 目标 | 入口 |
+|---|---|
+| 真实 RNA-seq QC、过滤、VST 和配对 DE | [airway 配对差异分析教程](airway-qc-de.html) |
+| Salmon/kallisto/RSEM 导入 | `import_tximport()` |
+| DE 原生后端结果与六列统一视图 | `de_*()`、`de_table()`、`de_ranks()`、`de_selected()` |
+| 基因集和调控活性 | `enrich_*()`、`score_*()`、`activity_*()` |
+| 批次、共表达、去卷积和临床模型 | `adjust_*()`、`coexpr_*()`、`deconv_*()`、`surv_*()` |
+| 完整函数与输入边界 | [在线 reference](https://younthing.github.io/bulkMAE/reference/index.html) 与 [方法指南](https://github.com/Younthing/bulkMAE/tree/main/inst/guides) |
+
+统计后端仍是可选依赖，只在相应 adapter 被调用时检查。项目应记录 MAE 构建代码、ID 版本、assay
+尺度、feature 选择、模型公式、contrast、随机种子以及外部资源版本。
+
+本文使用 bulkMAE `r as.character(utils::packageVersion("bulkMAE"))`。完整会话信息如下：
+
+```{r session-info}
+sessionInfo()
+```
