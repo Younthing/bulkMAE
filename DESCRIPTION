@@ -25,13 +25,18 @@ Encoding: UTF-8
 Depends:
     R (>= 4.4.0)
 Imports:
+    ggforce,
     ggplot2 (>= 3.5.0),
+    ggrepel,
+    ggridges,
     grDevices,
+    grid,
     methods,
     MultiAssayExperiment,
     S4Vectors,
     SummarizedExperiment,
     stats,
+    stringr,
     utils
 Suggests:
     AnnotationDbi,
@@ -79,7 +84,6 @@ Suggests:
     tximport,
     timeROC,
     uwot,
-    vdiffr,
     variancePartition,
     WGCNA
 VignetteBuilder: knitr

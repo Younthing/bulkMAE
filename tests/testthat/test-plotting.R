@@ -57,6 +57,29 @@ test_that("embedding metadata are joined by sample identifier", {
   )
   expect_identical(plot$layers[[2L]]$aes_params$size, 6)
   expect_identical(plot$layers[[2L]]$geom_params$size.unit, "pt")
+
+  many_coordinates <- matrix(
+    seq_len(18L),
+    ncol = 2L,
+    dimnames = list(paste0("s", seq_len(9L)), c("x", "y"))
+  )
+  many_samples <- data.frame(
+    group = factor(letters[seq_len(9L)]),
+    row.names = rownames(many_coordinates)
+  )
+  many_plot <- plot_embedding(
+    many_coordinates,
+    many_samples,
+    colour = "group"
+  )
+  expect_s3_class(many_plot, "ggplot")
+  expect_error(
+    ggplot2::ggplot_build(many_plot),
+    "Insufficient values in manual scale"
+  )
+  expect_no_error(suppressMessages(ggplot2::ggplot_build(
+    many_plot + ggplot2::scale_colour_viridis_d()
+  )))
 })
 
 test_that("recommended physical dimensions survive ggplot additions and drive export", {

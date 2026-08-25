@@ -174,7 +174,9 @@ plot_qc_library <- function(metrics) {
 #'   matching the embedding exactly.
 #' @param axes Two one-based embedding dimensions.
 #' @param colour,shape,label Optional column names in `sample_data` mapped to
-#'   colour, shape, and text labels. Shape values must be discrete.
+#'   colour, shape, and text labels. Shape values must be discrete. The default
+#'   discrete colour scale supports up to eight levels; for more levels, replace
+#'   it with a standard ggplot2 colour scale before drawing or building.
 #'
 #' @return An unprinted standard ggplot object carrying recommended physical
 #'   dimensions for [plot_save()].
@@ -626,6 +628,12 @@ plot_assay_heatmap <- function(
   purple = "#CC79A7", black = "#000000", grey = "#999999"
 )
 
+.bulkmae_qualitative <- c(
+  vermillion = "#D55E00", blue = "#0072B2", green = "#009E73",
+  yellow = "#F0E442", sky = "#56B4E9", orange = "#E69F00",
+  purple = "#CC79A7", black = "#000000"
+)
+
 .bulkmae_text_size_pt <- 6
 
 .plot_require_columns <- function(x, columns, argument) {
@@ -728,17 +736,34 @@ plot_assay_heatmap <- function(
   )
 }
 
-.plot_align_frame <- function(frame, ids, argument) {
+.plot_align_frame <- function(
+    frame,
+    ids,
+    argument,
+    ids_label = "embedding samples"
+) {
   .plot_assert_ids(rownames(frame), paste0("`", argument, "` row names"))
   if (!setequal(rownames(frame), ids)) {
-    stop("`", argument, "` row names must match embedding samples exactly.", call. = FALSE)
+    stop(
+      "`", argument, "` row names must match ", ids_label, " exactly.",
+      call. = FALSE
+    )
   }
   invisible(frame)
 }
 
 .plot_discrete_values <- function(x) {
   levels <- if (is.factor(x)) levels(droplevels(x)) else unique(as.character(x))
-  stats::setNames(rep(.bulkmae_colours, length.out = length(levels)), levels)
+  if (length(levels) > length(.bulkmae_qualitative)) {
+    # An unnamed, deliberately short scale lets the plot constructor return a
+    # standard ggplot. Its build fails clearly unless the caller first replaces
+    # the scale with `+ scale_colour_*()`, avoiding silent colour recycling.
+    return(unname(.bulkmae_qualitative))
+  }
+  stats::setNames(
+    unname(.bulkmae_qualitative[seq_along(levels)]),
+    levels
+  )
 }
 
 .plot_de_data <- function(result, coef, fdr, min_abs_effect) {
@@ -892,6 +917,37 @@ plot_assay_heatmap <- function(
   result <- result[ids]
   if (anyNA(result) || any(!nzchar(as.character(result)))) stop("`", argument, "` cannot contain missing or empty values.", call. = FALSE)
   result
+}
+
+.plot_enrichment_probabilities <- function(
+    values,
+    label,
+    allow_all_missing = FALSE
+) {
+  if (!is.numeric(values) || any(is.infinite(values)) ||
+      any(values < 0 | values > 1, na.rm = TRUE)) {
+    stop(label, " must contain probabilities between zero and one.", call. = FALSE)
+  }
+  if (!allow_all_missing && !any(is.finite(values))) {
+    stop(label, " are unavailable.", call. = FALSE)
+  }
+  invisible(values)
+}
+
+.plot_enrichment_labels <- function(data, labels) {
+  if (is.null(labels)) return(make.unique(data$term_label))
+  if (is.null(names(labels))) {
+    stop("`term_labels` must be term-named.", call. = FALSE)
+  }
+  .plot_assert_ids(names(labels), "Names of `term_labels`")
+  if (!setequal(names(labels), data$term_id)) {
+    stop("`term_labels` must describe the selected terms exactly.", call. = FALSE)
+  }
+  labels <- as.character(labels[data$term_id])
+  if (anyNA(labels) || any(!nzchar(labels))) {
+    stop("`term_labels` cannot contain missing or empty labels.", call. = FALSE)
+  }
+  make.unique(labels)
 }
 
 utils::globalVariables(".data")

@@ -2,8 +2,12 @@
 
 本文记录统一 ggplot2 绘图层形成过程中已经验证过的接口边界、实现方式和验收方法。新增或修改
 绘图相关接口前，应先阅读本文，并以当前的
-[`R/plotting.R`](../../R/plotting.R) 和
-[`tests/testthat/test-plotting.R`](../../tests/testthat/test-plotting.R) 为可执行事实来源。
+[`R/plotting.R`](../../R/plotting.R)、
+[`R/plotting-gsea.R`](../../R/plotting-gsea.R)、
+[`R/plotting-ora.R`](../../R/plotting-ora.R) 及其对应的
+[`tests/testthat/test-plotting.R`](../../tests/testthat/test-plotting.R)、
+[`tests/testthat/test-plotting-gsea.R`](../../tests/testthat/test-plotting-gsea.R)、
+[`tests/testthat/test-plotting-ora.R`](../../tests/testthat/test-plotting-ora.R) 为可执行事实来源。
 
 ## 先确定绘图层的职责
 
@@ -18,6 +22,38 @@ bulkMAE 的分析函数是对原生后端的薄封装，绘图层也应保持同
 - 用户可以用普通的 ggplot2 `+` 语法替换主题、比例尺、标签或局部样式。
 
 这条边界让绘图层保持无状态，也避免为了画图而迫使所有 DE 后端转换成新的 bulkMAE 结果类。例如，MA 图需要后端特有的丰度列，但不应因此扩充 `de_table()` 的六列公共契约。
+
+### 参考图脚本是视觉规格，不只是图型名称
+
+当维护者提供现有绘图脚本时，应先把它转换成逐项验收表，再设计 package Interface。至少记录：
+
+- 每一个统计层和装饰层及其绘制顺序；
+- 固定颜色、渐变端点、透明度、线宽、点大小与形状；
+- 坐标范围、面板比例、标签换行、图例位置和 plot margin；
+- 最终物理宽高、DPI，以及这个尺寸下的实际字号；
+- 数据选择、排序和节点归属规则。
+
+不能只保留“山脊图”“网络图”等抽象类别，然后用包内通用主题和色板重新设计。参考脚本已经包含
+成图经验；除非维护者要求重新设计，默认输出应尽量复现这些具体决定。允许的偏离必须逐项说明，
+通常只包括统计纠错、严格 ID 连接、统一 6 pt，以及为返回单个标准 `ggplot` 所需的结构替换。
+结构测试应直接断言关键 layer 参数；最终仍生成代表性 PNG 交由维护者判断视觉效果。
+
+### 五个富集图的逐图复核结论
+
+本轮按“一个函数完成源码比对、修改、测试和单图 PNG 后，再进入下一个函数”的顺序复核。后续
+维护时应保留以下边界：
+
+| 函数 | 应与参考源码一致 | 已纠正的漂移 | 可以且应保留的差异 |
+|---|---|---|---|
+| `plot_gsea_classic()` | 0.50/0.20/0.30 三段比例、ES 渐变、hit barcode、200 格 rank 色带、灰色 rank polygon、细边框、无图例和 `5.9 × 5.3 cm` | 逐层复核未发现额外漂移 | 单个 free-space facet 代替 patchwork；自行重建并校验 ES，不调用 `enrichplot:::`；term 显式指定且函数不保存文件 |
+| `plot_gsea_ridge()` | `geom_ridgeline()`、0.36 高度、0.18 填充透明度、命中刻线、七色顺序、无图例和 `12 × 5 cm` | GSEA 表同时识别 `qvalue`、`qvalues`、`q_value` | term 和 membership 显式指定；不自动选“正向 top term”；常量 rank 分布报错，不添加假 jitter |
+| `plot_ora_bubble()` | 40 字符换行、0.8–2.8 点面积范围、蓝到暗红证据渐变、0.1% 百分比标签、数学形式证据图例、右侧图例、细边框和 `10 × 8 cm` | 删除人为固定的 size breaks，并恢复参考图的默认刻度；换行宽度、百分比精度和图例表达式已对齐 | 保留正确的 rich factor、gene ratio、fold enrichment 定义；不复制参考脚本中错误的 denominator 或统计量 fallback |
+| `plot_ora_network()` | 社区形状、布局参数、Jaccard 模块边、15 层 halo、membership 线、节点范围、6 pt `ggrepel` 标签、无图例和 `8 × 8 cm` | 少于 5 个 term 时也跨完整五色色带插值；补齐 `fontface`、`bg.color`、`bg.r` | 共享 feature 只有一个 canonical 节点；feature 显式选择；确定性布局不读写全局 RNG；feature 标签是显式扩展 |
+| `plot_ora_radial()` | 6.3/4.1/6.65 半径、0.075 扇区间隔、term 排斥、节点与 membership 线范围、20 字符换行、径向标签旋转、四边 5 pt margin 和 `8 × 8 cm` | 使用径向源码独有的短色板规则：不超过 5 个 term 时取前 N 个基色；补齐字符串换行和 term 文字参数 | 所有几何文字统一为维护者要求的 6 pt，而不复制源码的 5.5/4 pt；gene 标签显式选择；term edge 继续用跨图一致的 Jaccard，而非未标准化 shared count |
+
+网络图与径向图的短色板规则看似相近但参考脚本确实不同，因此实现中不能再次合并为同一策略。
+外圈背景弧、中心节点和中心连线在径向参考脚本中默认关闭；bulkMAE 复现默认成图，不为这些关闭的
+装饰层增加浅公共参数。
 
 ## 主题、字号与物理尺寸是三件事
 
@@ -129,6 +165,68 @@ feature_id, effect, standard_error, statistic, p_value, adjusted_p_value
 - 分组和 feature label 仍按名称连接；重复的显示标签用 `make.unique()` 区分，避免多个 feature 合并到同一离散轴位置。
 - 行标准化值使用固定发散色阶，未标准化 assay 值使用连续 viridis 色阶。
 
+### GSEA 细节图
+
+GSEA 细节图需要完整 ranked list、命中位置和 running enrichment score，因此
+`plot_gsea_classic()` 与 `plot_gsea_ridge()` 使用专门的 ranked-list Adapter。两者共享 ranks、
+gene-set membership、leading edge 和证据解析，但保留两个语义明确的公共入口；不要用一个
+`view = "classic"/"ridge"` 的大函数把条件参数暴露给调用者。
+
+- 原生 clusterProfiler `gseaResult` 已保存 `geneList`、`geneSets` 和 exponent，可以准确重建图形。
+- fgsea 结果表不保存完整 ranks、pathways 或分析时的 `gseaParam`。classic 必须要求调用者显式
+  补齐 `ranks`、`gene_sets` 和 `exponent`；不能静默假定 exponent 为 1。
+- ranks 必须有限、具名、ID 唯一且已经按非递增顺序排列。绘图层验证但不暗中重排。
+- running score 在包内按 weighted hit/miss walk 计算，并与结果中的 ES 做容差校验；不要调用
+  `enrichplot:::` 私有函数。
+- classic 的 ES 曲线、hit barcode/排序热带和 ranked metric 是同一个统计图型的三个不可拆层，
+  不是报告级总拼图。实现用一个标准 ggplot 的 free-space facet，并固定约 0.50/0.20/0.30 层高。
+- classic 保留参考图的绿到红 ES 曲线、蓝白红 rank 热带、灰色 rank polygon、细黑边框和
+  `5.9 × 5.3 cm` 推荐尺寸。用 facet 代替 patchwork 是为维持标准 `ggplot` 返回契约，不是重新设计图。
+- classic 内部为保持三套真实 y 刻度而使用归一化显示带；主题、标题和颜色仍可用 `+` 替换，
+  但调用者不应替换内部 y scale。
+- ridge 的 x 是 gene-level rank statistic，不是表达量。每条 ridge 在 term 内归一化，只比较分布
+  位置与形状；不能用 ridge 高度比较 set size 或富集强度。
+- ridge 保留参考脚本的七色顺序、`0.36` 标准化高度、`0.18` 填充透明度、命中刻线和
+  `12 × 5 cm` 推荐尺寸；默认关闭原脚本也默认关闭的统计文字框。
+- leading edge 与完整 gene set 是两种不同 membership，必须由参数明确选择。少于两个可用且
+  不同的 rank 值时直接报错，不通过人为 jitter 伪造核密度。
+
+### ORA bubble 与 membership graph
+
+ORA 专用图需要 `GeneRatio`、`BgRatio`、`Count` 和 enriched-feature membership，因此使用独立
+的 ORA Adapter，不向通用 enrichment view 追加大量只对某个后端有意义的可空列。
+
+三个常见横轴必须严格区分：
+
+```text
+Gene ratio      = Count / input gene count
+Rich factor     = Count / background term size
+Fold enrichment = Gene ratio / background ratio
+```
+
+clusterProfiler 的 ratio 字符串为 `numerator/denominator`；background term size 是 `BgRatio`
+的分子，不是分母。解析时应验证正分母、ratio 范围以及 `GeneRatio` 分子与 `Count` 一致，不能在
+某列缺失时把另一种统计量作为 fallback 却沿用原轴名。
+
+`plot_ora_network()` 与 `plot_ora_radial()` 共享同一个 canonical graph：
+
+- `geneID` 表示富集输入中命中的 feature，不是完整 pathway membership；帮助页和 alt text 应称为
+  enriched-feature overlap。
+- 每个 feature 只有一个 canonical 节点，即使它连接多个 term；term ID 与 feature ID 在内部表中
+  始终保留各自命名空间。
+- term-term edge 固定表示完整 enriched-feature membership 的 Jaccard coefficient。显式限制
+  `features` 只影响显示节点，不能改变 Jaccard。
+- 外部 `feature_values` 按名称覆盖实际显示 feature，允许携带未显示的全基因组额外值；为复现参考
+  网络风格，节点大小和透明度使用绝对值，节点颜色表示其构图 community，不伪装成带方向的 effect 图例。
+- community layout 的 halo、radial layout 的外圈 ownership 都只是降低遮挡的构图信息，没有
+  inferential 含义；radial 中共享 feature 仍保留通向所有 term 的 membership edge。
+- term 和 feature 标签仍由显式 ID 连接。`label_features = NULL` 不自动标注“top gene”。
+- bubble 保留蓝到暗红证据渐变、细黑边框、浅灰读数网格、右侧紧凑图例和 `10 × 8 cm` 尺寸；
+  network/radial 保留低饱和 community 色、无图例的 `theme_void()`、halo/内外圈几何和 `8 × 8 cm` 尺寸。
+
+总拼图脚本只用于吸收单图比例、边框、留白和推荐物理尺寸经验。bulkMAE 不提供 GSEA/ORA
+overview 或报告拼图函数；调用者可在包外使用 patchwork/cowplot 组合返回的独立 ggplot。
+
 ## 实现时优先复用内部语义
 
 公共接口应保持小而清楚，把适配和校验复杂度封装在私有 helper 中，例如：
@@ -161,18 +259,18 @@ feature_id, effect, standard_error, statistic, p_value, adjusted_p_value
 
 ### 视觉回归与人工确认
 
-少量 vdiffr 快照可以作为布局意外漂移的报警器，但不能代替视觉验收。当前代表性快照见
-[`tests/testthat/test-plotting-vdiffr.R`](../../tests/testthat/test-plotting-vdiffr.R)。
+本仓库不把 vdiffr 或 SVG 快照作为视觉验收基线。需要人工确认时，将 PNG 生成到被忽略的
+`docs/plot-previews/`，使用最终推荐尺寸和固定 DPI；不要写入临时目录，也不要提交这些预览图。
+由维护者确认文字是否拥挤、图例是否侵占面板、横轴标签是否重叠以及正负尺度是否均衡。自动化
+测试只负责可计算的数值、比例尺和图层结构契约，最终视觉判断由人完成。
 
-需要人工确认时，将 PNG 生成到被忽略的 `docs/plot-previews/`，使用最终推荐尺寸和固定 DPI；不要写入临时目录，也不要提交这些预览图。由维护者确认文字是否拥挤、图例是否侵占面板、横轴标签是否重叠以及正负尺度是否均衡。自动化测试负责可计算契约，最终视觉判断由人完成。
-
-agent 不得自行接受视觉变化或更新 vdiffr baseline；应先生成 PNG，并取得维护者确认。
+agent 不得自行接受视觉变化；应先生成对应的单幅 PNG，并交由维护者确认。
 
 ## 新增图形构造函数检查表
 
 - [ ] 返回标准、未打印的单个 `ggplot`。
 - [ ] 不重新执行分析，不改变上游结果类型。
-- [ ] 标题留给调用者；轴、图例和 alt text 完整。
+- [ ] 报告级标题留给调用者；若 term 名是图形本体的一部分，可作为内置标题；轴、图例和 alt text 完整。
 - [ ] 所有元数据按名称连接，并验证该接口规定的精确集合或覆盖关系。
 - [ ] 颜色、因子顺序和统计分类可预测。
 - [ ] 数据标签显式使用 `size.unit = "pt"`。

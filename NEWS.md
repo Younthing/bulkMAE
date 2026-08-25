@@ -20,6 +20,10 @@
   smoke tests without requiring network services.
 - Keeps network-backed tests disabled by default. Set
   `BULKMAE_RUN_ONLINE_TESTS=true` only when deliberately testing remote resources.
+- Extends the standard ggplot2 layer with statistically faithful GSEA
+  classic/ridge plots and ORA bubble/community/radial plots. These views keep
+  rank vectors, ORA ratios, enriched-feature membership, and Jaccard overlap
+  distinct instead of coercing them into one generic effect.
 
 # bulkMAE 0.3.0
 

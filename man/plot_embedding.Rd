@@ -23,7 +23,9 @@ matching the embedding exactly.}
 \item{axes}{Two one-based embedding dimensions.}
 
 \item{colour, shape, label}{Optional column names in \code{sample_data} mapped to
-colour, shape, and text labels. Shape values must be discrete.}
+colour, shape, and text labels. Shape values must be discrete. The default
+discrete colour scale supports up to eight levels; for more levels, replace
+it with a standard ggplot2 colour scale before drawing or building.}
 }
 \value{
 An unprinted standard ggplot object carrying recommended physical
@@ -37,6 +39,11 @@ Other plotting:
 \code{\link{plot_assay_heatmap}()},
 \code{\link{plot_de_ma}()},
 \code{\link{plot_de_volcano}()},
+\code{\link{plot_gsea_classic}()},
+\code{\link{plot_gsea_ridge}()},
+\code{\link{plot_ora_bubble}()},
+\code{\link{plot_ora_network}()},
+\code{\link{plot_ora_radial}()},
 \code{\link{plot_qc_correlation}()},
 \code{\link{plot_qc_library}()},
 \code{\link{plot_qc_outliers}()},

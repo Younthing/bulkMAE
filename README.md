@@ -165,6 +165,30 @@ do not read the recommended dimensions. Use `plot_save()` for exact files, and
 set chunk `fig.width` / `fig.height` explicitly when document previews also
 need a fixed aspect ratio.
 
+Specialized enrichment constructors keep method-specific inputs and statistics
+explicit:
+
+```r
+plot_gsea_classic(gsea_result, term = "HALLMARK_INFLAMMATORY_RESPONSE")
+plot_gsea_ridge(gsea_result, terms = pathway_ids)
+
+plot_ora_bubble(ora_result, terms = pathway_ids)
+plot_ora_network(ora_result, terms = pathway_ids, feature_values = effects)
+plot_ora_radial(
+  ora_result,
+  terms = pathway_ids,
+  feature_values = effects,
+  label_features = c("IL6", "CXCL8")
+)
+```
+
+Every selection is explicit. A native clusterProfiler GSEA object carries its
+ranked vector, gene sets, and weighting exponent; a tabular fgsea result does
+not, so classic plots require those analysis inputs to be supplied rather than
+reconstructing them heuristically. ORA bubbles distinguish rich factor, gene
+ratio, and fold enrichment, while both network layouts compute Jaccard edges
+from the complete enriched-feature membership.
+
 Read the [Chinese executable getting-started guide](https://younthing.github.io/bulkMAE/articles/getting-started.html), the
 [airway QC and paired differential-expression tutorial](https://younthing.github.io/bulkMAE/articles/airway-qc-de.html), the
 [method-selection guide](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/expanded-methods-zh.md), and the

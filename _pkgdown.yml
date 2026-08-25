@@ -17,7 +17,7 @@ articles:
 
 reference:
   - title: Plotting
-    desc: Standard ggplot2 views of QC, embeddings, differential expression, and assays.
+    desc: Standard ggplot2 views of QC, embeddings, differential expression, enrichment, and assays.
     contents:
       - has_concept("plotting")
   - title: Functions
