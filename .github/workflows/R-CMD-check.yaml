@@ -46,8 +46,9 @@ jobs:
           http-user-agent: ${{ matrix.config.http-user-agent }}
           use-public-rspm: true
 
-      # Keep the portability matrix small and deterministic. Optional analysis
-      # engines are exercised by full-backend-check on Linux.
+      # Keep the portability matrix small and deterministic. Install only the
+      # optional engines required by executable vignettes here; the remaining
+      # analysis backends are exercised by full-backend-check on Linux.
       - uses: r-lib/actions/setup-r-dependencies@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
         with:
           dependencies: '"hard"'
@@ -60,6 +61,10 @@ jobs:
             any::airway
             any::edgeR
             any::DESeq2
+            any::limma
+            any::clusterProfiler
+            any::fgsea
+            any::org.Hs.eg.db
           needs: check
 
       - uses: r-lib/actions/check-r-package@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2

@@ -252,6 +252,9 @@ plot_assay_heatmap(
 
 本文使用 bulkMAE `r as.character(utils::packageVersion("bulkMAE"))`。完整会话信息如下，便于记录 R、Bioconductor 和后端版本。
 
+若要把 `de_selected()` 和 `de_ranks()`继续用于 ORA 或 GSEA，请阅读
+[富集分析教程](enrichment-analysis.html)。
+
 ```{r session-info}
 sessionInfo()
 ```

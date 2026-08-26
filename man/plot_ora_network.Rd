@@ -29,9 +29,11 @@ explicit list must describe the selected terms exactly.}
 \item{feature_values}{Optional feature-named finite numeric vector. It must
 cover every displayed feature; additional values are ignored.}
 
-\item{features}{Optional explicit feature identifiers to display. \code{NULL}
-displays all enriched features. Selection never changes Jaccard values,
-which use the complete membership.}
+\item{features}{Optional explicit feature identifiers to display. Supply a
+character vector for one global feature set, or a term-named list to
+select displayed membership independently within each selected term.
+\code{NULL} displays all enriched features. Selection never changes overlap
+statistics computed from the complete membership.}
 
 \item{term_labels}{Optional complete term-named labels.}
 
@@ -51,10 +53,10 @@ dimensions for \code{\link[=plot_save]{plot_save()}}.
 Builds a deterministic community layout from explicitly selected ORA terms
 and their enriched-feature membership. Term-to-term edges represent the
 Jaccard coefficient of the complete enriched-feature sets, not ontology or
-full-pathway similarity. Shared features are represented once. Optional
-feature values control feature-node size and alpha by absolute magnitude;
-community colour continues to identify layout ownership. Values do not
-affect term selection.
+full-pathway similarity. A shared feature is drawn once inside every
+selected term community that contains it, matching the reference community
+grammar. Optional feature values control every corresponding visual node's
+size and alpha by absolute magnitude. Values do not affect term selection.
 }
 \seealso{
 Other plotting:

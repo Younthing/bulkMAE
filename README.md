@@ -186,11 +186,13 @@ Every selection is explicit. A native clusterProfiler GSEA object carries its
 ranked vector, gene sets, and weighting exponent; a tabular fgsea result does
 not, so classic plots require those analysis inputs to be supplied rather than
 reconstructing them heuristically. ORA bubbles distinguish rich factor, gene
-ratio, and fold enrichment, while both network layouts compute Jaccard edges
-from the complete enriched-feature membership.
+ratio, and fold enrichment. Community-network term edges use Jaccard overlap
+from complete enriched-feature membership, while radial term edges encode the
+number of shared enriched features.
 
 Read the [Chinese executable getting-started guide](https://younthing.github.io/bulkMAE/articles/getting-started.html), the
 [airway QC and paired differential-expression tutorial](https://younthing.github.io/bulkMAE/articles/airway-qc-de.html), the
+[airway GO ORA、GSEA 与绘图教程](https://younthing.github.io/bulkMAE/articles/enrichment-analysis.html), the
 [method-selection guide](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/expanded-methods-zh.md), and the
 [input-completeness and resource-boundary audit](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/input-completeness-zh.md),
 plus the [implementation-to-documentation audit map](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/official-sources.md).

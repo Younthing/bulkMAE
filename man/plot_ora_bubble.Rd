@@ -38,7 +38,8 @@ Displays one of three distinct over-representation metrics without
 treating them as interchangeable: rich factor is overlap divided by the
 background term size, gene ratio is overlap divided by the input list size,
 and fold enrichment is gene ratio divided by background ratio. Point area
-represents overlap count and colour represents finite \code{-log10()} evidence.
+represents overlap count and colour represents finite \code{-log10()} evidence;
+adjusted evidence is labelled compactly as \verb{adj p}.
 }
 \seealso{
 Other plotting:

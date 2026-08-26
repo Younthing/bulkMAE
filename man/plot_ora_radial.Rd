@@ -29,9 +29,11 @@ explicit list must describe the selected terms exactly.}
 \item{feature_values}{Optional feature-named finite numeric vector. It must
 cover every displayed feature; additional values are ignored.}
 
-\item{features}{Optional explicit feature identifiers to display. \code{NULL}
-displays all enriched features. Selection never changes Jaccard values,
-which use the complete membership.}
+\item{features}{Optional explicit feature identifiers to display. Supply a
+character vector for one global feature set, or a term-named list to
+select displayed membership independently within each selected term.
+\code{NULL} displays all enriched features. Selection never changes overlap
+statistics computed from the complete membership.}
 
 \item{term_labels}{Optional complete term-named labels.}
 
@@ -50,9 +52,10 @@ dimensions for \code{\link[=plot_save]{plot_save()}}.
 \description{
 Places terms on an inner ring and unique enriched features on an outer ring.
 Membership curves retain every selected term-feature relation and inner
-term edges show Jaccard overlap. For layout only, each outer feature is
-assigned to the most significant adjacent term, with selected-term order
-breaking ties; shared features remain connected to every adjacent term.
+term-edge width and alpha show the number of shared enriched features. For
+layout only, each outer feature is assigned to the most significant adjacent
+term, with selected-term order breaking ties; shared features remain
+connected to every adjacent term.
 }
 \seealso{
 Other plotting:

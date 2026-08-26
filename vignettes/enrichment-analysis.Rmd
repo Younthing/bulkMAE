@@ -1,0 +1,383 @@
+---
+title: "airway 富集分析：ORA、GSEA 与图形"
+author: "bulkMAE"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    number_sections: true
+vignette: >
+  %\VignetteIndexEntry{airway 富集分析：ORA、GSEA 与图形}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 5,
+  fig.height = 4,
+  dpi = 120,
+  fig.retina = 2,
+  fig.align = "center"
+)
+set.seed(20260826)
+library(bulkMAE)
+library(ggplot2)
+invisible(suppressPackageStartupMessages(
+  suppressWarnings(loadNamespace("clusterProfiler"))
+))
+invisible(suppressPackageStartupMessages(
+  suppressWarnings(loadNamespace("org.Hs.eg.db"))
+))
+```
+
+# 本文完成什么
+
+本文直接接续 [airway QC 与配对差异分析](airway-qc-de.html)：使用同一份真实 counts、同一个
+`~ cell + dex` 模型和同一个 `trt - untrt` contrast，完成 GO Biological Process 的 ORA、GSEA、
+结果表和 5 幅图。为使本文可以独立执行，下面只重复富集所需的最短差异分析代码。
+
+安装完成后，分析与渲染不访问网络。缺少教学依赖时先运行：
+
+```{r install, eval=FALSE}
+BiocManager::install(c(
+  "airway", "edgeR", "DESeq2", "clusterProfiler", "org.Hs.eg.db"
+))
+```
+
+# 先按问题选方法
+
+```{r method-map, warning=FALSE}
+knitr::kable(
+  data.frame(
+    question = c(
+      "阈值选出的基因是否在某集合中过多？",
+      "集合成员是否集中在完整排序的一端？",
+      "是否要保留样本设计和集合内相关性？",
+      "RNA-seq 入选概率是否需要长度等偏倚校正？"
+    ),
+    input = c(
+      "入选基因 + 全部受检基因背景",
+      "全部受检基因的有方向统计量",
+      "log 表达矩阵 + 设计 + contrast",
+      "全部受检基因的 0/1 向量 + bias"
+    ),
+    function_name = c(
+      "enrich_ora(); enrich_go(method = 'ora')",
+      "enrich_gsea()/enrich_fgsea(); enrich_go(method = 'gsea')",
+      "enrich_camera()/enrich_fry()/enrich_roast()",
+      "enrich_goseq()"
+    ),
+    check.names = FALSE
+  ),
+  col.names = c("问题", "必需输入", "bulkMAE 接口"),
+  row.names = FALSE,
+  caption = "富集方法的最小选择表"
+)
+```
+
+本文执行前两项。GO、KEGG、Reactome 是资源选择，不是新的统计原假设；任意本地 gene sets 则可直接
+交给 `enrich_ora()`、`enrich_gsea()` 或 `enrich_fgsea()`。
+
+# 重建同一份 airway 差异结果
+
+```{r airway-de}
+data("airway", package = "airway")
+
+counts <- SummarizedExperiment::assay(airway, "counts")
+sample_data <- as.data.frame(
+  SummarizedExperiment::colData(airway),
+  optional = TRUE
+)
+feature_data <- as.data.frame(
+  SummarizedExperiment::rowData(airway),
+  optional = TRUE
+)[, c("gene_id", "gene_name", "symbol", "gene_biotype"), drop = FALSE]
+
+sample_data$dex <- factor(sample_data$dex, levels = c("untrt", "trt"))
+sample_data$cell <- factor(sample_data$cell)
+feature_data$display_label <- as.character(feature_data$symbol)
+missing_label <- is.na(feature_data$display_label) |
+  !nzchar(feature_data$display_label)
+feature_data$display_label[missing_label] <- feature_data$gene_id[missing_label]
+feature_data$display_label <- make.unique(feature_data$display_label)
+
+mae <- mae_from_matrix(
+  expression = counts,
+  samples = sample_data,
+  row_data = feature_data,
+  experiment = "airway",
+  assay = "counts"
+)
+keep <- filter_expr(mae, "airway", group = "dex")
+mae_filtered <- mae_subset_features(mae, "airway", names(keep)[keep])
+
+fit <- de_deseq2(
+  mae_filtered,
+  "airway",
+  design = ~ cell + dex,
+  fitType = "parametric",
+  quiet = TRUE
+)
+de_result <- de_deseq2_results(
+  fit,
+  contrast = c("dex", "trt", "untrt"),
+  alpha = 0.05
+)
+de_table_result <- de_table(de_result)
+```
+
+输入仍是 `r format(nrow(counts), big.mark = ",")` 个基因 × `r ncol(counts)` 个样本；过滤后保留
+`r format(sum(keep), big.mark = ",")` 个基因。Ensembl ID 始终作为分析键，symbol 只用于图上显示，
+因此不会因重复 symbol 而暗中合并基因。
+
+# 准备 ORA 与 GSEA 输入
+
+ORA 只分析满足上一篇阈值且上调的基因；若研究问题关注下调，应另行运行一次，而不是把两个方向混在
+同一个列表中。GSEA 使用全部有限的 Wald statistic。
+
+```{r enrichment-inputs}
+fdr_threshold <- 0.05
+effect_threshold <- 1
+
+selected_up <- de_selected(
+  de_result,
+  fdr = fdr_threshold,
+  min_abs_effect = effect_threshold,
+  direction = "up"
+)
+selected_down <- de_selected(
+  de_result,
+  fdr = fdr_threshold,
+  min_abs_effect = effect_threshold,
+  direction = "down"
+)
+ranks <- de_ranks(de_result, column = "statistic")
+
+# 仅为精确并列值提供稳定的 Ensembl-ID 次级顺序。
+tied_ranks <- duplicated(ranks) | duplicated(ranks, fromLast = TRUE)
+number_tied <- sum(tied_ranks)
+if (number_tied > 0L) {
+  minimum_gap <- min(diff(sort(unique(unname(ranks)))))
+  tie_step <- minimum_gap / (number_tied + 1L)
+  ranks[tied_ranks] <- ranks[tied_ranks] +
+    rank(names(ranks)[tied_ranks], ties.method = "first") * tie_step
+  ranks <- sort(ranks, decreasing = TRUE)
+}
+stopifnot(!anyDuplicated(unname(ranks)))
+
+org_db <- annotation_orgdb("human")
+```
+
+在 FDR ≤ `r fdr_threshold` 且绝对效应 ≥ `r effect_threshold` 时，有 `r sum(selected_up)` 个上调和
+`r sum(selected_down)` 个下调基因；GSEA 排序包含 `r length(ranks)` 个基因。原始统计量中有
+`r number_tied` 个条目属于精确并列组，上面的极小次级顺序不会改变任何原本不并列基因的先后。
+
+绘图条目在查看本次富集 p-value 前固定：四项对应 dexamethasone/激素响应，第五项对应上一篇预先关注的
+CRISPLD2 所在 extracellular-matrix 过程。
+
+```{r selected-terms}
+go_terms <- c(
+  "GO:0071385", # cellular response to glucocorticoid stimulus
+  "GO:0051384", # response to glucocorticoid
+  "GO:0048545", # response to steroid hormone
+  "GO:0032870", # cellular response to hormone stimulus
+  "GO:0030198"  # extracellular matrix organization
+)
+```
+
+# ORA：上调基因与受检背景
+
+```{r ora-analysis}
+ora_result <- suppressMessages(enrich_go(
+  genes = names(selected_up)[selected_up],
+  method = "ora",
+  org_db = org_db,
+  key_type = "ENSEMBL",
+  ontology = "BP",
+  universe = names(selected_up),
+  pvalueCutoff = 0.05,
+  qvalueCutoff = 0.2,
+  pAdjustMethod = "BH",
+  minGSSize = 15L,
+  maxGSSize = 500L,
+  readable = FALSE
+))
+ora_table <- as.data.frame(ora_result)
+stopifnot(nrow(ora_table) > 0L, all(go_terms %in% ora_table$ID))
+
+ora_selected <- ora_table[
+  match(go_terms, ora_table$ID),
+  c("ID", "Description", "GeneRatio", "BgRatio", "Count", "p.adjust"),
+  drop = FALSE
+]
+```
+
+结果是原生 `enrichResult`；`as.data.frame()`只用于查看，不会把不同后端强制变成统一结果类。
+输入的 `r sum(selected_up)` 个上调基因中有 `r sub(".*/", "", ora_selected$GeneRatio[[1L]])` 个进入
+当前 GO BP 检验；`BgRatio` 报告的有效注释背景为
+`r format(as.integer(sub(".*/", "", ora_selected$BgRatio[[1L]])), big.mark = ",")`，不应自行换回原始矩阵行数。
+
+```{r ora-table, warning=FALSE}
+knitr::kable(
+  ora_selected,
+  digits = 4,
+  row.names = FALSE,
+  caption = "预先指定 GO 条目的 ORA 结果"
+)
+```
+
+```{r ora-bubble, fig.width=3.94, fig.height=3.15, fig.cap="图 1：预先指定 GO 条目的 ORA rich factor、命中基因数和 adjusted p-value。", fig.alt="五个 airway GO 条目的 ORA 气泡图，横轴为 rich factor，点大小为命中基因数，颜色为 adjusted p-value 证据。"}
+# 图例中的 adj p 是 adjusted p-value 的紧凑写法。
+plot_ora_bubble(
+  ora_result,
+  terms = go_terms,
+  x = "rich_factor",
+  p_value = "adjusted"
+) +
+  labs(title = "Airway GO over-representation")
+```
+
+网络图分别显示每个条目中绝对效应最大的 6 个命中基因；共享基因在每个所属社区各画一个节点，
+网络图按原始设计只标注条目、不标注基因。条目间 Jaccard 边仍使用完整命中成员计算。
+
+```{r ora-network-inputs}
+ora_membership <- strsplit(
+  stats::setNames(ora_table$geneID, ora_table$ID)[go_terms],
+  "/",
+  fixed = TRUE
+)
+effects <- stats::setNames(
+  de_table_result$effect,
+  de_table_result$feature_id
+)
+feature_labels <- stats::setNames(
+  feature_data$display_label,
+  rownames(feature_data)
+)
+network_features <- lapply(ora_membership, function(ids) {
+  utils::head(ids[order(-abs(effects[ids]))], 6L)
+})
+display_features <- unique(unlist(
+  network_features,
+  use.names = FALSE
+))
+stopifnot(
+  all(lengths(network_features) == 6L),
+  all(display_features %in% names(feature_labels))
+)
+```
+
+```{r ora-network, fig.width=3.15, fig.height=3.15, fig.cap="图 2：GO 条目—基因 community network；共享基因在所属社区分别显示，条目间连线表示完整命中集合的 Jaccard 重叠。", fig.alt="五个真实 GO 条目与各自六个显式显示基因构成的白底 community network；图中只标注 GO 条目。"}
+plot_ora_network(
+  ora_result,
+  terms = go_terms,
+  feature_values = effects,
+  features = network_features,
+  p_value = "adjusted"
+) +
+  labs(title = "Airway GO term-feature network")
+```
+
+径向图复用相同的逐条目基因选择；共享基因在外圈只保留一个节点并连接全部所属条目，所有显示基因均
+显式标注。内圈条目连线的宽度和透明度表示共享基因数。
+
+```{r ora-radial, fig.width=3.15, fig.height=3.15, fig.cap="图 3：同一 GO 条目—基因关系的白底径向布局；内圈连线编码共享基因数。", fig.alt="五个真实 GO 条目位于内圈、逐条目选择基因位于外圈的径向网络；所有外圈基因均有 symbol 标签。"}
+plot_ora_radial(
+  ora_result,
+  terms = go_terms,
+  feature_values = effects,
+  features = network_features,
+  feature_labels = feature_labels,
+  label_features = display_features,
+  p_value = "adjusted"
+) +
+  labs(title = "Airway GO radial network")
+```
+
+# GSEA：完整 Wald-statistic 排序
+
+`pvalueCutoff = 1`只用于保留五个预先指定条目以便比较；显著性仍由结果表中的 adjusted p-value 判断。
+
+```{r gsea-analysis}
+gsea_result <- suppressMessages(enrich_go(
+  ranks = ranks,
+  method = "gsea",
+  org_db = org_db,
+  key_type = "ENSEMBL",
+  ontology = "BP",
+  pvalueCutoff = 1,
+  pAdjustMethod = "BH",
+  minGSSize = 15L,
+  maxGSSize = 500L,
+  eps = 0,
+  verbose = FALSE,
+  seed = TRUE,
+  by = "fgsea"
+))
+gsea_table <- as.data.frame(gsea_result)
+stopifnot(nrow(gsea_table) > 0L, all(go_terms %in% gsea_table$ID))
+
+gsea_selected <- gsea_table[
+  match(go_terms, gsea_table$ID),
+  c("ID", "Description", "setSize", "NES", "p.adjust"),
+  drop = FALSE
+]
+```
+
+NES 的正负对应 `trt - untrt` 排序方向。ORA 和 GSEA 的显著性不必一致：前者检验阈值化上调列表中的
+过度代表，后者检验完整排序中的集中位置。
+
+```{r gsea-table, warning=FALSE}
+knitr::kable(
+  gsea_selected,
+  digits = 4,
+  row.names = FALSE,
+  caption = "同一组预先指定 GO 条目的 GSEA 结果"
+)
+```
+
+```{r gsea-classic, fig.width=2.32, fig.height=2.09, fig.cap="图 4：cellular response to glucocorticoid stimulus 的经典 GSEA running-score 图。", fig.alt="糖皮质激素细胞响应 GO 条目的 running enrichment score、命中位置和完整 Wald-statistic 排序三层图。"}
+plot_gsea_classic(
+  gsea_result,
+  term = go_terms[[1L]]
+)
+```
+
+```{r gsea-ridge, fig.width=4.72, fig.height=1.97, fig.cap="图 5：五个预先指定 GO 条目的 leading-edge Wald statistic 分布。", fig.alt="五个 airway GO 条目的 leading-edge 基因 Wald statistic 山脊密度和成员位置图。"}
+plot_gsea_ridge(
+  gsea_result,
+  terms = go_terms,
+  membership = "leading_edge",
+  show_statistics = TRUE
+) +
+  labs(title = "Airway GO leading-edge distributions")
+```
+
+# 限制与来源
+
+airway 只有四个 cell line 的四对 untreated/treated 样本；`~ cell + dex` 估计的是该实验内的平均处理
+效应，不能代表更广泛人群。ORA 入选阈值、GO 注释版本、gene-set 大小过滤及模型假设都会影响结果，
+GSEA 也依赖排序统计量和集合定义。这里的条目与基因图均为同一数据上的描述性展示，仍需独立样本和
+实验验证。
+
+数据来自 Bioconductor airway ExperimentData 包，对应 Himes 等人的研究：*RNA-Seq Transcriptome
+Profiling Identifies CRISPLD2 as a Glucocorticoid Responsive Gene that Modulates Cytokine Function in
+Airway Smooth Muscle Cells*（PLoS ONE, 2014；[PMID 24926665](https://pubmed.ncbi.nlm.nih.gov/24926665/)；
+GEO GSE52778）。数据包说明见 [Bioconductor airway 手册](https://bioconductor.org/packages/release/data/experiment/manuals/airway/man/airway.pdf)。
+
+# 实际项目需要记录
+
+- 差异模型、contrast、效应方向及 ORA 入选阈值；
+- 分析 ID、注释数据库版本、ontology 和 gene-set 大小过滤；
+- ORA 的全部受检背景，或 GSEA 的完整排序定义；
+- 后端、adjusted p-value 字段和随机种子。
+
+本文使用 bulkMAE `r as.character(utils::packageVersion("bulkMAE"))`、airway
+`r as.character(utils::packageVersion("airway"))` 和 org.Hs.eg.db
+`r as.character(utils::packageVersion("org.Hs.eg.db"))`。完整会话如下：
+
+```{r session-info}
+sessionInfo()
+```

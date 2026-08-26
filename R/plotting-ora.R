@@ -4,7 +4,8 @@
 #' treating them as interchangeable: rich factor is overlap divided by the
 #' background term size, gene ratio is overlap divided by the input list size,
 #' and fold enrichment is gene ratio divided by background ratio. Point area
-#' represents overlap count and colour represents finite `-log10()` evidence.
+#' represents overlap count and colour represents finite `-log10()` evidence;
+#' adjusted evidence is labelled compactly as `adj p`.
 #'
 #' @param result A clusterProfiler `enrichResult` or an ORA result data frame
 #'   containing `ID`, `Description`, `GeneRatio`, `BgRatio`, `pvalue`,
@@ -65,6 +66,10 @@ plot_ora_bubble <- function(
       high = "#B2182B",
       name = .plot_ora_evidence_legend(selected$evidence_label)
     ) +
+    ggplot2::guides(
+      size = ggplot2::guide_legend(order = 1),
+      colour = ggplot2::guide_colourbar(order = 2)
+    ) +
     ggplot2::labs(
       x = x_label,
       y = NULL,
@@ -106,15 +111,20 @@ plot_ora_bubble <- function(
       legend.text = ggplot2::element_text(size = .bulkmae_text_size_pt),
       legend.key.height = grid::unit(2, "mm"),
       legend.key.width = grid::unit(2, "mm"),
+      plot.background = ggplot2::element_rect(
+        fill = "white", colour = NA
+      ),
       plot.margin = ggplot2::margin(0, 0, 0, 0, unit = "mm")
     )
   if (x %in% c("rich_factor", "gene_ratio")) {
     plot <- plot + ggplot2::scale_x_continuous(
       labels = .plot_percent_labels,
+      n.breaks = 4,
       expand = ggplot2::expansion(mult = c(0.01, 0.08))
     )
   } else {
     plot <- plot + ggplot2::scale_x_continuous(
+      n.breaks = 4,
       expand = ggplot2::expansion(mult = c(0.01, 0.08))
     )
   }
@@ -126,10 +136,10 @@ plot_ora_bubble <- function(
 #' Builds a deterministic community layout from explicitly selected ORA terms
 #' and their enriched-feature membership. Term-to-term edges represent the
 #' Jaccard coefficient of the complete enriched-feature sets, not ontology or
-#' full-pathway similarity. Shared features are represented once. Optional
-#' feature values control feature-node size and alpha by absolute magnitude;
-#' community colour continues to identify layout ownership. Values do not
-#' affect term selection.
+#' full-pathway similarity. A shared feature is drawn once inside every
+#' selected term community that contains it, matching the reference community
+#' grammar. Optional feature values control every corresponding visual node's
+#' size and alpha by absolute magnitude. Values do not affect term selection.
 #'
 #' @param result A clusterProfiler `enrichResult` or compatible ORA result data
 #'   frame. See [plot_ora_bubble()].
@@ -139,9 +149,11 @@ plot_ora_bubble <- function(
 #'   explicit list must describe the selected terms exactly.
 #' @param feature_values Optional feature-named finite numeric vector. It must
 #'   cover every displayed feature; additional values are ignored.
-#' @param features Optional explicit feature identifiers to display. `NULL`
-#'   displays all enriched features. Selection never changes Jaccard values,
-#'   which use the complete membership.
+#' @param features Optional explicit feature identifiers to display. Supply a
+#'   character vector for one global feature set, or a term-named list to
+#'   select displayed membership independently within each selected term.
+#'   `NULL` displays all enriched features. Selection never changes overlap
+#'   statistics computed from the complete membership.
 #' @param term_labels Optional complete term-named labels.
 #' @param feature_labels Optional feature-named labels covering every displayed
 #'   feature. Additional labels are ignored.
@@ -184,9 +196,10 @@ plot_ora_network <- function(
 #'
 #' Places terms on an inner ring and unique enriched features on an outer ring.
 #' Membership curves retain every selected term-feature relation and inner
-#' term edges show Jaccard overlap. For layout only, each outer feature is
-#' assigned to the most significant adjacent term, with selected-term order
-#' breaking ties; shared features remain connected to every adjacent term.
+#' term-edge width and alpha show the number of shared enriched features. For
+#' layout only, each outer feature is assigned to the most significant adjacent
+#' term, with selected-term order breaking ties; shared features remain
+#' connected to every adjacent term.
 #'
 #' @inheritParams plot_ora_network
 #'
@@ -408,7 +421,7 @@ plot_ora_radial <- function(
 
 .plot_ora_evidence_legend <- function(label) {
   if (identical(label, "-log10 adjusted p-value")) {
-    return(expression(-log[10]("adjusted p-value")))
+    return(expression(-log[10]("adj p")))
   }
   expression(-log[10]("p-value"))
 }
@@ -437,6 +450,32 @@ plot_ora_radial <- function(
   complete_features <- unique(unlist(complete_membership, use.names = FALSE))
   if (is.null(features)) {
     features <- complete_features
+    display_membership <- complete_membership
+  } else if (is.list(features) && !is.data.frame(features)) {
+    if (is.null(names(features))) {
+      stop("A list supplied as `features` must be term-named.", call. = FALSE)
+    }
+    .plot_assert_ids(names(features), "Names of `features`")
+    if (!setequal(names(features), terms)) {
+      stop("A list supplied as `features` must describe selected terms exactly.",
+           call. = FALSE)
+    }
+    display_membership <- lapply(features[terms], function(ids) {
+      ids <- as.character(ids)
+      .plot_assert_ids(ids, "Each element of `features`")
+      ids
+    })
+    for (term in terms) {
+      unknown <- setdiff(display_membership[[term]], complete_membership[[term]])
+      if (length(unknown)) {
+        stop(
+          "Unknown displayed features for term ", term, ": ",
+          paste(unknown, collapse = ", "), ".",
+          call. = FALSE
+        )
+      }
+    }
+    features <- unique(unlist(display_membership, use.names = FALSE))
   } else {
     features <- as.character(features)
     .plot_assert_ids(features, "`features`")
@@ -447,11 +486,12 @@ plot_ora_radial <- function(
         call. = FALSE
       )
     }
+    display_membership <- lapply(
+      complete_membership,
+      function(ids) features[features %in% ids]
+    )
   }
-  display_membership <- lapply(
-    complete_membership,
-    function(ids) features[features %in% ids]
-  )
+  names(display_membership) <- terms
   empty <- names(display_membership)[!lengths(display_membership)]
   if (length(empty)) {
     stop(
@@ -700,6 +740,7 @@ plot_ora_radial <- function(
     hub_gene_min_dist = 0.45,
     inner_compression = 0.5,
     shared_gene_push = 1.5,
+    shared_align_jitter = 1.2,
     canvas_limit = 3.3,
     bg_n_rings = 15L,
     bg_alpha = c(0.001, 0.018),
@@ -796,42 +837,57 @@ plot_ora_radial <- function(
 
 .plot_ora_repel_features <- function(features, minimum, iterations = 90L) {
   if (nrow(features) < 2L || minimum <= 0) return(features)
-  x <- features$x
-  y <- features$y
-  anchor_x <- x
-  anchor_y <- y
-  golden <- pi * (3 - sqrt(5))
-  for (iteration in seq_len(iterations)) {
-    dx_total <- numeric(length(x))
-    dy_total <- numeric(length(y))
-    for (i in seq_len(length(x) - 1L)) {
-      for (j in seq.int(i + 1L, length(x))) {
-        dx <- x[[j]] - x[[i]]
-        dy <- y[[j]] - y[[i]]
-        distance <- sqrt(dx^2 + dy^2)
-        if (distance < 1e-8) {
-          ux <- cos((i + j) * golden)
-          uy <- sin((i + j) * golden)
-          distance <- 0
-        } else {
-          ux <- dx / distance
-          uy <- dy / distance
-        }
-        if (distance < minimum) {
-          push <- (minimum - distance) * 0.5
-          dx_total[[i]] <- dx_total[[i]] - ux * push
-          dy_total[[i]] <- dy_total[[i]] - uy * push
-          dx_total[[j]] <- dx_total[[j]] + ux * push
-          dy_total[[j]] <- dy_total[[j]] + uy * push
+  groups <- if ("term_id" %in% names(features)) {
+    split(
+      seq_len(nrow(features)),
+      factor(features$term_id, levels = unique(features$term_id))
+    )
+  } else {
+    list(seq_len(nrow(features)))
+  }
+  result <- lapply(groups, function(rows) {
+    data <- features[rows, , drop = FALSE]
+    if (nrow(data) < 2L) return(data)
+    x <- data$x
+    y <- data$y
+    anchor_x <- x
+    anchor_y <- y
+    golden <- pi * (3 - sqrt(5))
+    for (iteration in seq_len(iterations)) {
+      dx_total <- numeric(length(x))
+      dy_total <- numeric(length(y))
+      for (i in seq_len(length(x) - 1L)) {
+        for (j in seq.int(i + 1L, length(x))) {
+          dx <- x[[j]] - x[[i]]
+          dy <- y[[j]] - y[[i]]
+          distance <- sqrt(dx^2 + dy^2)
+          if (distance < 1e-8) {
+            ux <- cos((i + j) * golden)
+            uy <- sin((i + j) * golden)
+            distance <- 0
+          } else {
+            ux <- dx / distance
+            uy <- dy / distance
+          }
+          if (distance < minimum) {
+            push <- (minimum - distance) * 0.5
+            dx_total[[i]] <- dx_total[[i]] - ux * push
+            dy_total[[i]] <- dy_total[[i]] - uy * push
+            dx_total[[j]] <- dx_total[[j]] + ux * push
+            dy_total[[j]] <- dy_total[[j]] + uy * push
+          }
         }
       }
+      x <- x + dx_total + (anchor_x - x) * 0.02
+      y <- y + dy_total + (anchor_y - y) * 0.02
     }
-    x <- x + dx_total + (anchor_x - x) * 0.02
-    y <- y + dy_total + (anchor_y - y) * 0.02
-  }
-  features$x <- x
-  features$y <- y
-  features
+    data$x <- x
+    data$y <- y
+    data
+  })
+  result <- do.call(rbind, result)
+  rownames(result) <- NULL
+  result
 }
 
 .plot_ora_community_layout <- function(graph) {
@@ -848,7 +904,6 @@ plot_ora_radial <- function(
   terms$hub_size <- .plot_rescale(terms$minus_log10_p, style$hub_size)
   terms$label <- .plot_wrap_words(terms$term_label, words = 3L)
 
-  primary <- .plot_ora_primary_terms(graph)
   degree <- table(graph$membership_edges$feature_id)
   magnitudes <- if (is.null(graph$feature_values)) {
     rep(1, length(graph$features))
@@ -857,48 +912,61 @@ plot_ora_radial <- function(
   }
   feature_size <- .plot_rescale(magnitudes, style$feature_size)
   feature_alpha <- .plot_rescale(magnitudes, style$feature_alpha)
+  names(feature_size) <- graph$features
+  names(feature_alpha) <- graph$features
   golden <- pi * (3 - sqrt(5))
-  rows <- vector("list", length(graph$features))
-  for (feature_index in seq_along(graph$features)) {
-    feature <- graph$features[[feature_index]]
-    adjacent <- graph$membership_edges$term_id[
-      graph$membership_edges$feature_id == feature
+  rows <- vector("list", length(graph$terms))
+  for (term_index in seq_along(graph$terms)) {
+    term <- graph$terms[[term_index]]
+    term_row <- match(term, terms$term_id)
+    term_features <- graph$membership_edges$feature_id[
+      graph$membership_edges$term_id == term
     ]
-    adjacent_rows <- match(adjacent, terms$term_id)
-    owner <- primary[[feature]]
-    owner_row <- match(owner, terms$term_id)
-    siblings <- graph$features[primary[graph$features] == owner]
-    sibling_index <- match(feature, siblings)
-    if (length(adjacent) == 1L) {
+    shared <- unname(degree[term_features]) > 1L
+    term_order <- order(shared, seq_along(term_features))
+    term_features <- term_features[term_order]
+    shared <- shared[term_order]
+    term_rows <- vector("list", length(term_features))
+    for (feature_index in seq_along(term_features)) {
+      feature <- term_features[[feature_index]]
+      adjacent <- graph$membership_edges$term_id[
+        graph$membership_edges$feature_id == feature
+      ]
+      other_rows <- match(setdiff(adjacent, term), terms$term_id)
+      if (length(other_rows)) {
+        target_angle <- atan2(
+          mean(terms$center_y[other_rows]) - terms$center_y[[term_row]],
+          mean(terms$center_x[other_rows]) - terms$center_x[[term_row]]
+        )
+        jitter <- style$shared_align_jitter *
+          sin((term_index + feature_index) * sqrt(2))
+        local_angle <- target_angle + jitter
+      } else {
+        local_angle <- term_index * golden + feature_index * golden
+      }
       raw_radius <- style$hub_gene_min_dist +
-        (terms$module_radius[[owner_row]] - style$hub_gene_min_dist) *
-        sqrt(sibling_index / length(siblings))
-      local_radius <- raw_radius * style$inner_compression
-      local_angle <- owner_row * golden + sibling_index * golden
-      x <- terms$center_x[[owner_row]] + cos(local_angle) * local_radius
-      y <- terms$center_y[[owner_row]] + sin(local_angle) * local_radius
-    } else {
-      x <- mean(terms$center_x[adjacent_rows])
-      y <- mean(terms$center_y[adjacent_rows])
-      offset <- style$shared_gene_push * 0.06 * sqrt(feature_index)
-      x <- x + offset * cos(feature_index * golden)
-      y <- y + offset * sin(feature_index * golden)
+        (terms$module_radius[[term_row]] - style$hub_gene_min_dist) *
+        sqrt(feature_index / length(term_features))
+      push <- if (shared[[feature_index]]) style$shared_gene_push else 1
+      local_radius <- raw_radius * style$inner_compression * push
+      term_rows[[feature_index]] <- data.frame(
+        term_id = term,
+        feature_id = feature,
+        primary_term = term,
+        x = terms$center_x[[term_row]] + cos(local_angle) * local_radius,
+        y = terms$center_y[[term_row]] + sin(local_angle) * local_radius,
+        degree = unname(degree[[feature]]),
+        label = unname(graph$feature_labels[[feature]]),
+        value = if (is.null(graph$feature_values)) NA_real_ else
+          unname(graph$feature_values[[feature]]),
+        plot_size = unname(feature_size[[feature]]),
+        feature_alpha = unname(feature_alpha[[feature]]),
+        colour = unname(graph$colours[[term]]),
+        shape_id = term,
+        stringsAsFactors = FALSE
+      )
     }
-    rows[[feature_index]] <- data.frame(
-      feature_id = feature,
-      primary_term = owner,
-      x = x,
-      y = y,
-      degree = unname(degree[[feature]]),
-      label = unname(graph$feature_labels[[feature]]),
-      value = if (is.null(graph$feature_values)) NA_real_ else
-        unname(graph$feature_values[[feature]]),
-      plot_size = feature_size[[feature_index]],
-      feature_alpha = feature_alpha[[feature_index]],
-      colour = unname(graph$colours[[owner]]),
-      shape_id = owner,
-      stringsAsFactors = FALSE
-    )
+    rows[[term_index]] <- do.call(rbind, term_rows)
   }
   features <- do.call(rbind, rows)
   rownames(features) <- NULL
@@ -909,8 +977,11 @@ plot_ora_radial <- function(
   membership <- graph$membership_edges
   membership$x_term <- terms$center_x[match(membership$term_id, terms$term_id)]
   membership$y_term <- terms$center_y[match(membership$term_id, terms$term_id)]
-  membership$x_feature <- features$x[match(membership$feature_id, features$feature_id)]
-  membership$y_feature <- features$y[match(membership$feature_id, features$feature_id)]
+  membership_key <- paste(membership$term_id, membership$feature_id, sep = "\r")
+  feature_key <- paste(features$term_id, features$feature_id, sep = "\r")
+  feature_rows <- match(membership_key, feature_key)
+  membership$x_feature <- features$x[feature_rows]
+  membership$y_feature <- features$y[feature_rows]
 
   overlap <- graph$overlap
   if (nrow(overlap)) {
@@ -932,7 +1003,7 @@ plot_ora_radial <- function(
   }
 
   feature_bottom <- vapply(graph$terms, function(term) {
-    ids <- features$primary_term == term
+    ids <- features$term_id == term
     if (any(ids)) min(features$y[ids]) else
       terms$center_y[match(term, terms$term_id)]
   }, numeric(1))
@@ -1060,7 +1131,7 @@ plot_ora_radial <- function(
     )
   if (length(graph$label_features)) {
     labels <- layout$features[
-      match(graph$label_features, layout$features$feature_id), , drop = FALSE
+      layout$features$feature_id %in% graph$label_features, , drop = FALSE
     ]
     plot <- plot + ggrepel::geom_text_repel(
       data = labels,
@@ -1093,15 +1164,16 @@ plot_ora_radial <- function(
       x = NULL,
       y = NULL,
       alt = paste(
-        "A community network of selected ORA terms and unique enriched features.",
-        "Term-feature lines show membership, pale term-term lines show Jaccard",
-        "overlap, feature size and alpha show absolute feature values when supplied,",
-        "and term size shows enrichment evidence."
+        "A community network of selected ORA terms and term-specific enriched",
+        "feature nodes. Term-feature lines show membership, pale term-term lines",
+        "show Jaccard overlap, feature size and alpha show absolute feature values",
+        "when supplied, and term size shows enrichment evidence."
       )
     ) +
     ggplot2::theme_void(base_size = .bulkmae_text_size_pt) +
     ggplot2::theme(
       legend.position = "none",
+      plot.background = ggplot2::element_rect(fill = "white", colour = NA),
       plot.margin = ggplot2::margin(5, 0, 0, 0, unit = "pt"),
       plot.title = ggplot2::element_text(
         face = "plain", hjust = 0.5, size = .bulkmae_text_size_pt,
@@ -1267,7 +1339,7 @@ plot_ora_radial <- function(
     overlap$y <- terms$y[match(overlap$from, terms$term_id)]
     overlap$xend <- terms$x[match(overlap$to, terms$term_id)]
     overlap$yend <- terms$y[match(overlap$to, terms$term_id)]
-    strength <- overlap$jaccard^style$overlap_power
+    strength <- overlap$shared_n^style$overlap_power
     overlap$edge_width <- .plot_rescale(strength, style$overlap_width)
     overlap$edge_alpha <- .plot_rescale(strength, style$overlap_alpha)
   }
@@ -1384,13 +1456,15 @@ plot_ora_radial <- function(
       alt = paste(
         "A radial network of selected ORA terms on an inner ring and unique",
         "enriched features on an outer ring. Curves show term membership, pale",
-        "inner lines show Jaccard overlap, feature size and alpha show absolute",
-        "feature values when supplied, and term size shows enrichment evidence."
+        "inner-line width and alpha show shared-feature counts, feature size and",
+        "alpha show absolute feature values when supplied, and term size shows",
+        "enrichment evidence."
       )
     ) +
     ggplot2::theme_void(base_size = .bulkmae_text_size_pt) +
     ggplot2::theme(
       legend.position = "none",
+      plot.background = ggplot2::element_rect(fill = "white", colour = NA),
       plot.margin = ggplot2::margin(5, 5, 5, 5, unit = "pt"),
       plot.title = ggplot2::element_text(
         face = "plain", hjust = 0.1, size = .bulkmae_text_size_pt,

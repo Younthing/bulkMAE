@@ -45,6 +45,10 @@ jobs:
             any::airway
             any::edgeR
             any::DESeq2
+            any::limma
+            any::clusterProfiler
+            any::fgsea
+            any::org.Hs.eg.db
             local::.
           needs: website
 

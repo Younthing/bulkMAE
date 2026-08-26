@@ -47,9 +47,9 @@ bulkMAE 的分析函数是对原生后端的薄封装，绘图层也应保持同
 |---|---|---|---|
 | `plot_gsea_classic()` | 0.50/0.20/0.30 三段比例、ES 渐变、hit barcode、200 格 rank 色带、灰色 rank polygon、细边框、无图例和 `5.9 × 5.3 cm` | 逐层复核未发现额外漂移 | 单个 free-space facet 代替 patchwork；自行重建并校验 ES，不调用 `enrichplot:::`；term 显式指定且函数不保存文件 |
 | `plot_gsea_ridge()` | `geom_ridgeline()`、0.36 高度、0.18 填充透明度、命中刻线、七色顺序、无图例和 `12 × 5 cm` | GSEA 表同时识别 `qvalue`、`qvalues`、`q_value` | term 和 membership 显式指定；不自动选“正向 top term”；常量 rank 分布报错，不添加假 jitter |
-| `plot_ora_bubble()` | 40 字符换行、0.8–2.8 点面积范围、蓝到暗红证据渐变、0.1% 百分比标签、数学形式证据图例、右侧图例、细边框和 `10 × 8 cm` | 删除人为固定的 size breaks，并恢复参考图的默认刻度；换行宽度、百分比精度和图例表达式已对齐 | 保留正确的 rich factor、gene ratio、fold enrichment 定义；不复制参考脚本中错误的 denominator 或统计量 fallback |
-| `plot_ora_network()` | 社区形状、布局参数、Jaccard 模块边、15 层 halo、membership 线、节点范围、6 pt `ggrepel` 标签、无图例和 `8 × 8 cm` | 少于 5 个 term 时也跨完整五色色带插值；补齐 `fontface`、`bg.color`、`bg.r` | 共享 feature 只有一个 canonical 节点；feature 显式选择；确定性布局不读写全局 RNG；feature 标签是显式扩展 |
-| `plot_ora_radial()` | 6.3/4.1/6.65 半径、0.075 扇区间隔、term 排斥、节点与 membership 线范围、20 字符换行、径向标签旋转、四边 5 pt margin 和 `8 × 8 cm` | 使用径向源码独有的短色板规则：不超过 5 个 term 时取前 N 个基色；补齐字符串换行和 term 文字参数 | 所有几何文字统一为维护者要求的 6 pt，而不复制源码的 5.5/4 pt；gene 标签显式选择；term edge 继续用跨图一致的 Jaccard，而非未标准化 shared count |
+| `plot_ora_bubble()` | 40 字符换行、0.8–2.8 点面积范围、蓝到暗红证据渐变、0.1% 百分比标签、右侧图例、细边框和 `10 × 8 cm` | 固定 Gene count 在上、证据色条在下；证据标题缩写为 `-log10(adj p)`；主刻度约束为 4 个以避免最终尺寸下重叠；显式白底 | 保留正确的 rich factor、gene ratio、fold enrichment 定义和轴名；term 由调用者显式选择并排序；不复制参考脚本中错误的 denominator 或统计量 fallback |
+| `plot_ora_network()` | term-specific feature 视觉节点、社区形状、Jaccard term 边、15 层 halo、membership 线、节点范围、默认不标 gene、无图例、白底和 `8 × 8 cm` | 恢复共享 feature 在每个所属社区各画一次；term-named `features` 可逐条目选择显示成员；补齐白底与文字背景参数 | 完整 membership 仍只保留一份并计算 Jaccard；feature 选择显式；确定性布局不读写全局 RNG；gene 标签仅作为显式扩展 |
+| `plot_ora_radial()` | 唯一外圈 feature 节点、shared-count term 边、6.3/4.1/6.65 半径、0.075 扇区间隔、节点与 membership 线范围、20 字符换行、径向标签旋转、白底和 `8 × 8 cm` | 恢复 term edge 的 `shared_n^0.85` 强度；使用径向源码独有的短色板规则；补齐白底、字符串换行和 term 文字参数 | 所有几何文字统一为维护者要求的 6 pt，而不复制源码的 5.5/4 pt；gene 标签与显示集合仍由 ID 显式指定 |
 
 网络图与径向图的短色板规则看似相近但参考脚本确实不同，因此实现中不能再次合并为同一策略。
 外圈背景弧、中心节点和中心连线在径向参考脚本中默认关闭；bulkMAE 复现默认成图，不为这些关闭的
@@ -208,21 +208,28 @@ clusterProfiler 的 ratio 字符串为 `numerator/denominator`；background term
 的分子，不是分母。解析时应验证正分母、ratio 范围以及 `GeneRatio` 分子与 `Count` 一致，不能在
 某列缺失时把另一种统计量作为 fallback 却沿用原轴名。
 
-`plot_ora_network()` 与 `plot_ora_radial()` 共享同一个 canonical graph：
+`plot_ora_network()` 与 `plot_ora_radial()` 共享同一份经过验证的完整 membership，但两种布局保留
+参考源码各自的视觉节点与 term-edge 语义：
 
 - `geneID` 表示富集输入中命中的 feature，不是完整 pathway membership；帮助页和 alt text 应称为
   enriched-feature overlap。
-- 每个 feature 只有一个 canonical 节点，即使它连接多个 term；term ID 与 feature ID 在内部表中
-  始终保留各自命名空间。
-- term-term edge 固定表示完整 enriched-feature membership 的 Jaccard coefficient。显式限制
-  `features` 只影响显示节点，不能改变 Jaccard。
+- 内部 feature ID 保持唯一并与 term ID 分开命名；community 布局再把每条显示 membership 展开成
+  term-specific 视觉节点，因此共享 feature 会在每个所属社区各出现一次。radial 布局则保留一个
+  外圈视觉节点，并连接全部相邻 term。
+- network 的 term-term edge 表示完整 enriched-feature membership 的 Jaccard coefficient；radial
+  内圈 edge 的宽度和透明度按共享 feature 数的 `shared_n^0.85` 缩放。二者都不是 ontology semantic
+  similarity，也不能混写成同一统计量。
+- `features` 可以是全局 character vector，也可以是逐 term 命名的 list；它只限制显示 membership，
+  不改变用于 network Jaccard 的完整 membership。
 - 外部 `feature_values` 按名称覆盖实际显示 feature，允许携带未显示的全基因组额外值；为复现参考
   网络风格，节点大小和透明度使用绝对值，节点颜色表示其构图 community，不伪装成带方向的 effect 图例。
 - community layout 的 halo、radial layout 的外圈 ownership 都只是降低遮挡的构图信息，没有
   inferential 含义；radial 中共享 feature 仍保留通向所有 term 的 membership edge。
-- term 和 feature 标签仍由显式 ID 连接。`label_features = NULL` 不自动标注“top gene”。
-- bubble 保留蓝到暗红证据渐变、细黑边框、浅灰读数网格、右侧紧凑图例和 `10 × 8 cm` 尺寸；
-  network/radial 保留低饱和 community 色、无图例的 `theme_void()`、halo/内外圈几何和 `8 × 8 cm` 尺寸。
+- term 和 feature 标签仍由显式 ID 连接。`label_features = NULL` 不自动标注“top gene”；参考 network
+  默认不标 gene，而参考 radial 可由调用者显式标注全部显示 gene。
+- bubble 保留蓝到暗红证据渐变、细黑边框、浅灰读数网格、`adj p` 紧凑色条、四个主刻度和
+  `10 × 8 cm` 尺寸；network/radial 保留低饱和 community 色、无图例的 `theme_void()`、显式白底、
+  halo/内外圈几何和 `8 × 8 cm` 尺寸。
 
 总拼图脚本只用于吸收单图比例、边框、留白和推荐物理尺寸经验。bulkMAE 不提供 GSEA/ORA
 overview 或报告拼图函数；调用者可在包外使用 patchwork/cowplot 组合返回的独立 ggplot。
@@ -260,7 +267,7 @@ overview 或报告拼图函数；调用者可在包外使用 patchwork/cowplot �
 ### 视觉回归与人工确认
 
 本仓库不把 vdiffr 或 SVG 快照作为视觉验收基线。需要人工确认时，将 PNG 生成到被忽略的
-`docs/plot-previews/`，使用最终推荐尺寸和固定 DPI；不要写入临时目录，也不要提交这些预览图。
+`docs/plot-previews/`，使用最终推荐尺寸和 600 dpi；不要写入临时目录，也不要提交这些预览图。
 由维护者确认文字是否拥挤、图例是否侵占面板、横轴标签是否重叠以及正负尺度是否均衡。自动化
 测试只负责可计算的数值、比例尺和图层结构契约，最终视觉判断由人完成。
 

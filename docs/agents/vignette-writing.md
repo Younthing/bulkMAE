@@ -1,7 +1,8 @@
 # bulkMAE 可执行 vignette 写作经验
 
-本文总结首篇真实分析教程形成过程中已经验证过的写作、渲染和 CI 经验。新增分析型 vignette 前，应结合本文阅读
+本文总结真实分析教程形成过程中已经验证过的写作、渲染和 CI 经验。新增分析型 vignette 前，应结合本文阅读
 [`vignettes/airway-qc-de.Rmd`](../../vignettes/airway-qc-de.Rmd)、
+[`vignettes/enrichment-analysis.Rmd`](../../vignettes/enrichment-analysis.Rmd)、
 [`DESCRIPTION`](../../DESCRIPTION) 和相关工作流配置。
 
 ## 先区分 API 总览与真实分析教程
@@ -25,6 +26,11 @@
 
 正文中的网页链接只用于来源说明，不能成为渲染数据的运行时依赖。BioMart、KEGG、STRING、OmniPath、LINCS 等在线服务不适合作为普通 vignette 构建的必经步骤。
 
+续篇分析应复用上一篇已经定义的数据、过滤、设计和 contrast。airway 富集教程虽然为保证独立执行而
+重复最短 DE 代码，但 counts、`~ cell + dex`、`trt - untrt` 和过滤规则必须与 QC/DE 教程一致；不能
+为了得到更好看的富集图换成模拟结果或另一套数据。GO 教学使用已安装的 `org.Hs.eg.db`，安装完成后的
+渲染不访问网络。
+
 ## 先解释实验设计，再调用模型
 
 真实数据不等于真实分析。教程必须把设计结构写清楚，并让代码与文字保持一致。例如 airway 的四个 cell line 各有 untreated/treated 一对样本，因此：
@@ -45,6 +51,10 @@
 - 热图的 top 30 feature 在教程代码中显式选择并传给绘图函数，同时明确它是同一数据上的描述性展示，不是独立验证。
 
 同样，筛查阈值不是生物学真理，聚类图不是验证队列，显著性也不等于因果。教程结尾应说明样本量、设计范围、注释版本、模型假设和独立验证需求。
+
+富集教程还要避免先看 p-value 再挑图：明确区分 ORA 的阈值化基因列表与完整受检背景、GSEA 的完整
+有方向排序，并在查看本次富集显著性前固定需要展示的 term。绘图可按显式 effect 选择每个 term 的
+代表 gene，但正文必须说明该选择只改变显示 membership，不改变 ORA 检验或完整 membership 统计量。
 
 ## 所有结果都由可执行代码生成
 
@@ -138,7 +148,8 @@ inline R 适合报告：
    其中 `VERSION` 替换为上一步实际生成的版本号。本地必须确认最终为 `Status: OK`；CI 通过 `error-on: "warning"` 强制 warning 也使任务失败。
 
 5. 用 pkgdown 的实际配置构建站点，确认文章顺序、图片嵌入和链接。
-6. 打开最终 HTML，人工确认结果表、动态摘要、正文排版、alt text 和预期图数；当前 airway 教程应有 7 幅图。
+6. 打开最终 HTML，人工确认结果表、动态摘要、正文排版、alt text 和预期图数；airway QC/DE 教程
+   应有 7 幅图，富集教程应有 5 幅图。
 
 直接 Knit 主要验证作者当前环境；`R CMD build` 会在打包路径中实际执行 vignette；只有在干净依赖环境中结合 `R CMD check`，才能可靠发现漏声明依赖。pkgdown 还会验证网站配置。几条路径覆盖的失败面不同。
 
@@ -162,11 +173,13 @@ inline R 适合报告：
 - [ ] 有明确研究问题和实验设计说明，而不是函数清单。
 - [ ] 使用官方、可追溯且安装后离线可用的数据。
 - [ ] 因子水平、配对/批次结构和 contrast 显式固定。
+- [ ] 若文章接续上一篇，数据、过滤、模型和 contrast 与上游教程一致。
 - [ ] 除安装示例外，所有分析 chunk 实际执行。
 - [ ] seed、图形设备参数和关键阈值明确。
 - [ ] 数字、比例、结果表和包版本由代码动态生成。
 - [ ] 每幅图有与正文语言一致的独立 caption 和有意义的 alt text。
 - [ ] 标签基因有事前依据，数据驱动热图明确标为描述性。
+- [ ] ORA 背景和 GSEA 完整排序明确；展示 term 不在查看本次 p-value 后临时挑选。
 - [ ] 结尾包含研究限制、数据/论文来源和 `sessionInfo()`。
 - [ ] DESCRIPTION、R CMD check、pkgdown 与文章索引同步更新。
 - [ ] 从源码完成 build、check 和 pkgdown 构建，无 warning。

@@ -22,8 +22,13 @@
   `BULKMAE_RUN_ONLINE_TESTS=true` only when deliberately testing remote resources.
 - Extends the standard ggplot2 layer with statistically faithful GSEA
   classic/ridge plots and ORA bubble/community/radial plots. These views keep
-  rank vectors, ORA ratios, enriched-feature membership, and Jaccard overlap
-  distinct instead of coercing them into one generic effect.
+  rank vectors, ORA ratios, enriched-feature membership, community Jaccard
+  overlap, and radial shared-feature counts distinct instead of coercing them
+  into one generic effect. ORA views reproduce the reference term-specific
+  community nodes, unique radial nodes, compact `adj p` legend, and white
+  publication backgrounds.
+- Adds a concise executable Chinese airway enrichment tutorial covering
+  method selection, native GO ORA/GSEA results, and all five enrichment plots.
 
 # bulkMAE 0.3.0
 

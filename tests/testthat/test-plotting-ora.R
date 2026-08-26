@@ -33,6 +33,8 @@ test_that("ORA bubble keeps ratio metrics statistically distinct", {
   expect_identical(rich$labels$size, "Gene count")
   expect_true(all(is.finite(rich$data$minus_log10_p)))
   expect_identical(rich$theme$legend.position, "right")
+  expect_equal(rich$guides$guides$size$params$order, 1)
+  expect_equal(rich$guides$guides$colour$params$order, 2)
   expect_equal(rich$layers[[1L]]$aes_params$alpha, 0.92)
   expect_identical(
     rich$scales$get_scales("colour")$palette(c(0, 1)),
@@ -49,16 +51,18 @@ test_that("ORA bubble keeps ratio metrics statistically distinct", {
   )
   expect_identical(
     deparse1(rich$scales$get_scales("colour")$name),
-    "expression(-log[10](\"adjusted p-value\"))"
+    "expression(-log[10](\"adj p\"))"
   )
   expect_equal(
     rich$scales$get_scales("x")$expand,
     c(0.01, 0, 0.08, 0)
   )
+  expect_equal(rich$scales$get_scales("x")$n.breaks, 4)
   expect_identical(rich$theme$panel.grid.major$colour, "grey90")
   expect_equal(rich$theme$panel.grid.major$linewidth, 0.2)
   expect_identical(rich$theme$panel.border$colour, "black")
   expect_equal(rich$theme$panel.border$linewidth, 0.2)
+  expect_identical(rich$theme$plot.background$fill, "white")
   expect_equal(as.numeric(rich$theme$axis.ticks.length), 0.8)
   expect_equal(rich$theme$plot.title$size, 6)
   expect_equal(rich$theme$plot.title$hjust, 0.5)
@@ -154,6 +158,96 @@ test_that("ORA graph has unique features and one complete Jaccard contract", {
   )
   expect_equal(subset_graph$overlap$jaccard, graph$overlap$jaccard)
   expect_equal(nrow(subset_graph$membership_edges), 5L)
+
+  per_term_graph <- bulkMAE:::.plot_ora_graph(
+    result = result,
+    terms = c("t1", "t2", "t3"),
+    membership = NULL,
+    feature_values = values,
+    features = list(
+      t1 = c("g1", "g2"),
+      t2 = c("g3", "g4"),
+      t3 = "g6"
+    ),
+    term_labels = NULL,
+    feature_labels = NULL,
+    label_features = NULL,
+    p_value = "auto"
+  )
+  expect_identical(lengths(per_term_graph$membership), c(t1 = 2L, t2 = 2L, t3 = 1L))
+  expect_equal(nrow(per_term_graph$membership_edges), 5L)
+  expect_equal(per_term_graph$overlap$jaccard, graph$overlap$jaccard)
+})
+
+test_that("ORA community layout keeps one visual feature node per term", {
+  result <- .toy_ora_plot_result()
+  values <- c(g1 = 2, g2 = -1, g3 = 0.5, g4 = -2, g5 = 1.2, g6 = -0.4)
+  graph <- bulkMAE:::.plot_ora_graph(
+    result, c("t1", "t2", "t3"), NULL, values, NULL,
+    NULL, NULL, NULL, "auto"
+  )
+
+  layout <- bulkMAE:::.plot_ora_community_layout(graph)
+  node_keys <- paste(layout$features$term_id, layout$features$feature_id, sep = "\r")
+  edge_keys <- paste(
+    graph$membership_edges$term_id,
+    graph$membership_edges$feature_id,
+    sep = "\r"
+  )
+
+  expect_equal(nrow(layout$features), nrow(graph$membership_edges))
+  expect_setequal(node_keys, edge_keys)
+  expect_equal(anyDuplicated(node_keys), 0L)
+  expect_equal(sum(layout$features$feature_id == "g2"), 2L)
+  expect_equal(sum(layout$features$feature_id == "g3"), 2L)
+  expect_equal(nrow(layout$membership), nrow(layout$features))
+})
+
+test_that("ORA community plot has the reference white background and no gene labels", {
+  result <- .toy_ora_plot_result()
+  values <- c(g1 = 2, g2 = -1, g3 = 0.5, g4 = -2, g5 = 1.2, g6 = -0.4)
+  plot <- plot_ora_network(
+    result,
+    terms = c("t1", "t2", "t3"),
+    feature_values = values
+  )
+
+  expect_identical(plot$theme$plot.background$fill, "white")
+  expect_identical(
+    unname(vapply(
+      plot$layers, function(layer) class(layer$geom)[[1L]], character(1)
+    )),
+    c(
+      "GeomCurve", "GeomCircle", "GeomSegment", "GeomPoint", "GeomPoint",
+      "GeomTextRepel"
+    )
+  )
+})
+
+test_that("ORA radial plot uses shared counts and a white background", {
+  result <- .toy_ora_plot_result()
+  values <- c(g1 = 2, g2 = -1, g3 = 0.5, g4 = -2, g5 = 1.2, g6 = -0.4)
+  graph <- bulkMAE:::.plot_ora_graph(
+    result, c("t1", "t2", "t3"), NULL, values, NULL,
+    NULL, NULL, names(values), "auto"
+  )
+  graph$overlap <- data.frame(
+    from = c("t1", "t1"),
+    to = c("t2", "t3"),
+    shared_n = c(10L, 2L),
+    jaccard = c(0.1, 0.8),
+    stringsAsFactors = FALSE
+  )
+
+  layout <- bulkMAE:::.plot_ora_radial_layout(graph)
+  plot <- bulkMAE:::.plot_ora_radial_layers(graph, layout)
+
+  expect_gt(layout$overlap$edge_width[[1L]], layout$overlap$edge_width[[2L]])
+  expect_gt(layout$overlap$edge_alpha[[1L]], layout$overlap$edge_alpha[[2L]])
+  background <- ggplot2::calc_element("plot.background", plot$theme)
+  expect_identical(background$fill, "white")
+  expect_true(is.na(background$colour))
+  expect_equal(nrow(plot$layers[[6L]]$data), length(values))
 })
 
 test_that("ORA community and radial plots reproduce the reference visual grammar", {
@@ -258,8 +352,8 @@ test_that("ORA community and radial plots reproduce the reference visual grammar
   expect_equal(range(radial_layout$features$feature_alpha), c(0.45, 0.77))
   expect_equal(range(radial_layout$terms$pathway_size), c(6, 12))
   expect_equal(range(radial_layout$terms$pathway_alpha), c(0.35, 0.55))
-  expect_equal(range(radial_layout$overlap$edge_width), c(0.8, 1.4))
-  expect_equal(range(radial_layout$overlap$edge_alpha), c(0.25, 0.40))
+  expect_equal(radial_layout$overlap$edge_width, rep(1.1, 2L))
+  expect_equal(radial_layout$overlap$edge_alpha, rep(0.325, 2L))
   left <- (radial_layout$features$angle * 180 / pi) %% 360 > 90 &
     (radial_layout$features$angle * 180 / pi) %% 360 < 270
   expect_identical(radial_layout$features$label_hjust, ifelse(left, 1, 0))
