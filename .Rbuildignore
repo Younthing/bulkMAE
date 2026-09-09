@@ -7,6 +7,7 @@
 ^omnipathr-log$
 ^tests/testthat/omnipathr-log$
 ^\.github$
+^\.cursor$
 ^_pkgdown\.yml$
 ^docs$
 ^AGENTS\.md$
