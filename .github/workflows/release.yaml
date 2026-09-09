@@ -1,0 +1,104 @@
+name: Release
+
+# Publish a GitHub Release when a version tag is pushed. The tag must match the
+# DESCRIPTION version as `vX.Y.Z` (for example v0.4.0). The job builds the
+# source tarball with vignettes and attaches it, using the matching NEWS.md
+# section as the release notes. Publishing a release also triggers pkgdown.yaml
+# (`release: [published]`) to refresh the documentation site.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (must equal vX.Y.Z from DESCRIPTION)."
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build tarball and publish release
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      R_KEEP_PKG_SOURCE: yes
+      BULKMAE_RUN_ONLINE_TESTS: "false"
+
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - uses: r-lib/actions/setup-pandoc@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
+
+      - uses: r-lib/actions/setup-r@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      # Vignettes execute a real airway analysis, so the release build needs the
+      # same offline backends as R-CMD-check to produce a complete tarball.
+      - uses: r-lib/actions/setup-r-dependencies@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
+        with:
+          dependencies: '"hard"'
+          extra-packages: |
+            any::knitr
+            any::rmarkdown
+            any::airway
+            any::edgeR
+            any::DESeq2
+            any::limma
+            any::clusterProfiler
+            any::fgsea
+            any::org.Hs.eg.db
+          needs: check
+
+      - name: Resolve tag and verify it matches DESCRIPTION
+        id: version
+        run: |
+          set -euo pipefail
+          tag="${{ github.event.inputs.tag || github.ref_name }}"
+          version="$(grep '^Version:' DESCRIPTION | sed -E 's/^Version:[[:space:]]*//')"
+          expected="v${version}"
+          if [ "$tag" != "$expected" ]; then
+            echo "::error::Tag '${tag}' does not match DESCRIPTION version ('${expected}')."
+            exit 1
+          fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Build source tarball
+        run: R CMD build --no-manual .
+
+      - name: Extract release notes from NEWS.md
+        run: |
+          set -euo pipefail
+          version="${{ steps.version.outputs.version }}"
+          awk -v h="# bulkMAE ${version}" '
+            $0 == h { flag = 1; next }
+            /^# bulkMAE / && flag { exit }
+            flag { print }
+          ' NEWS.md | sed -e '/./,$!d' > RELEASE_NOTES.md
+          if [ ! -s RELEASE_NOTES.md ]; then
+            echo "Release ${version}." > RELEASE_NOTES.md
+          fi
+          echo "----- release notes -----"
+          cat RELEASE_NOTES.md
+
+      - name: Publish GitHub Release
+        run: |
+          set -euo pipefail
+          gh release create "${{ steps.version.outputs.tag }}" \
+            --title "bulkMAE ${{ steps.version.outputs.version }}" \
+            --notes-file RELEASE_NOTES.md \
+            --verify-tag \
+            bulkMAE_*.tar.gz
