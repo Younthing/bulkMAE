@@ -44,7 +44,8 @@ transform_voom(
 
 - ...:
 
-  Additional arguments passed to `limma::voom()`.
+  Additional arguments passed to
+  [`limma::voom()`](https://rdrr.io/pkg/limma/man/voom.html).
 
 ## Value
 

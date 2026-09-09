@@ -52,7 +52,8 @@ adjust_batch(
 
 - ...:
 
-  Additional arguments passed to `limma::removeBatchEffect()`.
+  Additional arguments passed to
+  [`limma::removeBatchEffect()`](https://rdrr.io/pkg/limma/man/removeBatchEffect.html).
 
 ## Value
 

@@ -56,5 +56,6 @@ A native limma or edgeR differential-splicing result.
 named. This is particularly useful after expression filtering. Supply an
 untested `DGEGLM` to the edgeR method; choose its test with `coef` or
 `contrast`. For limma, apply the desired contrast with
-`limma::contrasts.fit()` before calling this function when a contrast,
-rather than a coefficient, is required.
+[`limma::contrasts.fit()`](https://rdrr.io/pkg/limma/man/contrasts.fit.html)
+before calling this function when a contrast, rather than a coefficient,
+is required.

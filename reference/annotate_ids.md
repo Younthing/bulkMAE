@@ -1,7 +1,9 @@
 # Map feature identifiers with an AnnotationDbi database
 
-This is a thin wrapper around `AnnotationDbi::mapIds()`. It deliberately
-returns a mapping table and does not alter row names in the MAE.
+This is a thin wrapper around
+[`AnnotationDbi::mapIds()`](https://rdrr.io/pkg/AnnotationDbi/man/AnnotationDb-class.html).
+It deliberately returns a mapping table and does not alter row names in
+the MAE.
 
 ## Usage
 

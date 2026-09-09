@@ -21,7 +21,8 @@ enrich_gsea(ranks, gene_sets, ...)
 
 - ...:
 
-  Additional arguments passed to `clusterProfiler::GSEA()`.
+  Additional arguments passed to
+  [`clusterProfiler::GSEA()`](https://rdrr.io/pkg/clusterProfiler/man/GSEA.html).
 
 ## Value
 

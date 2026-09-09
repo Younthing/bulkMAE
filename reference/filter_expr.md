@@ -41,15 +41,18 @@ filter_expr(
 
 - min_count:
 
-  Minimum count passed to `edgeR::filterByExpr()`.
+  Minimum count passed to
+  [`edgeR::filterByExpr()`](https://rdrr.io/pkg/edgeR/man/filterByExpr.html).
 
 - min_total_count:
 
-  Minimum total count passed to `edgeR::filterByExpr()`.
+  Minimum total count passed to
+  [`edgeR::filterByExpr()`](https://rdrr.io/pkg/edgeR/man/filterByExpr.html).
 
 - ...:
 
-  Additional arguments passed to `edgeR::filterByExpr()`.
+  Additional arguments passed to
+  [`edgeR::filterByExpr()`](https://rdrr.io/pkg/edgeR/man/filterByExpr.html).
 
 ## Value
 

@@ -40,7 +40,8 @@ enrich_camera(
 
 - contrast:
 
-  Contrast accepted by `limma::camera()`.
+  Contrast accepted by
+  [`limma::camera()`](https://rdrr.io/pkg/limma/man/camera.html).
 
 - assay:
 
@@ -54,7 +55,8 @@ enrich_camera(
 
 - ...:
 
-  Additional arguments passed to `limma::camera()`.
+  Additional arguments passed to
+  [`limma::camera()`](https://rdrr.io/pkg/limma/man/camera.html).
 
 ## Value
 

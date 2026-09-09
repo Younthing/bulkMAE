@@ -18,7 +18,11 @@
       <ul class="navbar-nav me-auto"><li class="active nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
-  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/getting-started.html">A stateless bulk transcriptomics workflow with bulkMAE</a></li>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Tutorials</h6></li>
+    <li><a class="dropdown-item" href="../articles/getting-started.html">快速入门：从表达矩阵到 bulkMAE 工作流</a></li>
+    <li><a class="dropdown-item" href="../articles/airway-qc-de.html">从样本质控到配对差异表达</a></li>
+    <li><a class="dropdown-item" href="../articles/enrichment-analysis.html">airway 富集分析：ORA、GSEA 与图形</a></li>
   </ul></li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><form class="form-inline" role="search">
@@ -79,7 +83,7 @@
 
 <dt id="arg-filter">filter<a class="anchor" aria-label="anchor" href="#arg-filter"></a></dt>
 <dd><p>Remove low-expression features with
-<code>edgeR::filterByExpr()</code>.</p></dd>
+<code><a href="https://rdrr.io/pkg/edgeR/man/filterByExpr.html" class="external-link">edgeR::filterByExpr()</a></code>.</p></dd>
 
 
 <dt id="arg-normalize-method">normalize_method<a class="anchor" aria-label="anchor" href="#arg-normalize-method"></a></dt>
@@ -91,15 +95,15 @@
 
 
 <dt id="arg-coef">coef<a class="anchor" aria-label="anchor" href="#arg-coef"></a></dt>
-<dd><p>Coefficient index or name for <code>edgeR::glmQLFTest()</code>.</p></dd>
+<dd><p>Coefficient index or name for <code><a href="https://rdrr.io/pkg/edgeR/man/glmQLFTest.html" class="external-link">edgeR::glmQLFTest()</a></code>.</p></dd>
 
 
 <dt id="arg-contrast">contrast<a class="anchor" aria-label="anchor" href="#arg-contrast"></a></dt>
-<dd><p>Optional numeric contrast for <code>edgeR::glmQLFTest()</code>.</p></dd>
+<dd><p>Optional numeric contrast for <code><a href="https://rdrr.io/pkg/edgeR/man/glmQLFTest.html" class="external-link">edgeR::glmQLFTest()</a></code>.</p></dd>
 
 
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
-<dd><p>Additional arguments passed to <code>edgeR::glmQLFit()</code>.</p></dd>
+<dd><p>Additional arguments passed to <code><a href="https://rdrr.io/pkg/edgeR/man/glmQLFit.html" class="external-link">edgeR::glmQLFit()</a></code>.</p></dd>
 
 </dl></div>
     <div class="section level2">

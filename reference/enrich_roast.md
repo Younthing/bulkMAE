@@ -39,7 +39,8 @@ enrich_roast(
 
 - contrast:
 
-  Contrast accepted by `limma::camera()`.
+  Contrast accepted by
+  [`limma::camera()`](https://rdrr.io/pkg/limma/man/camera.html).
 
 - assay:
 
@@ -61,7 +62,8 @@ enrich_roast(
 
 - ...:
 
-  Additional arguments passed to `limma::mroast()`.
+  Additional arguments passed to
+  [`limma::mroast()`](https://rdrr.io/pkg/limma/man/roast.html).
 
 ## Value
 

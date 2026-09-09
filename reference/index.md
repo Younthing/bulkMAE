@@ -1,6 +1,40 @@
 # Package index
 
-## All functions
+## Plotting
+
+Standard ggplot2 views of QC, embeddings, differential expression,
+enrichment, and assays.
+
+- [`plot_assay_heatmap()`](https://younthing.github.io/bulkMAE/reference/plot_assay_heatmap.md)
+  : Plot selected assay features as a heatmap
+- [`plot_de_ma()`](https://younthing.github.io/bulkMAE/reference/plot_de_ma.md)
+  : Plot a differential-expression MA plot
+- [`plot_de_volcano()`](https://younthing.github.io/bulkMAE/reference/plot_de_volcano.md)
+  : Plot a differential-expression volcano plot
+- [`plot_embedding()`](https://younthing.github.io/bulkMAE/reference/plot_embedding.md)
+  : Plot a sample embedding
+- [`plot_gsea_classic()`](https://younthing.github.io/bulkMAE/reference/plot_gsea_classic.md)
+  : Plot one classic GSEA running-score profile
+- [`plot_gsea_ridge()`](https://younthing.github.io/bulkMAE/reference/plot_gsea_ridge.md)
+  : Plot GSEA rank-metric distributions as ridges
+- [`plot_ora_bubble()`](https://younthing.github.io/bulkMAE/reference/plot_ora_bubble.md)
+  : Plot explicitly selected ORA terms as bubbles
+- [`plot_ora_network()`](https://younthing.github.io/bulkMAE/reference/plot_ora_network.md)
+  : Plot an ORA term-feature community network
+- [`plot_ora_radial()`](https://younthing.github.io/bulkMAE/reference/plot_ora_radial.md)
+  : Plot an ORA radial term-feature network
+- [`plot_qc_correlation()`](https://younthing.github.io/bulkMAE/reference/plot_qc_correlation.md)
+  : Plot a sample correlation matrix
+- [`plot_qc_library()`](https://younthing.github.io/bulkMAE/reference/plot_qc_library.md)
+  : Plot sample library QC metrics
+- [`plot_qc_outliers()`](https://younthing.github.io/bulkMAE/reference/plot_qc_outliers.md)
+  : Plot robust sample outlier distances
+- [`plot_save()`](https://younthing.github.io/bulkMAE/reference/plot_save.md)
+  : Save a bulkMAE plot at its recommended physical size
+- [`theme_bulkmae()`](https://younthing.github.io/bulkMAE/reference/theme_bulkmae.md)
+  : bulkMAE plot theme
+
+## Functions
 
 - [`activity_decouple()`](https://younthing.github.io/bulkMAE/reference/activity_decouple.md)
   : Run one or more decoupleR methods

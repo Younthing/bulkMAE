@@ -46,8 +46,10 @@ enrich_kegg(
 
 - ...:
 
-  Additional arguments passed to `clusterProfiler::enrichKEGG()` or
-  `clusterProfiler::gseKEGG()`.
+  Additional arguments passed to
+  [`clusterProfiler::enrichKEGG()`](https://rdrr.io/pkg/clusterProfiler/man/enrichKEGG.html)
+  or
+  [`clusterProfiler::gseKEGG()`](https://rdrr.io/pkg/clusterProfiler/man/gseKEGG.html).
 
 ## Value
 

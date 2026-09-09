@@ -24,7 +24,8 @@ enrich_fgsea(ranks, pathways, min_size = 15, max_size = 500, ...)
 
 - ...:
 
-  Additional arguments passed to `fgsea::fgseaMultilevel()`.
+  Additional arguments passed to
+  [`fgsea::fgseaMultilevel()`](https://rdrr.io/pkg/fgsea/man/fgseaMultilevel.html).
 
 ## Value
 

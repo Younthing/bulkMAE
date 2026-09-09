@@ -24,12 +24,15 @@ normalize_tmm(x, experiment, assay = "counts", method = "TMM", ...)
 
 - method:
 
-  Normalization method passed to `edgeR::normLibSizes()`.
+  Normalization method passed to
+  [`edgeR::normLibSizes()`](https://rdrr.io/pkg/edgeR/man/calcNormFactors.html).
 
 - ...:
 
-  Additional arguments passed to `edgeR::normLibSizes()`.
+  Additional arguments passed to
+  [`edgeR::normLibSizes()`](https://rdrr.io/pkg/edgeR/man/calcNormFactors.html).
 
 ## Value
 
-A native edgeR::DGEList containing normalization factors.
+A native [edgeR::DGEList](https://rdrr.io/pkg/edgeR/man/DGEList.html)
+containing normalization factors.

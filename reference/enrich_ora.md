@@ -24,7 +24,8 @@ enrich_ora(genes, gene_sets, universe = NULL, ...)
 
 - ...:
 
-  Additional arguments passed to `clusterProfiler::enricher()`.
+  Additional arguments passed to
+  [`clusterProfiler::enricher()`](https://rdrr.io/pkg/clusterProfiler/man/enricher.html).
 
 ## Value
 

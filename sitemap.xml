@@ -1,5 +1,8 @@
 <urlset xmlns = 'http://www.sitemaps.org/schemas/sitemap/0.9'>
 <url><loc>https://younthing.github.io/bulkMAE/404.html</loc></url>
+<url><loc>https://younthing.github.io/bulkMAE/AGENTS.html</loc></url>
+<url><loc>https://younthing.github.io/bulkMAE/articles/airway-qc-de.html</loc></url>
+<url><loc>https://younthing.github.io/bulkMAE/articles/enrichment-analysis.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/articles/getting-started.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/articles/index.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/authors.html</loc></url>
@@ -99,6 +102,19 @@
 <url><loc>https://younthing.github.io/bulkMAE/reference/normalize_deseq.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/reference/normalize_tmm.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/reference/normalize_tpm.html</loc></url>
+<url><loc>https://younthing.github.io/bulkMAE/reference/plot_assay_heatmap.html</loc></url>
+<url><loc>https://younthing.github.io/bulkMAE/reference/plot_de_ma.html</loc></url>
+<url><loc>https://younthing.github.io/bulkMAE/reference/plot_de_volcano.html</loc></url>
+<url><loc>https://younthing.github.io/bulkMAE/reference/plot_embedding.html</loc></url>
+<url><loc>https://younthing.github.io/bulkMAE/reference/plot_gsea_classic.html</loc></url>
+<url><loc>https://younthing.github.io/bulkMAE/reference/plot_gsea_ridge.html</loc></url>
+<url><loc>https://younthing.github.io/bulkMAE/reference/plot_ora_bubble.html</loc></url>
+<url><loc>https://younthing.github.io/bulkMAE/reference/plot_ora_network.html</loc></url>
+<url><loc>https://younthing.github.io/bulkMAE/reference/plot_ora_radial.html</loc></url>
+<url><loc>https://younthing.github.io/bulkMAE/reference/plot_qc_correlation.html</loc></url>
+<url><loc>https://younthing.github.io/bulkMAE/reference/plot_qc_library.html</loc></url>
+<url><loc>https://younthing.github.io/bulkMAE/reference/plot_qc_outliers.html</loc></url>
+<url><loc>https://younthing.github.io/bulkMAE/reference/plot_save.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/reference/qc_correlation.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/reference/qc_library.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/reference/qc_outliers.html</loc></url>
@@ -115,6 +131,7 @@
 <url><loc>https://younthing.github.io/bulkMAE/reference/surv_km.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/reference/surv_penalized.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/reference/surv_roc.html</loc></url>
+<url><loc>https://younthing.github.io/bulkMAE/reference/theme_bulkmae.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/reference/transform_rlog.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/reference/transform_voom.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/reference/transform_vst.html</loc></url>

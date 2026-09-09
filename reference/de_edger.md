@@ -39,7 +39,8 @@ de_edger(
 
 - filter:
 
-  Remove low-expression features with `edgeR::filterByExpr()`.
+  Remove low-expression features with
+  [`edgeR::filterByExpr()`](https://rdrr.io/pkg/edgeR/man/filterByExpr.html).
 
 - normalize_method:
 
@@ -51,15 +52,18 @@ de_edger(
 
 - coef:
 
-  Coefficient index or name for `edgeR::glmQLFTest()`.
+  Coefficient index or name for
+  [`edgeR::glmQLFTest()`](https://rdrr.io/pkg/edgeR/man/glmQLFTest.html).
 
 - contrast:
 
-  Optional numeric contrast for `edgeR::glmQLFTest()`.
+  Optional numeric contrast for
+  [`edgeR::glmQLFTest()`](https://rdrr.io/pkg/edgeR/man/glmQLFTest.html).
 
 - ...:
 
-  Additional arguments passed to `edgeR::glmQLFit()`.
+  Additional arguments passed to
+  [`edgeR::glmQLFit()`](https://rdrr.io/pkg/edgeR/man/glmQLFit.html).
 
 ## Value
 

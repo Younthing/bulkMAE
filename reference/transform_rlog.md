@@ -40,11 +40,13 @@ transform_rlog(
 
 - fit_type:
 
-  Dispersion fit type passed to `DESeq2::vst()`.
+  Dispersion fit type passed to
+  [`DESeq2::vst()`](https://rdrr.io/pkg/DESeq2/man/vst.html).
 
 - ...:
 
-  Additional arguments passed to `DESeq2::vst()`.
+  Additional arguments passed to
+  [`DESeq2::vst()`](https://rdrr.io/pkg/DESeq2/man/vst.html).
 
 ## Value
 

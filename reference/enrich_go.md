@@ -51,8 +51,10 @@ enrich_go(
 
 - ...:
 
-  Additional arguments passed to `clusterProfiler::enrichGO()` or
-  `clusterProfiler::gseGO()`.
+  Additional arguments passed to
+  [`clusterProfiler::enrichGO()`](https://rdrr.io/pkg/clusterProfiler/man/enrichGO.html)
+  or
+  [`clusterProfiler::gseGO()`](https://rdrr.io/pkg/clusterProfiler/man/gseGO.html).
 
 ## Value
 

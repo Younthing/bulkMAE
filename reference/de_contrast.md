@@ -28,7 +28,8 @@ de_contrast(x, experiment, formula, contrasts)
 
 - contrasts:
 
-  Character contrast expressions accepted by `limma::makeContrasts()`.
+  Character contrast expressions accepted by
+  [`limma::makeContrasts()`](https://rdrr.io/pkg/limma/man/makeContrasts.html).
 
 ## Value
 

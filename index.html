@@ -35,7 +35,11 @@
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
-<li><a class="dropdown-item" href="articles/getting-started.html">A stateless bulk transcriptomics workflow with bulkMAE</a></li>
+<li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Tutorials</h6></li>
+    <li><a class="dropdown-item" href="articles/getting-started.html">快速入门：从表达矩阵到 bulkMAE 工作流</a></li>
+    <li><a class="dropdown-item" href="articles/airway-qc-de.html">从样本质控到配对差异表达</a></li>
+    <li><a class="dropdown-item" href="articles/enrichment-analysis.html">airway 富集分析：ORA、GSEA 与图形</a></li>
   </ul>
 </li>
 <li class="nav-item"><a class="nav-link" href="news/index.html">Changelog</a></li>
@@ -223,7 +227,36 @@
 <span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="fu"><a href="reference/mae_pull_assay.html">mae_pull_assay</a></span><span class="op">(</span><span class="va">mae_small</span>, <span class="st">"rna"</span>, <span class="st">"tpm"</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/colSums.html" class="external-link">colSums</a></span><span class="op">(</span><span class="fu"><a href="reference/mae_pull_assay.html">mae_pull_assay</a></span><span class="op">(</span><span class="va">mae_with_tpm</span>, <span class="st">"rna"</span>, <span class="st">"tpm"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p>These helpers return modified copies: <code>mae</code> remains the raw-count input, while <code>mae_with_tpm</code> and <code>mae_small</code> make each added or filtered data state explicit.</p>
-<p>Read the <a href="https://younthing.github.io/bulkMAE/articles/getting-started.html">complete walkthrough</a>, the <a href="https://github.com/Younthing/bulkMAE/blob/main/inst/guides/expanded-methods-zh.md" class="external-link">method-selection guide</a>, and the <a href="https://github.com/Younthing/bulkMAE/blob/main/inst/guides/input-completeness-zh.md" class="external-link">input-completeness and resource-boundary audit</a>, plus the <a href="https://github.com/Younthing/bulkMAE/blob/main/inst/guides/official-sources.md" class="external-link">implementation-to-documentation audit map</a>. Users upgrading from 0.3 or earlier should also read the <a href="https://github.com/Younthing/bulkMAE/blob/main/inst/guides/naming-migration-zh.md" class="external-link">0.4 naming migration map</a>. After installation, the audit files are also available under <code>system.file("guides", package = "bulkMAE")</code>.</p>
+</div>
+<div class="section level2">
+<h2 id="publication-size-plots">Publication-size plots<a class="anchor" aria-label="anchor" href="#publication-size-plots"></a>
+</h2>
+<p>Every <code>plot_*()</code> helper returns a standard ggplot object and carries a recommended physical size tuned to that plot family. Continue styling with ordinary ggplot2 syntax, then let <code><a href="reference/plot_save.html">plot_save()</a></code> export at that final size:</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">qc_plot</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/plot_qc_library.html">plot_qc_library</a></span><span class="op">(</span><span class="fu"><a href="reference/qc_library.html">qc_library</a></span><span class="op">(</span><span class="va">mae</span>, <span class="st">"rna"</span>, <span class="st">"counts"</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">labs</span><span class="op">(</span>title <span class="op">=</span> <span class="st">"Library QC"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">theme</span><span class="op">(</span>legend.position <span class="op">=</span> <span class="st">"bottom"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="reference/plot_save.html">plot_save</a></span><span class="op">(</span><span class="st">"library-qc.pdf"</span>, <span class="va">qc_plot</span><span class="op">)</span></span></code></pre></div>
+<p>The default is <code>scale = 1</code>; PDF output uses Cairo when available. Override either dimension explicitly when a journal requires an exact layout:</p>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="reference/plot_save.html">plot_save</a></span><span class="op">(</span><span class="st">"library-qc.pdf"</span>, <span class="va">qc_plot</span>, width <span class="op">=</span> <span class="fl">8.5</span>, height <span class="op">=</span> <span class="fl">11</span>, units <span class="op">=</span> <span class="st">"cm"</span><span class="op">)</span></span></code></pre></div>
+<p><code><a href="reference/theme_bulkmae.html">theme_bulkmae()</a></code> uses publication-oriented 6 pt base text, and data labels drawn by bulkMAE use point units explicitly. A theme controls styling but not the physical graphics device: RStudio’s plot pane and knitr chunks therefore do not read the recommended dimensions. Use <code><a href="reference/plot_save.html">plot_save()</a></code> for exact files, and set chunk <code>fig.width</code> / <code>fig.height</code> explicitly when document previews also need a fixed aspect ratio.</p>
+<p>Specialized enrichment constructors keep method-specific inputs and statistics explicit:</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="reference/plot_gsea_classic.html">plot_gsea_classic</a></span><span class="op">(</span><span class="va">gsea_result</span>, term <span class="op">=</span> <span class="st">"HALLMARK_INFLAMMATORY_RESPONSE"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="reference/plot_gsea_ridge.html">plot_gsea_ridge</a></span><span class="op">(</span><span class="va">gsea_result</span>, terms <span class="op">=</span> <span class="va">pathway_ids</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="reference/plot_ora_bubble.html">plot_ora_bubble</a></span><span class="op">(</span><span class="va">ora_result</span>, terms <span class="op">=</span> <span class="va">pathway_ids</span><span class="op">)</span></span>
+<span><span class="fu"><a href="reference/plot_ora_network.html">plot_ora_network</a></span><span class="op">(</span><span class="va">ora_result</span>, terms <span class="op">=</span> <span class="va">pathway_ids</span>, feature_values <span class="op">=</span> <span class="va">effects</span><span class="op">)</span></span>
+<span><span class="fu"><a href="reference/plot_ora_radial.html">plot_ora_radial</a></span><span class="op">(</span></span>
+<span>  <span class="va">ora_result</span>,</span>
+<span>  terms <span class="op">=</span> <span class="va">pathway_ids</span>,</span>
+<span>  feature_values <span class="op">=</span> <span class="va">effects</span>,</span>
+<span>  label_features <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"IL6"</span>, <span class="st">"CXCL8"</span><span class="op">)</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p>Every selection is explicit. A native clusterProfiler GSEA object carries its ranked vector, gene sets, and weighting exponent; a tabular fgsea result does not, so classic plots require those analysis inputs to be supplied rather than reconstructing them heuristically. ORA bubbles distinguish rich factor, gene ratio, and fold enrichment. Community-network term edges use Jaccard overlap from complete enriched-feature membership, while radial term edges encode the number of shared enriched features.</p>
+<p>Read the <a href="https://younthing.github.io/bulkMAE/articles/getting-started.html">Chinese executable getting-started guide</a>, the <a href="https://younthing.github.io/bulkMAE/articles/airway-qc-de.html">airway QC and paired differential-expression tutorial</a>, the <a href="https://younthing.github.io/bulkMAE/articles/enrichment-analysis.html">airway GO ORA、GSEA 与绘图教程</a>, the <a href="https://github.com/Younthing/bulkMAE/blob/main/inst/guides/expanded-methods-zh.md" class="external-link">method-selection guide</a>, and the <a href="https://github.com/Younthing/bulkMAE/blob/main/inst/guides/input-completeness-zh.md" class="external-link">input-completeness and resource-boundary audit</a>, plus the <a href="https://github.com/Younthing/bulkMAE/blob/main/inst/guides/official-sources.md" class="external-link">implementation-to-documentation audit map</a>. Users upgrading from 0.3 or earlier should also read the <a href="https://github.com/Younthing/bulkMAE/blob/main/inst/guides/naming-migration-zh.md" class="external-link">0.4 naming migration map</a>. After installation, the audit files are also available under <code>system.file("guides", package = "bulkMAE")</code>.</p>
 </div>
 <div class="section level2">
 <h2 id="continuous-integration">Continuous integration<a class="anchor" aria-label="anchor" href="#continuous-integration"></a>
@@ -234,7 +267,7 @@
 <div class="section level2">
 <h2 id="dependency-policy">Dependency policy<a class="anchor" aria-label="anchor" href="#dependency-policy"></a>
 </h2>
-<p>Only MAE/SE infrastructure is imported. Analysis engines are optional and checked when their wrapper is called. This lets users install only the methods needed for a project instead of forcing one large, conflict-prone environment.</p>
+<p>Only MAE/SE infrastructure and ggplot2 are imported. Analysis engines are optional and checked when their wrapper is called. This lets users install only the methods needed for a project instead of forcing one large, conflict-prone environment.</p>
 <p>MuSiC, immunedeconv, and BayesPrism are declared optional dependencies but are not available from every standard Bioconductor/CRAN repository. Their wrappers resolve the installed backend only when called and restore any temporary search path compatibility changes; install them from their official repositories and record the commit or release in the project lockfile.</p>
 <p>See the <a href="https://github.com/Younthing/bulkMAE/blob/main/inst/guides/dependency-installation-zh.md" class="external-link">Chinese pak dependency installation guide</a> for the complete CRAN/Bioconductor backend list, verified GitHub package specifications, and notes about resources that package installation cannot provide.</p>
 </div>

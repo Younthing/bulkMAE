@@ -37,7 +37,8 @@ de_dream(
 
 - filter:
 
-  Remove low-expression features with `edgeR::filterByExpr()`.
+  Remove low-expression features with
+  [`edgeR::filterByExpr()`](https://rdrr.io/pkg/edgeR/man/filterByExpr.html).
 
 - normalize_method:
 

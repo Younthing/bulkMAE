@@ -1,7 +1,8 @@
 # Run sample multidimensional scaling
 
-Uses `limma::plotMDS()` with `plot = FALSE` and returns the native MDS
-object without opening a graphics device.
+Uses [`limma::plotMDS()`](https://rdrr.io/pkg/limma/man/plotMDS.html)
+with `plot = FALSE` and returns the native MDS object without opening a
+graphics device.
 
 ## Usage
 
@@ -45,7 +46,8 @@ reduce_mds(
 
 - ...:
 
-  Additional arguments passed to `limma::plotMDS()`.
+  Additional arguments passed to
+  [`limma::plotMDS()`](https://rdrr.io/pkg/limma/man/plotMDS.html).
 
 ## Value
 

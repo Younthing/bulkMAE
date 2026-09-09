@@ -40,7 +40,8 @@ de_deseq2_results(
 
 - ...:
 
-  Additional arguments passed to `DESeq2::results()`.
+  Additional arguments passed to
+  [`DESeq2::results()`](https://rdrr.io/pkg/DESeq2/man/results.html).
 
 ## Value
 

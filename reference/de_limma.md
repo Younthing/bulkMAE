@@ -32,15 +32,18 @@ de_limma(x, experiment, formula, assay, contrasts = NULL, trend = FALSE, ...)
 
 - contrasts:
 
-  Optional contrast matrix passed to `limma::contrasts.fit()`.
+  Optional contrast matrix passed to
+  [`limma::contrasts.fit()`](https://rdrr.io/pkg/limma/man/contrasts.fit.html).
 
 - trend:
 
-  Passed to `limma::eBayes()`.
+  Passed to
+  [`limma::eBayes()`](https://rdrr.io/pkg/limma/man/ebayes.html).
 
 - ...:
 
-  Additional arguments passed to `limma::eBayes()`.
+  Additional arguments passed to
+  [`limma::eBayes()`](https://rdrr.io/pkg/limma/man/ebayes.html).
 
 ## Value
 

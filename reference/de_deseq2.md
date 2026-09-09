@@ -44,7 +44,8 @@ de_deseq2(
 
 - ...:
 
-  Additional arguments passed to `DESeq2::DESeq()`.
+  Additional arguments passed to
+  [`DESeq2::DESeq()`](https://rdrr.io/pkg/DESeq2/man/DESeq.html).
 
 ## Value
 

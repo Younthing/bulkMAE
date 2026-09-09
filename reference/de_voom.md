@@ -39,7 +39,8 @@ de_voom(
 
 - filter:
 
-  Remove low-expression features with `edgeR::filterByExpr()`.
+  Remove low-expression features with
+  [`edgeR::filterByExpr()`](https://rdrr.io/pkg/edgeR/man/filterByExpr.html).
 
 - normalize_method:
 
@@ -47,11 +48,13 @@ de_voom(
 
 - contrasts:
 
-  Optional contrast matrix passed to `limma::contrasts.fit()`.
+  Optional contrast matrix passed to
+  [`limma::contrasts.fit()`](https://rdrr.io/pkg/limma/man/contrasts.fit.html).
 
 - trend:
 
-  Passed to `limma::eBayes()`.
+  Passed to
+  [`limma::eBayes()`](https://rdrr.io/pkg/limma/man/ebayes.html).
 
 - voom_plot:
 
@@ -59,7 +62,8 @@ de_voom(
 
 - ...:
 
-  Additional arguments passed to `limma::eBayes()`.
+  Additional arguments passed to
+  [`limma::eBayes()`](https://rdrr.io/pkg/limma/man/ebayes.html).
 
 ## Value
 
