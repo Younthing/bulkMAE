@@ -1,5 +1,13 @@
 url: https://younthing.github.io/bulkMAE/
 
+# Build the site into a dedicated subdirectory instead of the default `docs/`.
+# The repository keeps tracked, non-site content under `docs/agents/`, so a
+# bare `docs/` destination makes pkgdown's `clean_site()` abort with
+# "is non-empty and not built by pkgdown". `docs/_site` is ignored by both
+# .gitignore (`docs/*`) and .Rbuildignore (`^docs$`); the workflow deploys it
+# to the gh-pages branch.
+destination: docs/_site
+
 template:
   bootstrap: 5
 
