@@ -197,8 +197,8 @@ ora_result <- suppressMessages(enrich_go(
   key_type = "ENSEMBL",
   ontology = "BP",
   universe = names(selected_up),
-  pvalueCutoff = 0.05,
-  qvalueCutoff = 0.2,
+  pvalueCutoff = 1,
+  qvalueCutoff = 1,
   pAdjustMethod = "BH",
   minGSSize = 15L,
   maxGSSize = 500L,
@@ -213,6 +213,10 @@ ora_selected <- ora_table[
   drop = FALSE
 ]
 ```
+
+与下面的 GSEA 一致，ORA 也用 `pvalueCutoff = 1`、`qvalueCutoff = 1` 保留全部受检 term，从而稳健地
+选出预先指定的条目；显著性仍由结果表中的 adjusted p-value 判断，个别预先指定条目在本次注释版本下
+可能并不显著。这避免了教程因注释数据库更新导致某个预先指定条目跌出显著集合而无法构建。
 
 结果是原生 `enrichResult`；`as.data.frame()`只用于查看，不会把不同后端强制变成统一结果类。
 输入的 `r sum(selected_up)` 个上调基因中有 `r sub(".*/", "", ora_selected$GeneRatio[[1L]])` 个进入
