@@ -2,8 +2,9 @@
 
 - Documents installation from the GitHub Release tag or attached source
   tarball.
-- Runs the full-backend and coverage workflows on `main`, nightly, and
-  manual dispatch, not on pull requests.
+- Tightens CI: pull requests run one Ubuntu R-release check; portability,
+  full-backend, and coverage stay on `main`, nightly, or manual dispatch.
+  Publishing a Release rebuilds pkgdown in the same workflow.
 
 # bulkMAE 0.4.0
 

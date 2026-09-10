@@ -234,15 +234,15 @@ After installation, the audit files are also available under
 
 ## Continuous integration
 
-Pull requests and the default branch run a cross-platform R CMD check against
-the package's hard dependencies. The full-backend and coverage jobs install
-every optional offline analysis backend with `pak`; they run on `main`, nightly,
-and manual dispatch from the Actions tab, not on pull requests.
-Network-backed tests remain opt-in so transient failures from BioMart, KEGG,
-STRING, OmniPath, or LINCS do not block ordinary changes.
+Pull requests run one Ubuntu R-release CMD check against hard dependencies.
+After merge, `main` runs macOS/Windows/Ubuntu-devel portability checks, the
+full-backend job, coverage, and pkgdown. Those heavier workflows also run
+nightly or from **Actions → Run workflow**. Network-backed tests remain
+opt-in so transient failures from BioMart, KEGG, STRING, OmniPath, or LINCS
+do not block ordinary changes.
 
 The [pkgdown website](https://younthing.github.io/bulkMAE/) is rebuilt from
-`main` and published from the generated `gh-pages` branch.
+`main` and from a published Release, then deployed to `gh-pages`.
 
 ## Dependency policy
 

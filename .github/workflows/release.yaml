@@ -3,8 +3,8 @@ name: Release
 # Publish a GitHub Release when a version tag is pushed. The tag must match the
 # DESCRIPTION version as `vX.Y.Z` (for example v0.4.0). The job builds the
 # source tarball with vignettes and attaches it, using the matching NEWS.md
-# section as the release notes. Publishing a release also triggers pkgdown.yaml
-# (`release: [published]`) to refresh the documentation site.
+# section as the release notes. The pkgdown job in this workflow then refreshes
+# the documentation site (GITHUB_TOKEN cannot trigger pkgdown.yaml by itself).
 on:
   push:
     tags:
@@ -36,6 +36,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          fetch-tags: true
 
       - uses: r-lib/actions/setup-pandoc@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
 
@@ -88,7 +91,8 @@ jobs:
             flag { print }
           ' NEWS.md | sed -e '/./,$!d' > RELEASE_NOTES.md
           if [ ! -s RELEASE_NOTES.md ]; then
-            echo "Release ${version}." > RELEASE_NOTES.md
+            echo "::error::No NEWS.md section for bulkMAE ${version}."
+            exit 1
           fi
           echo "----- release notes -----"
           cat RELEASE_NOTES.md
@@ -101,3 +105,11 @@ jobs:
             --notes-file RELEASE_NOTES.md \
             --verify-tag \
             bulkMAE_*.tar.gz
+
+  pkgdown:
+    name: Refresh documentation site
+    needs: release
+    uses: ./.github/workflows/pkgdown.yaml
+    permissions:
+      contents: write
+    secrets: inherit
