@@ -237,7 +237,7 @@ After installation, the audit files are also available under
 Pull requests and the default branch run a cross-platform R CMD check against
 the package's hard dependencies. The full-backend and coverage jobs install
 every optional offline analysis backend with `pak`; they run on `main`, nightly,
-manual dispatch, and pull requests labeled `full-ci`, not on ordinary PRs.
+and manual dispatch from the Actions tab, not on pull requests.
 Network-backed tests remain opt-in so transient failures from BioMart, KEGG,
 STRING, OmniPath, or LINCS do not block ordinary changes.
 

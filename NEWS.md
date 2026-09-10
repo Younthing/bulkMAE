@@ -2,8 +2,8 @@
 
 - Documents installation from the GitHub Release tag or attached source
   tarball.
-- Runs the full-backend and coverage workflows on `main`, nightly, manual
-  dispatch, and pull requests labeled `full-ci`, not on every PR.
+- Runs the full-backend and coverage workflows on `main`, nightly, and
+  manual dispatch, not on pull requests.
 
 # bulkMAE 0.4.0
 
