@@ -453,17 +453,17 @@ enrich_roast <- function(
 
 #' Calculate GSVA scores
 #'
-#' Uses the current parameter-object API: [GSVA::gsvaParam()] followed by
-#' [GSVA::gsva()].
+#' Uses the current parameter-object API: `GSVA::gsvaParam()` followed by
+#' `GSVA::gsva()`.
 #'
 #' @inheritParams mae_pull_assay
 #' @param gene_sets Named list of gene sets.
 #' @param kcdf Kernel used by GSVA.
 #' @param min_size,max_size Gene-set size limits.
 #' @param verbose Show backend progress.
-#' @param ... Additional arguments passed to [GSVA::gsvaParam()].
+#' @param ... Additional arguments passed to `GSVA::gsvaParam()`.
 #'
-#' @return The native matrix-like object returned by [GSVA::gsva()].
+#' @return The native matrix-like object returned by `GSVA::gsva()`.
 #' @export
 score_gsva <- function(
     x,
@@ -503,13 +503,13 @@ score_gsva <- function(
 
 #' Calculate single-sample GSEA scores
 #'
-#' Uses the current [GSVA::ssgseaParam()] parameter-object API.
+#' Uses the current `GSVA::ssgseaParam()` parameter-object API.
 #'
 #' @inheritParams score_gsva
 #' @param normalize Normalize ssGSEA scores by their range.
 #' @param alpha Tail-weight exponent used by ssGSEA.
 #'
-#' @return The native matrix-like object returned by [GSVA::gsva()].
+#' @return The native matrix-like object returned by `GSVA::gsva()`.
 #' @export
 score_ssgsea <- function(
     x,

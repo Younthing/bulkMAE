@@ -227,8 +227,8 @@ Read the [Chinese executable getting-started guide](https://younthing.github.io/
 [method-selection guide](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/expanded-methods-zh.md), and the
 [input-completeness and resource-boundary audit](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/input-completeness-zh.md),
 plus the [implementation-to-documentation audit map](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/official-sources.md).
-Users upgrading from 0.3 or earlier should also read the
-[0.4 naming migration map](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/naming-migration-zh.md).
+Users upgrading from 0.3 or earlier should call `bulkmae_rename()` or read the
+[0.4 naming migration map](https://younthing.github.io/bulkMAE/articles/naming-migration.html).
 After installation, the audit files are also available under
 `system.file("guides", package = "bulkMAE")`.
 
@@ -236,8 +236,8 @@ After installation, the audit files are also available under
 
 Pull requests run one Ubuntu R-release CMD check against hard dependencies.
 After merge, `main` runs macOS/Windows/Ubuntu-devel portability checks, the
-full-backend job, coverage, and pkgdown. Those heavier workflows also run
-nightly or from **Actions → Run workflow**. Network-backed tests remain
+full-backend job, coverage, pkgdown, and BiocCheck. Those heavier workflows
+also run nightly or from **Actions → Run workflow**. Network-backed tests remain
 opt-in so transient failures from BioMart, KEGG, STRING, OmniPath, or LINCS
 do not block ordinary changes.
 

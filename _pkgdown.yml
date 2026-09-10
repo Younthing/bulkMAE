@@ -23,6 +23,10 @@ articles:
       - getting-started
       - airway-qc-de
       - enrichment-analysis
+  - title: Guides
+    navbar: Guides
+    contents:
+      - naming-migration
 
 reference:
   - title: Plotting

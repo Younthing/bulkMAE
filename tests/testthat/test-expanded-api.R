@@ -44,7 +44,7 @@ test_that("public API follows discoverable analysis families", {
     "activity_tf", "adjust_batch", "adjust_combat", "adjust_combatseq",
     "adjust_covariates", "adjust_ruv", "adjust_sva", "annotate_biomart",
     "annotate_ensembl", "annotate_gene_lengths", "annotate_ids",
-    "annotate_rekey", "annotation_orgdb", "cluster_consensus",
+    "annotate_rekey", "annotation_orgdb", "bulkmae_rename", "cluster_consensus",
     "cluster_consensus_classes", "cluster_consensus_diagnostics",
     "cluster_nmf", "cluster_nmf_classes", "coexpr_differential",
     "coexpr_modules", "coexpr_pick_power", "coexpr_preservation",

@@ -1,0 +1,39 @@
+---
+title: "0.4 API 命名迁移"
+author: "bulkMAE"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+vignette: >
+  %\VignetteIndexEntry{0.4 API 命名迁移}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+0.4 起旧名不再导出。查询替换名：
+
+```{r}
+library(bulkMAE)
+bulkmae_rename("run_gsva")
+bulkmae_rename("run_go_ora")
+```
+
+完整对照表见随包指南
+`system.file("guides", "naming-migration-zh.md", package = "bulkMAE")`。
+
+```{r, echo=FALSE, results="asis"}
+guide <- system.file("guides", "naming-migration-zh.md", package = "bulkMAE")
+if (!nzchar(guide)) {
+  guide <- file.path("..", "inst", "guides", "naming-migration-zh.md")
+}
+lines <- readLines(guide, encoding = "UTF-8")
+# Drop the duplicated H1; the vignette title already names the page.
+if (length(lines) && startsWith(lines[[1L]], "# ")) {
+  lines <- lines[-1L]
+}
+cat(lines, sep = "\n")
+```
