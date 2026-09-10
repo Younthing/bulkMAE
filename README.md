@@ -6,23 +6,27 @@
 [![Codecov test coverage](https://codecov.io/gh/Younthing/bulkMAE/graph/badge.svg)](https://app.codecov.io/gh/Younthing/bulkMAE)
 [![pkgdown](https://github.com/Younthing/bulkMAE/actions/workflows/pkgdown.yaml/badge.svg)](https://younthing.github.io/bulkMAE/)
 [![GitHub release](https://img.shields.io/github/v/release/Younthing/bulkMAE)](https://github.com/Younthing/bulkMAE/releases/latest)
+[![License: Artistic-2.0](https://img.shields.io/badge/license-Artistic--2.0-blue.svg)](https://opensource.org/licenses/Artistic-2.0)
 <!-- badges: end -->
 
-`bulkMAE` is a deliberately small adapter layer for bulk transcriptomics in R.
-Every assay-level workflow starts from a `MultiAssayExperiment` (MAE), selects
-one `SummarizedExperiment` leaf, aligns it with primary sample metadata through
-`sampleMap`, and calls an established backend package.
+Stateless adapters from
+[`MultiAssayExperiment`](https://bioconductor.org/packages/release/bioc/html/MultiAssayExperiment.html)
+to established bulk transcriptomics methods.
 
-The public API is organized as `<family>_<method>()` or
-`<family>_<operation>()`. For example, typing `de_`, `enrich_`, `score_`,
-`coexpr_`, or `surv_` exposes one coherent analysis family in autocomplete.
+Each analysis call names an MAE, one `SummarizedExperiment` leaf, and an
+assay. `bulkMAE` aligns samples through `sampleMap` and returns the backend's
+native object. It does not keep analysis history, mutate the input MAE, or wrap
+results in a new class. DESeq2 still returns a `DESeqDataSet`. edgeR still
+returns its fit and test objects. limma still returns an `MArrayLM`.
 
-The package does **not** keep analysis history, mutate the input MAE, invent a
-result registry, or wrap backend result objects in a new class. DESeq2 returns a
-`DESeqDataSet`, edgeR returns its native fit/test object, limma returns an
-`MArrayLM`, and so on.
+The public API is `<family>_<method>()` or `<family>_<operation>()`. Typing
+`de_`, `enrich_`, `score_`, `coexpr_`, or `surv_` shows one family in
+autocomplete.
 
-## Installation
+Read the [pkgdown site](https://younthing.github.io/bulkMAE/) for reference
+pages and executable tutorials.
+
+## Install
 
 Install the current GitHub Release (`v0.4.0`):
 
@@ -48,11 +52,76 @@ The development tree on `main` is:
 pak::pak("Younthing/bulkMAE")
 ```
 
-Analysis backends remain optional and are installed per project. See
-[Dependency policy](#dependency-policy) and the
-[Chinese pak dependency installation guide](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/dependency-installation-zh.md).
+Analysis backends stay optional. Install only the engines a project uses. See
+[Dependencies](#dependencies) and the
+[Chinese pak installation guide](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/dependency-installation-zh.md).
 
-## Contract
+## Quick start
+
+`mae_simulate()` builds a small synthetic MAE for examples. The annotations
+and outcomes have no biological meaning.
+
+```r
+library(bulkMAE)
+
+mae <- mae_simulate(n_features = 120, n_samples = 8, seed = 1)
+mae_validate(mae, "rna")
+mae_assays(mae, "rna")
+```
+
+Import a real feature-by-sample matrix with aligned sample metadata:
+
+```r
+mae <- mae_from_matrix(
+  expression = counts,
+  samples = sample_data,
+  row_data = feature_data,
+  experiment = "rna",
+  assay = "counts"
+)
+```
+
+Helpers such as `mae_add_assay()` and `mae_subset_features()` return modified
+copies. The input MAE stays unchanged.
+
+## Analysis families
+
+| Layer | Main functions | Native backends |
+|---|---|---|
+| Access and import | `mae_from_matrix()`, `mae_add_experiment()`, `mae_add_sample_data()`, `import_tximport()` | [MAE](https://bioconductor.org/packages/release/bioc/html/MultiAssayExperiment.html), [SE](https://bioconductor.org/packages/release/bioc/html/SummarizedExperiment.html), [tximport](https://bioconductor.org/packages/release/bioc/html/tximport.html) |
+| Annotation and QC | `annotation_orgdb()`, `annotate_rekey()`, `annotate_gene_lengths()`, `filter_expr()`, `reduce_pca()` | [AnnotationDbi](https://bioconductor.org/packages/release/bioc/html/AnnotationDbi.html), [biomaRt](https://bioconductor.org/packages/release/bioc/html/biomaRt.html), [edgeR](https://bioconductor.org/packages/release/bioc/html/edgeR.html), [limma](https://bioconductor.org/packages/release/bioc/html/limma.html) |
+| Preprocessing | `normalize_tmm()`, `transform_vst()`, `adjust_combat()`, `adjust_batch()` | [edgeR](https://bioconductor.org/packages/release/bioc/html/edgeR.html), [DESeq2](https://bioconductor.org/packages/release/bioc/html/DESeq2.html), [sva](https://bioconductor.org/packages/release/bioc/html/sva.html), [limma](https://bioconductor.org/packages/release/bioc/html/limma.html) |
+| Differential | `de_deseq2()`, `de_edger()`, `de_limma()`, `de_dream()`, `de_masigpro()` | [DESeq2](https://bioconductor.org/packages/release/bioc/html/DESeq2.html), [edgeR](https://bioconductor.org/packages/release/bioc/html/edgeR.html), [limma](https://bioconductor.org/packages/release/bioc/html/limma.html), [dream](https://bioconductor.org/packages/release/bioc/html/variancePartition.html), [maSigPro](https://bioconductor.org/packages/release/bioc/html/maSigPro.html) |
+| Splicing and co-expression | `dtu_diffsplice()`, `coexpr_differential()` | [limma](https://bioconductor.org/packages/release/bioc/html/limma.html), [edgeR](https://bioconductor.org/packages/release/bioc/html/edgeR.html), [diffcoexp](https://bioconductor.org/packages/release/bioc/html/diffcoexp.html) |
+| Gene sets and pathways | `gene_sets_prepare()`, `gene_sets_read_gmt()`, `gene_sets_msigdb()`, `enrich_fgsea()`, `score_gsva()` | [msigdbr](https://cran.r-project.org/package=msigdbr), [clusterProfiler](https://bioconductor.org/packages/release/bioc/html/clusterProfiler.html), [goseq](https://bioconductor.org/packages/release/bioc/html/goseq.html), [fgsea](https://bioconductor.org/packages/release/bioc/html/fgsea.html), [GSVA](https://bioconductor.org/packages/release/bioc/html/GSVA.html) |
+| Regulatory activity | `activity_decouple()`, `activity_progeny()`, `activity_tf()` | [decoupleR](https://bioconductor.org/packages/release/bioc/html/decoupleR.html) |
+| Systems/subtypes | `cluster_consensus()`, `cluster_nmf()`, `coexpr_wgcna()`, `coexpr_preservation()`, `network_genie3()` | [ConsensusClusterPlus](https://bioconductor.org/packages/release/bioc/html/ConsensusClusterPlus.html), [NMF](https://cran.r-project.org/package=NMF), [WGCNA](https://cran.r-project.org/package=WGCNA), [GENIE3](https://bioconductor.org/packages/release/bioc/html/GENIE3.html) |
+| Deconvolution | `deconv_reference()`, `deconv()`, `deconv_music()`, `deconv_bayesprism()` | [SingleCellExperiment](https://bioconductor.org/packages/release/bioc/html/SingleCellExperiment.html), [immunedeconv](https://omnideconv.org/immunedeconv/), [MuSiC](https://xuranw.github.io/MuSiC/), [BayesPrism](https://github.com/Danko-Lab/BayesPrism) |
+| Clinical | `score_signature()`, `surv_formula()`, `surv_cox()`, `meta_collect()`, `meta_effect()`, `drug_lincs()` | [survival](https://cran.r-project.org/package=survival), [glmnet](https://cran.r-project.org/package=glmnet), [timeROC](https://cran.r-project.org/package=timeROC), [metafor](https://wviechtb.github.io/metafor/), [signatureSearch](https://bioconductor.org/packages/release/bioc/html/signatureSearch.html) |
+
+Each backend name links to its official package page. Official pages for
+wrappers outside this table are
+[RUVSeq](https://bioconductor.org/packages/release/bioc/html/RUVSeq.html),
+[ReactomePA](https://bioconductor.org/packages/release/bioc/html/ReactomePA.html),
+[singscore](https://bioconductor.org/packages/release/bioc/html/singscore.html),
+[STRINGdb](https://bioconductor.org/packages/release/bioc/html/STRINGdb.html),
+[CIBERSORTx](https://cibersortx.stanford.edu/),
+[uwot](https://cran.r-project.org/package=uwot),
+[Rtsne](https://cran.r-project.org/package=Rtsne), and
+[OmnipathR](https://bioconductor.org/packages/release/bioc/html/OmnipathR.html).
+
+`activity_decouple()` can run enrichment-style statistics (`aucell`, `fgsea`,
+`gsva`, `ora`) or network-aware estimators (`mlm`, `ulm`, `viper`, `wmean`,
+`wsum`), and can ask decoupleR for a consensus. Use `activity_methods()` to
+list methods in the installed decoupleR release. For signed or weighted
+methods, map the resource weight column with `mor = "weight"` or the matching
+column name.
+
+`coexpr_wgcna()` applies `goodSamplesGenes()` before the network fit. It warns
+when samples or features are removed and appends their names plus the native
+quality result to the returned list.
+
+## Call shape
 
 ```r
 result <- analysis_function(
@@ -63,200 +132,129 @@ result <- analysis_function(
 )
 ```
 
-- `x` is always the MAE containing samples and assays.
-- `experiment` is explicit; hidden “active assays” are not used.
-- `assay` is explicit whenever more than one scale is plausible.
-- samples are aligned with `MultiAssayExperiment::getWithColData()`.
-- transformed data and model fits are returned; they are not written back.
+- `x` is the MAE that holds samples and assays.
+- `experiment` is always named. There is no hidden active assay.
+- `assay` is named whenever more than one scale is plausible.
+- Samples are aligned with `MultiAssayExperiment::getWithColData()`.
+- Fits and transformed matrices are returned. They are not written back.
 
-## Input completeness
+Bridges that used to be assembled by hand include `de_design()`,
+`de_contrast()`, `de_masigpro_design()`, `adjust_covariates()`,
+`gene_sets_prepare()`, `annotation_orgdb()`, `annotate_rekey()`,
+`deconv_reference()`, `surv_formula()`, `de_table()`, and `coexpr_modules()`.
 
-Starting from a feature-by-sample matrix and aligned sample metadata, the
-public API can construct an MAE (`mae_from_matrix()`), add assays, experiments,
-sample covariates, and feature annotations, and convert native DE results into
-ranks, selections, or effect tables. `mae_simulate()` supplies an installed,
-fully synthetic MAE for examples and offline smoke tests.
+## What you supply
 
-The package also provides the bridges that previously forced users to assemble
-backend objects by hand: `de_design()`/`de_contrast()`,
-`de_masigpro_design()`, `adjust_covariates()`, `gene_sets_prepare()`,
-`annotation_orgdb()`, `annotate_rekey()`, `deconv_reference()`,
-`surv_formula()`, and native-result accessors such as `de_table()` and
-`coexpr_modules()`.
-
-Expression and sample metadata alone cannot determine study facts or reference
-biology. Real survival outcomes, pairing/time semantics, RUV negative controls,
-locked signature parameters, transcript/effective lengths, a tissue-matched
+Expression and sample metadata do not determine study facts or reference
+biology. Survival outcomes, pairing and time semantics, RUV negative controls,
+locked signature weights, transcript or effective lengths, a tissue-matched
 single-cell reference, validation cohorts, and cross-study effect estimates
-must come from the study or a declared reference. BioMart, KEGG, STRING,
-OmniPath/MSigDB, and LINCS are online or cache-backed; CIBERSORTx execution is
-external. These are explicit input/resource boundaries, not values that
-`bulkMAE` silently guesses or replaces with simulation.
+must come from the study or a declared resource.
 
-## Coverage
+BioMart, KEGG, STRING, OmniPath, MSigDB, and LINCS are online or cache-backed.
+CIBERSORTx execution is external. `bulkMAE` does not fill those gaps with
+simulation.
 
-| Layer | Main functions | Native backends |
-|---|---|---|
-| Access/import | `mae_from_matrix()`, `mae_add_experiment()`, `mae_add_sample_data()`, `import_tximport()` | MAE, SE, tximport |
-| Annotation/QC | `annotation_orgdb()`, `annotate_rekey()`, `annotate_gene_lengths()`, `filter_expr()`, `reduce_pca()` | AnnotationDbi, biomaRt, edgeR, limma |
-| Preprocessing | `normalize_tmm()`, `transform_vst()`, `adjust_combat()`, `adjust_batch()` | edgeR, DESeq2, sva, limma |
-| Differential | `de_deseq2()`, `de_edger()`, `de_limma()`, `de_dream()`, `de_masigpro()` | DESeq2, edgeR, limma, dream, maSigPro |
-| Splicing/co-expression | `dtu_diffsplice()`, `coexpr_differential()` | limma, edgeR, diffcoexp |
-| Gene sets/pathways | `gene_sets_prepare()`, `gene_sets_read_gmt()`, `gene_sets_msigdb()`, `enrich_fgsea()`, `score_gsva()` | msigdbr, clusterProfiler, goseq, fgsea, GSVA |
-| Regulatory activity | `activity_decouple()`, `activity_progeny()`, `activity_tf()` | decoupleR |
-| Systems/subtypes | `cluster_consensus()`, `cluster_nmf()`, `coexpr_wgcna()`, `coexpr_preservation()`, `network_genie3()` | ConsensusClusterPlus, NMF, WGCNA, GENIE3 |
-| Deconvolution | `deconv_reference()`, `deconv()`, `deconv_music()`, `deconv_bayesprism()` | SingleCellExperiment, immunedeconv, MuSiC, BayesPrism |
-| Clinical | `score_signature()`, `surv_formula()`, `surv_cox()`, `meta_collect()`, `meta_effect()`, `drug_lincs()` | survival, glmnet, timeROC, metafor, signatureSearch |
+## Plots
 
-`activity_decouple()` is intentionally cross-cutting. Its `statistics` argument can
-select enrichment-style algorithms (`aucell`, `fgsea`, `gsva`, `ora`) or
-network-aware activity estimators (`mlm`, `ulm`, `viper`, `wmean`, `wsum`), and
-can ask decoupleR for a consensus. Use `activity_methods()` to inspect the
-methods supported by the installed decoupleR release. For signed or weighted
-methods, map the resource's weight column explicitly with `mor = "weight"` (or
-the corresponding column name).
+The landing gallery uses the four publication views most papers need. A volcano
+of differential effects, a selected-feature heatmap, an ORA community network,
+and a GSEA rank-metric ridge.
 
-`coexpr_wgcna()` automatically applies `goodSamplesGenes()` filtering. It warns
-when samples or features are removed and appends their names plus the native
-quality result to the returned WGCNA list; it does not pause for confirmation.
+<p align="center">
+  <img src="man/figures/readme-volcano.png" alt="Volcano plot of effect estimates and raw p-values" width="49%">
+  <img src="man/figures/readme-heatmap.png" alt="Row-scaled heatmap split by condition" width="49%">
+</p>
+<p align="center">
+  <img src="man/figures/readme-ora-network.png" alt="ORA term-feature community network" width="49%">
+  <img src="man/figures/readme-gsea-ridge.png" alt="GSEA rank-metric ridge plot" width="49%">
+</p>
 
-## Minimal example
+Every `plot_*()` helper returns a standard ggplot object and attaches a
+recommended physical size. Style it with ordinary ggplot2 syntax, then write
+the file with `plot_save()`:
 
 ```r
-library(bulkMAE)
-
-set.seed(1)
-sample_data <- data.frame(
-  condition = factor(rep(c("control", "treated"), each = 4)),
-  batch = factor(rep(c("A", "B"), times = 4)),
-  row.names = sprintf("sample%02d", seq_len(8))
-)
-counts <- matrix(
-  rnbinom(120 * 8, mu = 100, size = 5),
-  nrow = 120,
-  dimnames = list(
-    sprintf("gene%03d", seq_len(120)),
-    rownames(sample_data)
-  )
-)
-feature_data <- data.frame(
-  gene_length = seq(500, 2500, length.out = nrow(counts)),
-  row.names = rownames(counts)
-)
-
-mae <- mae_from_matrix(
-  expression = counts,
-  samples = sample_data,
-  row_data = feature_data,
-  experiment = "rna",
-  assay = "counts"
-)
-
-tpm <- normalize_tpm(mae, "rna", lengths = "gene_length")
-mae_with_tpm <- mae_add_assay(mae, "rna", tpm, name = "tpm")
-mae_small <- mae_subset_features(
-  mae_with_tpm,
+volcano <- plot_de_volcano(de_result, label_features = c("IL6", "CXCL8"))
+heatmap <- plot_assay_heatmap(
+  mae,
   "rna",
-  features = rownames(counts)[seq_len(50)]
+  "log_expression",
+  features = selected,
+  column_split = "condition"
 )
-
-mae_assays(mae_with_tpm, "rna")
-dim(mae_pull_assay(mae_small, "rna", "tpm"))
-colSums(mae_pull_assay(mae_with_tpm, "rna", "tpm"))
-```
-
-These helpers return modified copies: `mae` remains the raw-count input, while
-`mae_with_tpm` and `mae_small` make each added or filtered data state explicit.
-
-## Publication-size plots
-
-Every `plot_*()` helper returns a standard ggplot object and carries a
-recommended physical size tuned to that plot family. Continue styling with
-ordinary ggplot2 syntax, then let `plot_save()` export at that final size:
-
-```r
-qc_plot <- plot_qc_library(qc_library(mae, "rna", "counts")) +
-  labs(title = "Library QC") +
-  theme(legend.position = "bottom")
-
-plot_save("library-qc.pdf", qc_plot)
-```
-
-The default is `scale = 1`; PDF output uses Cairo when available. Override
-either dimension explicitly when a journal requires an exact layout:
-
-```r
-plot_save("library-qc.pdf", qc_plot, width = 8.5, height = 11, units = "cm")
-```
-
-`theme_bulkmae()` uses publication-oriented 6 pt base text, and data labels
-drawn by bulkMAE use point units explicitly. A theme controls styling but not
-the physical graphics device: RStudio's plot pane and knitr chunks therefore
-do not read the recommended dimensions. Use `plot_save()` for exact files, and
-set chunk `fig.width` / `fig.height` explicitly when document previews also
-need a fixed aspect ratio.
-
-Specialized enrichment constructors keep method-specific inputs and statistics
-explicit:
-
-```r
-plot_gsea_classic(gsea_result, term = "HALLMARK_INFLAMMATORY_RESPONSE")
-plot_gsea_ridge(gsea_result, terms = pathway_ids)
-
-plot_ora_bubble(ora_result, terms = pathway_ids)
-plot_ora_network(ora_result, terms = pathway_ids, feature_values = effects)
-plot_ora_radial(
+network <- plot_ora_network(
   ora_result,
   terms = pathway_ids,
-  feature_values = effects,
-  label_features = c("IL6", "CXCL8")
+  feature_values = effects
 )
+ridge <- plot_gsea_ridge(gsea_result, terms = pathway_ids)
+
+plot_save("volcano.pdf", volcano)
 ```
 
-Every selection is explicit. A native clusterProfiler GSEA object carries its
-ranked vector, gene sets, and weighting exponent; a tabular fgsea result does
-not, so classic plots require those analysis inputs to be supplied rather than
-reconstructing them heuristically. ORA bubbles distinguish rich factor, gene
-ratio, and fold enrichment. Community-network term edges use Jaccard overlap
-from complete enriched-feature membership, while radial term edges encode the
-number of shared enriched features.
+The default scale is `1`. PDF output uses Cairo when available. Override a
+dimension when a journal requires an exact layout:
 
-Read the [Chinese executable getting-started guide](https://younthing.github.io/bulkMAE/articles/getting-started.html), the
-[airway QC and paired differential-expression tutorial](https://younthing.github.io/bulkMAE/articles/airway-qc-de.html), the
-[airway GO ORA、GSEA 与绘图教程](https://younthing.github.io/bulkMAE/articles/enrichment-analysis.html), the
-[method-selection guide](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/expanded-methods-zh.md), and the
-[input-completeness and resource-boundary audit](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/input-completeness-zh.md),
-plus the [implementation-to-documentation audit map](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/official-sources.md).
-Users upgrading from 0.3 or earlier should call `bulkmae_rename()` or read the
-[0.4 naming migration map](https://younthing.github.io/bulkMAE/articles/naming-migration.html).
-After installation, the audit files are also available under
-`system.file("guides", package = "bulkMAE")`.
+```r
+plot_save("volcano.pdf", volcano, width = 8.5, height = 11, units = "cm")
+```
 
-## Continuous integration
+`theme_bulkmae()` uses 6 pt base text. A theme does not set the graphics
+device size, so the RStudio plot pane and knitr chunks do not read the
+recommended dimensions. Use `plot_save()` for exact files. Set chunk
+`fig.width` and `fig.height` when a document preview also needs a fixed
+aspect ratio.
+
+A native clusterProfiler GSEA object already carries its ranked vector, gene
+sets, and weighting exponent. A tabular fgsea result does not, so ridge and
+classic plots require those inputs. ORA network edges use Jaccard overlap from
+complete enriched-feature membership. Classic GSEA, ORA bubble, and radial
+views are in the
+[enrichment tutorial](https://younthing.github.io/bulkMAE/articles/enrichment-analysis.html).
+
+## Documentation
+
+- [Getting started](https://younthing.github.io/bulkMAE/articles/getting-started.html)
+  (Chinese executable guide)
+- [airway QC and paired differential expression](https://younthing.github.io/bulkMAE/articles/airway-qc-de.html)
+- [airway GO ORA, GSEA, and plots](https://younthing.github.io/bulkMAE/articles/enrichment-analysis.html)
+- [Method-selection guide](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/expanded-methods-zh.md)
+- [Input-completeness audit](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/input-completeness-zh.md)
+- [Adapter-to-source map](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/official-sources.md)
+- [0.4 naming migration](https://younthing.github.io/bulkMAE/articles/naming-migration.html)
+  for upgrades from 0.3 or earlier. Call `bulkmae_rename()` to map an old name.
+
+Installed copies also live under `system.file("guides", package = "bulkMAE")`.
+
+## Tests and CI
 
 Pull requests run one Ubuntu R-release CMD check against hard dependencies.
-After merge, `main` runs macOS/Windows/Ubuntu-devel portability checks, the
-full-backend job, coverage, pkgdown, and BiocCheck. Those heavier workflows
-also run nightly or from **Actions → Run workflow**. Network-backed tests remain
-opt-in so transient failures from BioMart, KEGG, STRING, OmniPath, or LINCS
-do not block ordinary changes.
+After merge, `main` runs macOS, Windows, and Ubuntu-devel portability checks,
+the full-backend job, coverage, pkgdown, and BiocCheck. Those heavier workflows also run
+nightly or from **Actions → Run workflow**. Network-backed tests stay opt-in
+so BioMart, KEGG, STRING, OmniPath, or LINCS outages do not block ordinary
+changes.
 
-The [pkgdown website](https://younthing.github.io/bulkMAE/) is rebuilt from
-`main` and from a published Release, then deployed to `gh-pages`.
+The [pkgdown site](https://younthing.github.io/bulkMAE/) rebuilds from `main`
+and from a published Release, then deploys to `gh-pages`.
 
-## Dependency policy
+## Dependencies
 
-Only MAE/SE infrastructure and ggplot2 are imported. Analysis engines are optional and
-checked when their wrapper is called. This lets users install only the methods
-needed for a project instead of forcing one large, conflict-prone environment.
+Hard imports are MAE and SE infrastructure plus ggplot2. Analysis engines are
+checked when their wrapper is called.
 
-MuSiC, immunedeconv, and BayesPrism are declared optional dependencies but are
-not available from every standard Bioconductor/CRAN repository. Their wrappers
-resolve the installed backend only when called and restore any temporary search
-path compatibility changes; install them from their official repositories and
-record the commit or release in the project lockfile.
+[MuSiC](https://xuranw.github.io/MuSiC/),
+[immunedeconv](https://omnideconv.org/immunedeconv/), and
+[BayesPrism](https://github.com/Danko-Lab/BayesPrism) are optional and are
+not on every standard Bioconductor or CRAN repository. Install them from
+their official sources and record the commit or release in the project
+lockfile.
 
-See the [Chinese pak dependency installation guide](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/dependency-installation-zh.md)
-for the complete CRAN/Bioconductor backend list, verified GitHub package
-specifications, and notes about resources that package installation cannot
-provide.
+The [Chinese pak installation guide](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/dependency-installation-zh.md)
+lists CRAN and Bioconductor backends, verified GitHub specifications, and
+resources that package installation cannot provide.
+
+## License
+
+`bulkMAE` is released under the [Artistic License 2.0](https://opensource.org/licenses/Artistic-2.0).
