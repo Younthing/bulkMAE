@@ -66,7 +66,7 @@ bulkmae_rename <- function(old_name = NULL) {
     }
     cells <- trimws(strsplit(line, "|", fixed = TRUE)[[1L]])
     cells <- cells[nzchar(cells)]
-    if (length(cells) < 3L || identical(cells[[1L]], "区域")) {
+    if (length(cells) < 3L || grepl("0\\.3", cells[[2L]])) {
       next
     }
     if (grepl("^-{3,}$", cells[[1L]])) {
