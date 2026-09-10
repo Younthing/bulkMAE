@@ -31,12 +31,12 @@ score_gsva(
 
 \item{verbose}{Show backend progress.}
 
-\item{...}{Additional arguments passed to \code{\link[GSVA:gsvaParam-class]{GSVA::gsvaParam()}}.}
+\item{...}{Additional arguments passed to \code{GSVA::gsvaParam()}.}
 }
 \value{
-The native matrix-like object returned by \code{\link[GSVA:gsva]{GSVA::gsva()}}.
+The native matrix-like object returned by \code{GSVA::gsva()}.
 }
 \description{
-Uses the current parameter-object API: \code{\link[GSVA:gsvaParam-class]{GSVA::gsvaParam()}} followed by
-\code{\link[GSVA:gsva]{GSVA::gsva()}}.
+Uses the current parameter-object API: \code{GSVA::gsvaParam()} followed by
+\code{GSVA::gsva()}.
 }

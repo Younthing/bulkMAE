@@ -34,11 +34,11 @@ score_ssgsea(
 
 \item{verbose}{Show backend progress.}
 
-\item{...}{Additional arguments passed to \code{\link[GSVA:gsvaParam-class]{GSVA::gsvaParam()}}.}
+\item{...}{Additional arguments passed to \code{GSVA::gsvaParam()}.}
 }
 \value{
-The native matrix-like object returned by \code{\link[GSVA:gsva]{GSVA::gsva()}}.
+The native matrix-like object returned by \code{GSVA::gsva()}.
 }
 \description{
-Uses the current \code{\link[GSVA:ssgseaParam-class]{GSVA::ssgseaParam()}} parameter-object API.
+Uses the current \code{GSVA::ssgseaParam()} parameter-object API.
 }
