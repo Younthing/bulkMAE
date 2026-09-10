@@ -1,3 +1,10 @@
+# bulkMAE (development version)
+
+- Documents installation from the GitHub Release tag or attached source
+  tarball.
+- Runs the full-backend and coverage workflows on `main`, nightly, manual
+  dispatch, and pull requests labeled `full-ci`, not on every PR.
+
 # bulkMAE 0.4.0
 
 - Replaces mixed `run_*`, `infer_*`, `prepare_*`, and backend-specific naming

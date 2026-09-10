@@ -5,6 +5,7 @@
 [![Full backend check](https://github.com/Younthing/bulkMAE/actions/workflows/full-backend-check.yaml/badge.svg)](https://github.com/Younthing/bulkMAE/actions/workflows/full-backend-check.yaml)
 [![Codecov test coverage](https://codecov.io/gh/Younthing/bulkMAE/graph/badge.svg)](https://app.codecov.io/gh/Younthing/bulkMAE)
 [![pkgdown](https://github.com/Younthing/bulkMAE/actions/workflows/pkgdown.yaml/badge.svg)](https://younthing.github.io/bulkMAE/)
+[![GitHub release](https://img.shields.io/github/v/release/Younthing/bulkMAE)](https://github.com/Younthing/bulkMAE/releases/latest)
 <!-- badges: end -->
 
 `bulkMAE` is a deliberately small adapter layer for bulk transcriptomics in R.
@@ -20,6 +21,36 @@ The package does **not** keep analysis history, mutate the input MAE, invent a
 result registry, or wrap backend result objects in a new class. DESeq2 returns a
 `DESeqDataSet`, edgeR returns its native fit/test object, limma returns an
 `MArrayLM`, and so on.
+
+## Installation
+
+Install the current GitHub Release (`v0.4.0`):
+
+```r
+# install.packages("pak")
+pak::pak("Younthing/bulkMAE@v0.4.0")
+```
+
+Or install the source tarball attached to that
+[release](https://github.com/Younthing/bulkMAE/releases/tag/v0.4.0):
+
+```r
+install.packages(
+  "https://github.com/Younthing/bulkMAE/releases/download/v0.4.0/bulkMAE_0.4.0.tar.gz",
+  repos = NULL,
+  type = "source"
+)
+```
+
+The development tree on `main` is:
+
+```r
+pak::pak("Younthing/bulkMAE")
+```
+
+Analysis backends remain optional and are installed per project. See
+[Dependency policy](#dependency-policy) and the
+[Chinese pak dependency installation guide](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/dependency-installation-zh.md).
 
 ## Contract
 
@@ -204,10 +235,11 @@ After installation, the audit files are also available under
 ## Continuous integration
 
 Pull requests and the default branch run a cross-platform R CMD check against
-the package's hard dependencies. A separate Ubuntu job installs every optional
-offline analysis backend with `pak`, while the coverage workflow exercises the
-same full backend set. Network-backed tests remain opt-in so transient failures
-from BioMart, KEGG, STRING, OmniPath, or LINCS do not block ordinary changes.
+the package's hard dependencies. The full-backend and coverage jobs install
+every optional offline analysis backend with `pak`; they run on `main`, nightly,
+manual dispatch, and pull requests labeled `full-ci`, not on ordinary PRs.
+Network-backed tests remain opt-in so transient failures from BioMart, KEGG,
+STRING, OmniPath, or LINCS do not block ordinary changes.
 
 The [pkgdown website](https://younthing.github.io/bulkMAE/) is rebuilt from
 `main` and published from the generated `gh-pages` branch.
