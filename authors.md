@@ -7,7 +7,7 @@
 ## Citation
 
 Source:
-[`DESCRIPTION`](https://github.com/Younthing/bulkMAE/blob/main/DESCRIPTION)
+[`DESCRIPTION`](https://github.com/Younthing/bulkMAE/blob/v0.4.1/DESCRIPTION)
 
 Fan XingFu (2026). *bulkMAE: Stateless Bulk Transcriptomics with
 MultiAssayExperiment*. R package version 0.4.1,
