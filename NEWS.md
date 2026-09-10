@@ -1,10 +1,16 @@
-# bulkMAE (development version)
+# bulkMAE 0.4.1
 
+- Records Fan XingFu as the package author and maintainer.
+- Stops pkgdown reference builds from following GSVA S4 Rd links, and keeps
+  the pkgdown library uncached so a broken `magick` stack cannot abort the
+  site build.
+- Adds `bulkmae_rename()` and a vignette/pkgdown copy of the 0.4 naming map
+  so old `run_*` / `infer_*` / `prepare_*` calls fail with an explicit
+  replacement.
+- Runs BiocCheck on `main`.
 - Documents installation from the GitHub Release tag or attached source
-  tarball.
-- Tightens CI: pull requests run one Ubuntu R-release check; portability,
-  full-backend, and coverage stay on `main`, nightly, or manual dispatch.
-  Publishing a Release rebuilds pkgdown in the same workflow.
+  tarball, and keeps portability, full-backend, and coverage off pull
+  requests.
 
 # bulkMAE 0.4.0
 

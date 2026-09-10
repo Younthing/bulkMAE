@@ -65,8 +65,8 @@ recorded.
 - [ ] Use a mutually compatible R/Bioconductor pair that satisfies every
       minimum version in `DESCRIPTION`; do not reuse a mixed-release library.
 
-- [ ] Replace the provisional maintainer identity in `DESCRIPTION`.
-- [ ] Add the project URL and bug tracker after creating the repository.
+- [x] Maintainer is Fan XingFu (`fanxingfu3344@gmail.com`).
+- [x] Project URL and bug tracker are recorded in `DESCRIPTION`.
 
 ```r
 # Regenerate one standard Rd topic per public function from the roxygen source.

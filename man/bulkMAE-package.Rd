@@ -21,7 +21,7 @@ are optional dependencies and are checked only when their adapter is called.
 \code{vignette("getting-started", package = "bulkMAE")}
 }
 \author{
-\strong{Maintainer}: Younthing \email{fanxingfu3344@gmail.com}
+\strong{Maintainer}: Fan XingFu \email{fanxingfu3344@gmail.com}
 
 }
 \keyword{internal}
