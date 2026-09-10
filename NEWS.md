@@ -1,3 +1,11 @@
+# bulkMAE (development version)
+
+- Documents installation from the GitHub Release tag or attached source
+  tarball.
+- Tightens CI: pull requests run one Ubuntu R-release check; portability,
+  full-backend, and coverage stay on `main`, nightly, or manual dispatch.
+  Publishing a Release rebuilds pkgdown in the same workflow.
+
 # bulkMAE 0.4.0
 
 - Replaces mixed `run_*`, `infer_*`, `prepare_*`, and backend-specific naming

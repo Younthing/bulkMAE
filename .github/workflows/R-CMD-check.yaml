@@ -1,5 +1,7 @@
 name: R-CMD-check
 
+# Fast PR gate: one Ubuntu R-release check with hard dependencies and
+# vignette backends. Portability, full backends, and coverage run on main.
 on:
   push:
     branches: [main, master]
@@ -15,24 +17,16 @@ concurrency:
 
 jobs:
   R-CMD-check:
-    name: ${{ matrix.config.os }} (R ${{ matrix.config.r }})
-    runs-on: ${{ matrix.config.os }}
+    name: ubuntu-latest (R release)
+    runs-on: ubuntu-latest
     timeout-minutes: 45
-
-    strategy:
-      fail-fast: false
-      matrix:
-        config:
-          - { os: macos-latest, r: release }
-          - { os: windows-latest, r: release }
-          - { os: ubuntu-latest, r: devel, http-user-agent: release }
-          - { os: ubuntu-latest, r: release }
 
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
       R_KEEP_PKG_SOURCE: yes
       _R_CHECK_FORCE_SUGGESTS_: "false"
       BULKMAE_RUN_ONLINE_TESTS: "false"
+      TESTTHAT_PARALLEL: "false"
 
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -41,16 +35,14 @@ jobs:
 
       - uses: r-lib/actions/setup-r@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
         with:
-          r-version: ${{ matrix.config.r }}
-          http-user-agent: ${{ matrix.config.http-user-agent }}
+          r-version: release
           use-public-rspm: true
 
-      # Keep the portability matrix small and deterministic. Install only the
-      # optional engines required by executable vignettes here; the remaining
-      # analysis backends are exercised by full-backend-check on Linux.
       - uses: r-lib/actions/setup-r-dependencies@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
         with:
           dependencies: '"hard"'
+          # Native Suggests (e.g. magick via immunedeconv) are unsafe to restore
+          # from a shared pak cache on this toolchain.
           cache: false
           extra-packages: |
             any::rcmdcheck

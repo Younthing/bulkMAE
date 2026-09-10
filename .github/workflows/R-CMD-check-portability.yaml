@@ -1,10 +1,11 @@
-name: Full backend check
+name: R-CMD-check-portability
 
+# macOS, Windows, and Ubuntu R-devel. Runs on main and manual dispatch,
+# not on pull requests. Devel is advisory: Bioconductor daily builds
+# should not block a merge already gated by Ubuntu R-release.
 on:
   push:
     branches: [main, master]
-  schedule:
-    - cron: "0 17 * * *"
   workflow_dispatch:
 
 permissions:
@@ -15,15 +16,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  full-backend-check:
-    name: Ubuntu (R release, all offline backends)
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
+  R-CMD-check-portability:
+    name: ${{ matrix.config.os }} (R ${{ matrix.config.r }})
+    runs-on: ${{ matrix.config.os }}
+    timeout-minutes: 45
+    continue-on-error: ${{ matrix.config.r == 'devel' }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - { os: macos-latest, r: release }
+          - { os: windows-latest, r: release }
+          - { os: ubuntu-latest, r: devel, http-user-agent: release }
 
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
       R_KEEP_PKG_SOURCE: yes
-      _R_CHECK_FORCE_SUGGESTS_: "true"
+      _R_CHECK_FORCE_SUGGESTS_: "false"
       BULKMAE_RUN_ONLINE_TESTS: "false"
       TESTTHAT_PARALLEL: "false"
 
@@ -34,20 +44,26 @@ jobs:
 
       - uses: r-lib/actions/setup-r@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
         with:
-          r-version: release
+          r-version: ${{ matrix.config.r }}
+          http-user-agent: ${{ matrix.config.http-user-agent }}
           use-public-rspm: true
 
-      # setup-r-dependencies resolves and installs with pak. The three GitHub
-      # backends are pinned because they are not consistently available from
-      # the standard CRAN/Bioconductor repositories.
       - uses: r-lib/actions/setup-r-dependencies@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
         with:
-          dependencies: '"all"'
+          dependencies: '"hard"'
+          cache: false
           extra-packages: |
             any::rcmdcheck
-            MuSiC=github::xuranw/MuSiC@f21fe67f5670d5e9fca0ad7550abaae3423eb59c
-            immunedeconv=github::omnideconv/immunedeconv@e625e6c28ed14a30f9f40f159925cc9f0df4fa49
-            BayesPrism=github::Danko-Lab/BayesPrism/BayesPrism@19052052a6f30833b27e2148294459b0ba2f923e
+            any::testthat
+            any::knitr
+            any::rmarkdown
+            any::airway
+            any::edgeR
+            any::DESeq2
+            any::limma
+            any::clusterProfiler
+            any::fgsea
+            any::org.Hs.eg.db
           needs: check
 
       - uses: r-lib/actions/check-r-package@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2
