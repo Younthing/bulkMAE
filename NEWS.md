@@ -1,3 +1,8 @@
+# bulkMAE (development version)
+
+- Rewrites the README as a landing page with official backend links and a
+  gallery of volcano, heatmap, ORA network, and GSEA ridge plots.
+
 # bulkMAE 0.4.1
 
 - Records Fan XingFu as the package author and maintainer.
