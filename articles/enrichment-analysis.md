@@ -445,7 +445,7 @@ GSE52778）。数据包说明见 [Bioconductor airway
 - ORA 的全部受检背景，或 GSEA 的完整排序定义；
 - 后端、adjusted p-value 字段和随机种子。
 
-本文使用 bulkMAE 0.4.0、airway 1.32.0 和 org.Hs.eg.db
+本文使用 bulkMAE 0.4.1、airway 1.32.0 和 org.Hs.eg.db
 3.23.1。完整会话如下：
 
 ``` r
@@ -453,7 +453,7 @@ GSE52778）。数据包说明见 [Bioconductor airway
 sessionInfo()
 #> R version 4.6.1 (2026-06-24)
 #> Platform: x86_64-pc-linux-gnu
-#> Running under: Ubuntu 24.04.4 LTS
+#> Running under: Ubuntu 24.04.5 LTS
 #> 
 #> Matrix products: default
 #> BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3 
@@ -472,7 +472,7 @@ sessionInfo()
 #> [1] stats     graphics  grDevices utils     datasets  methods   base     
 #> 
 #> other attached packages:
-#> [1] ggplot2_4.0.3 bulkMAE_0.4.0
+#> [1] ggplot2_4.0.3 bulkMAE_0.4.1
 #> 
 #> loaded via a namespace (and not attached):
 #>   [1] RColorBrewer_1.1-3          jsonlite_2.0.0             

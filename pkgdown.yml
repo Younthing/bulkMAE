@@ -5,7 +5,8 @@ articles:
   airway-qc-de: airway-qc-de.html
   enrichment-analysis: enrichment-analysis.html
   getting-started: getting-started.html
-last_built: 2026-09-09T14:38Z
+  naming-migration: naming-migration.html
+last_built: 2026-09-10T10:42Z
 urls:
   reference: https://younthing.github.io/bulkMAE/reference
   article: https://younthing.github.io/bulkMAE/articles

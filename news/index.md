@@ -1,5 +1,25 @@
 # Changelog
 
+## bulkMAE (development version)
+
+- Rewrites the README as a landing page with official backend links and
+  a gallery of volcano, heatmap, ORA network, and GSEA ridge plots.
+
+## bulkMAE 0.4.1
+
+- Records Fan XingFu as the package author and maintainer.
+- Stops pkgdown reference builds from following GSVA S4 Rd links, and
+  keeps the pkgdown library uncached so a broken `magick` stack cannot
+  abort the site build.
+- Adds
+  [`bulkmae_rename()`](https://younthing.github.io/bulkMAE/reference/bulkmae_rename.md)
+  and a vignette/pkgdown copy of the 0.4 naming map so old `run_*` /
+  `infer_*` / `prepare_*` calls fail with an explicit replacement.
+- Runs BiocCheck on `main`.
+- Documents installation from the GitHub Release tag or attached source
+  tarball, and keeps portability, full-backend, and coverage off pull
+  requests.
+
 ## bulkMAE 0.4.0
 
 - Replaces mixed `run_*`, `infer_*`, `prepare_*`, and backend-specific

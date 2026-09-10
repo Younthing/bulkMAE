@@ -22,7 +22,7 @@
 
     <a class="navbar-brand me-2" href="index.html">bulkMAE</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -40,6 +40,9 @@
     <li><a class="dropdown-item" href="articles/getting-started.html">快速入门：从表达矩阵到 bulkMAE 工作流</a></li>
     <li><a class="dropdown-item" href="articles/airway-qc-de.html">从样本质控到配对差异表达</a></li>
     <li><a class="dropdown-item" href="articles/enrichment-analysis.html">airway 富集分析：ORA、GSEA 与图形</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Guides</h6></li>
+    <li><a class="dropdown-item" href="articles/naming-migration.html">0.4 API 命名迁移</a></li>
   </ul>
 </li>
 <li class="nav-item"><a class="nav-link" href="news/index.html">Changelog</a></li>
@@ -60,40 +63,53 @@
 <div class="page-header"><h1 id="bulkmae">bulkMAE<a class="anchor" aria-label="anchor" href="#bulkmae"></a>
 </h1></div>
 <!-- badges: start -->
-<p><a href="https://github.com/Younthing/bulkMAE/actions/workflows/R-CMD-check.yaml" class="external-link"><img src="https://github.com/Younthing/bulkMAE/actions/workflows/R-CMD-check.yaml/badge.svg" alt="R-CMD-check"></a> <a href="https://github.com/Younthing/bulkMAE/actions/workflows/full-backend-check.yaml" class="external-link"><img src="https://github.com/Younthing/bulkMAE/actions/workflows/full-backend-check.yaml/badge.svg" alt="Full backend check"></a> <a href="https://app.codecov.io/gh/Younthing/bulkMAE" class="external-link"><img src="https://codecov.io/gh/Younthing/bulkMAE/graph/badge.svg" alt="Codecov test coverage"></a> <a href="https://younthing.github.io/bulkMAE/"><img src="https://github.com/Younthing/bulkMAE/actions/workflows/pkgdown.yaml/badge.svg" alt="pkgdown"></a> <!-- badges: end --></p>
-<p><code>bulkMAE</code> is a deliberately small adapter layer for bulk transcriptomics in R. Every assay-level workflow starts from a <code>MultiAssayExperiment</code> (MAE), selects one <code>SummarizedExperiment</code> leaf, aligns it with primary sample metadata through <code>sampleMap</code>, and calls an established backend package.</p>
-<p>The public API is organized as <code>&lt;family&gt;_&lt;method&gt;()</code> or <code>&lt;family&gt;_&lt;operation&gt;()</code>. For example, typing <code>de_</code>, <code>enrich_</code>, <code>score_</code>, <code>coexpr_</code>, or <code>surv_</code> exposes one coherent analysis family in autocomplete.</p>
-<p>The package does <strong>not</strong> keep analysis history, mutate the input MAE, invent a result registry, or wrap backend result objects in a new class. DESeq2 returns a <code>DESeqDataSet</code>, edgeR returns its native fit/test object, limma returns an <code>MArrayLM</code>, and so on.</p>
+<p><a href="https://github.com/Younthing/bulkMAE/actions/workflows/R-CMD-check.yaml" class="external-link"><img src="https://github.com/Younthing/bulkMAE/actions/workflows/R-CMD-check.yaml/badge.svg" alt="R-CMD-check"></a> <a href="https://github.com/Younthing/bulkMAE/actions/workflows/full-backend-check.yaml" class="external-link"><img src="https://github.com/Younthing/bulkMAE/actions/workflows/full-backend-check.yaml/badge.svg" alt="Full backend check"></a> <a href="https://app.codecov.io/gh/Younthing/bulkMAE" class="external-link"><img src="https://codecov.io/gh/Younthing/bulkMAE/graph/badge.svg" alt="Codecov test coverage"></a> <a href="https://younthing.github.io/bulkMAE/"><img src="https://github.com/Younthing/bulkMAE/actions/workflows/pkgdown.yaml/badge.svg" alt="pkgdown"></a> <a href="https://github.com/Younthing/bulkMAE/releases/latest" class="external-link"><img src="https://img.shields.io/github/v/release/Younthing/bulkMAE" alt="GitHub release"></a> <a href="https://opensource.org/licenses/Artistic-2.0" class="external-link"><img src="https://img.shields.io/badge/license-Artistic--2.0-blue.svg" alt="License: Artistic-2.0"></a> <!-- badges: end --></p>
+<p>Stateless adapters from <a href="https://bioconductor.org/packages/release/bioc/html/MultiAssayExperiment.html" class="external-link"><code>MultiAssayExperiment</code></a> to established bulk transcriptomics methods.</p>
+<p>Each analysis call names an MAE, one <code>SummarizedExperiment</code> leaf, and an assay. <code>bulkMAE</code> aligns samples through <code>sampleMap</code> and returns the backend’s native object. It does not keep analysis history, mutate the input MAE, or wrap results in a new class. DESeq2 still returns a <code>DESeqDataSet</code>. edgeR still returns its fit and test objects. limma still returns an <code>MArrayLM</code>.</p>
+<p>The public API is <code>&lt;family&gt;_&lt;method&gt;()</code> or <code>&lt;family&gt;_&lt;operation&gt;()</code>. Typing <code>de_</code>, <code>enrich_</code>, <code>score_</code>, <code>coexpr_</code>, or <code>surv_</code> shows one family in autocomplete.</p>
+<p>Read the <a href="https://younthing.github.io/bulkMAE/">pkgdown site</a> for reference pages and executable tutorials.</p>
 <div class="section level2">
-<h2 id="contract">Contract<a class="anchor" aria-label="anchor" href="#contract"></a>
+<h2 id="install">Install<a class="anchor" aria-label="anchor" href="#install"></a>
 </h2>
+<p>Install the current GitHub Release (<code>v0.4.0</code>):</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu">analysis_function</span><span class="op">(</span></span>
-<span>  x <span class="op">=</span> <span class="va">mae</span>,</span>
-<span>  experiment <span class="op">=</span> <span class="st">"rna"</span>,</span>
-<span>  assay <span class="op">=</span> <span class="st">"counts"</span>,</span>
-<span>  <span class="va">...</span></span>
+<code class="sourceCode R"><span><span class="co"># install.packages("pak")</span></span>
+<span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pak.html" class="external-link">pak</a></span><span class="op">(</span><span class="st">"Younthing/bulkMAE@v0.4.0"</span><span class="op">)</span></span></code></pre></div>
+<p>Or install the source tarball attached to that <a href="https://github.com/Younthing/bulkMAE/releases/tag/v0.4.0" class="external-link">release</a>:</p>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span></span>
+<span>  <span class="st">"https://github.com/Younthing/bulkMAE/releases/download/v0.4.0/bulkMAE_0.4.0.tar.gz"</span>,</span>
+<span>  repos <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  type <span class="op">=</span> <span class="st">"source"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
-<ul>
-<li>
-<code>x</code> is always the MAE containing samples and assays.</li>
-<li>
-<code>experiment</code> is explicit; hidden “active assays” are not used.</li>
-<li>
-<code>assay</code> is explicit whenever more than one scale is plausible.</li>
-<li>samples are aligned with <code><a href="https://github.com/waldronlab/MultiAssayExperiment/reference/MultiAssayExperiment-helpers.html" class="external-link">MultiAssayExperiment::getWithColData()</a></code>.</li>
-<li>transformed data and model fits are returned; they are not written back.</li>
-</ul>
+<p>The development tree on <code>main</code> is:</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pak.html" class="external-link">pak</a></span><span class="op">(</span><span class="st">"Younthing/bulkMAE"</span><span class="op">)</span></span></code></pre></div>
+<p>Analysis backends stay optional. Install only the engines a project uses. See <a href="#dependencies">Dependencies</a> and the <a href="https://github.com/Younthing/bulkMAE/blob/main/inst/guides/dependency-installation-zh.md" class="external-link">Chinese pak installation guide</a>.</p>
 </div>
 <div class="section level2">
-<h2 id="input-completeness">Input completeness<a class="anchor" aria-label="anchor" href="#input-completeness"></a>
+<h2 id="quick-start">Quick start<a class="anchor" aria-label="anchor" href="#quick-start"></a>
 </h2>
-<p>Starting from a feature-by-sample matrix and aligned sample metadata, the public API can construct an MAE (<code><a href="reference/mae_from_matrix.html">mae_from_matrix()</a></code>), add assays, experiments, sample covariates, and feature annotations, and convert native DE results into ranks, selections, or effect tables. <code><a href="reference/mae_simulate.html">mae_simulate()</a></code> supplies an installed, fully synthetic MAE for examples and offline smoke tests.</p>
-<p>The package also provides the bridges that previously forced users to assemble backend objects by hand: <code><a href="reference/de_design.html">de_design()</a></code>/<code><a href="reference/de_contrast.html">de_contrast()</a></code>, <code><a href="reference/de_masigpro_design.html">de_masigpro_design()</a></code>, <code><a href="reference/adjust_covariates.html">adjust_covariates()</a></code>, <code><a href="reference/gene_sets_prepare.html">gene_sets_prepare()</a></code>, <code><a href="reference/annotation_orgdb.html">annotation_orgdb()</a></code>, <code><a href="reference/annotate_rekey.html">annotate_rekey()</a></code>, <code><a href="reference/deconv_reference.html">deconv_reference()</a></code>, <code><a href="reference/surv_formula.html">surv_formula()</a></code>, and native-result accessors such as <code><a href="reference/de_table.html">de_table()</a></code> and <code><a href="reference/coexpr_modules.html">coexpr_modules()</a></code>.</p>
-<p>Expression and sample metadata alone cannot determine study facts or reference biology. Real survival outcomes, pairing/time semantics, RUV negative controls, locked signature parameters, transcript/effective lengths, a tissue-matched single-cell reference, validation cohorts, and cross-study effect estimates must come from the study or a declared reference. BioMart, KEGG, STRING, OmniPath/MSigDB, and LINCS are online or cache-backed; CIBERSORTx execution is external. These are explicit input/resource boundaries, not values that <code>bulkMAE</code> silently guesses or replaces with simulation.</p>
+<p><code><a href="reference/mae_simulate.html">mae_simulate()</a></code> builds a small synthetic MAE for examples. The annotations and outcomes have no biological meaning.</p>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://younthing.github.io/bulkMAE/">bulkMAE</a></span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">mae</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/mae_simulate.html">mae_simulate</a></span><span class="op">(</span>n_features <span class="op">=</span> <span class="fl">120</span>, n_samples <span class="op">=</span> <span class="fl">8</span>, seed <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
+<span><span class="fu"><a href="reference/mae_validate.html">mae_validate</a></span><span class="op">(</span><span class="va">mae</span>, <span class="st">"rna"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="reference/mae_assays.html">mae_assays</a></span><span class="op">(</span><span class="va">mae</span>, <span class="st">"rna"</span><span class="op">)</span></span></code></pre></div>
+<p>Import a real feature-by-sample matrix with aligned sample metadata:</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">mae</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/mae_from_matrix.html">mae_from_matrix</a></span><span class="op">(</span></span>
+<span>  expression <span class="op">=</span> <span class="va">counts</span>,</span>
+<span>  samples <span class="op">=</span> <span class="va">sample_data</span>,</span>
+<span>  row_data <span class="op">=</span> <span class="va">feature_data</span>,</span>
+<span>  experiment <span class="op">=</span> <span class="st">"rna"</span>,</span>
+<span>  assay <span class="op">=</span> <span class="st">"counts"</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p>Helpers such as <code><a href="reference/mae_add_assay.html">mae_add_assay()</a></code> and <code><a href="reference/mae_subset_features.html">mae_subset_features()</a></code> return modified copies. The input MAE stays unchanged.</p>
 </div>
 <div class="section level2">
-<h2 id="coverage">Coverage<a class="anchor" aria-label="anchor" href="#coverage"></a>
+<h2 id="analysis-families">Analysis families<a class="anchor" aria-label="anchor" href="#analysis-families"></a>
 </h2>
 <table class="table">
 <colgroup>
@@ -108,168 +124,192 @@
 </tr></thead>
 <tbody>
 <tr>
-<td>Access/import</td>
+<td>Access and import</td>
 <td>
 <code><a href="reference/mae_from_matrix.html">mae_from_matrix()</a></code>, <code><a href="reference/mae_add_experiment.html">mae_add_experiment()</a></code>, <code><a href="reference/mae_add_sample_data.html">mae_add_sample_data()</a></code>, <code><a href="reference/import_tximport.html">import_tximport()</a></code>
 </td>
-<td>MAE, SE, tximport</td>
+<td>
+<a href="https://bioconductor.org/packages/release/bioc/html/MultiAssayExperiment.html" class="external-link">MAE</a>, <a href="https://bioconductor.org/packages/release/bioc/html/SummarizedExperiment.html" class="external-link">SE</a>, <a href="https://bioconductor.org/packages/release/bioc/html/tximport.html" class="external-link">tximport</a>
+</td>
 </tr>
 <tr>
-<td>Annotation/QC</td>
+<td>Annotation and QC</td>
 <td>
 <code><a href="reference/annotation_orgdb.html">annotation_orgdb()</a></code>, <code><a href="reference/annotate_rekey.html">annotate_rekey()</a></code>, <code><a href="reference/annotate_gene_lengths.html">annotate_gene_lengths()</a></code>, <code><a href="reference/filter_expr.html">filter_expr()</a></code>, <code><a href="reference/reduce_pca.html">reduce_pca()</a></code>
 </td>
-<td>AnnotationDbi, biomaRt, edgeR, limma</td>
+<td>
+<a href="https://bioconductor.org/packages/release/bioc/html/AnnotationDbi.html" class="external-link">AnnotationDbi</a>, <a href="https://bioconductor.org/packages/release/bioc/html/biomaRt.html" class="external-link">biomaRt</a>, <a href="https://bioconductor.org/packages/release/bioc/html/edgeR.html" class="external-link">edgeR</a>, <a href="https://bioconductor.org/packages/release/bioc/html/limma.html" class="external-link">limma</a>
+</td>
 </tr>
 <tr>
 <td>Preprocessing</td>
 <td>
 <code><a href="reference/normalize_tmm.html">normalize_tmm()</a></code>, <code><a href="reference/transform_vst.html">transform_vst()</a></code>, <code><a href="reference/adjust_combat.html">adjust_combat()</a></code>, <code><a href="reference/adjust_batch.html">adjust_batch()</a></code>
 </td>
-<td>edgeR, DESeq2, sva, limma</td>
+<td>
+<a href="https://bioconductor.org/packages/release/bioc/html/edgeR.html" class="external-link">edgeR</a>, <a href="https://bioconductor.org/packages/release/bioc/html/DESeq2.html" class="external-link">DESeq2</a>, <a href="https://bioconductor.org/packages/release/bioc/html/sva.html" class="external-link">sva</a>, <a href="https://bioconductor.org/packages/release/bioc/html/limma.html" class="external-link">limma</a>
+</td>
 </tr>
 <tr>
 <td>Differential</td>
 <td>
 <code><a href="reference/de_deseq2.html">de_deseq2()</a></code>, <code><a href="reference/de_edger.html">de_edger()</a></code>, <code><a href="reference/de_limma.html">de_limma()</a></code>, <code><a href="reference/de_dream.html">de_dream()</a></code>, <code><a href="reference/de_masigpro.html">de_masigpro()</a></code>
 </td>
-<td>DESeq2, edgeR, limma, dream, maSigPro</td>
+<td>
+<a href="https://bioconductor.org/packages/release/bioc/html/DESeq2.html" class="external-link">DESeq2</a>, <a href="https://bioconductor.org/packages/release/bioc/html/edgeR.html" class="external-link">edgeR</a>, <a href="https://bioconductor.org/packages/release/bioc/html/limma.html" class="external-link">limma</a>, <a href="https://bioconductor.org/packages/release/bioc/html/variancePartition.html" class="external-link">dream</a>, <a href="https://bioconductor.org/packages/release/bioc/html/maSigPro.html" class="external-link">maSigPro</a>
+</td>
 </tr>
 <tr>
-<td>Splicing/co-expression</td>
+<td>Splicing and co-expression</td>
 <td>
 <code><a href="reference/dtu_diffsplice.html">dtu_diffsplice()</a></code>, <code><a href="reference/coexpr_differential.html">coexpr_differential()</a></code>
 </td>
-<td>limma, edgeR, diffcoexp</td>
+<td>
+<a href="https://bioconductor.org/packages/release/bioc/html/limma.html" class="external-link">limma</a>, <a href="https://bioconductor.org/packages/release/bioc/html/edgeR.html" class="external-link">edgeR</a>, <a href="https://bioconductor.org/packages/release/bioc/html/diffcoexp.html" class="external-link">diffcoexp</a>
+</td>
 </tr>
 <tr>
-<td>Gene sets/pathways</td>
+<td>Gene sets and pathways</td>
 <td>
 <code><a href="reference/gene_sets_prepare.html">gene_sets_prepare()</a></code>, <code><a href="reference/gene_sets_read_gmt.html">gene_sets_read_gmt()</a></code>, <code><a href="reference/gene_sets_msigdb.html">gene_sets_msigdb()</a></code>, <code><a href="reference/enrich_fgsea.html">enrich_fgsea()</a></code>, <code><a href="reference/score_gsva.html">score_gsva()</a></code>
 </td>
-<td>msigdbr, clusterProfiler, goseq, fgsea, GSVA</td>
+<td>
+<a href="https://cran.r-project.org/package=msigdbr" class="external-link">msigdbr</a>, <a href="https://bioconductor.org/packages/release/bioc/html/clusterProfiler.html" class="external-link">clusterProfiler</a>, <a href="https://bioconductor.org/packages/release/bioc/html/goseq.html" class="external-link">goseq</a>, <a href="https://bioconductor.org/packages/release/bioc/html/fgsea.html" class="external-link">fgsea</a>, <a href="https://bioconductor.org/packages/release/bioc/html/GSVA.html" class="external-link">GSVA</a>
+</td>
 </tr>
 <tr>
 <td>Regulatory activity</td>
 <td>
 <code><a href="reference/activity_decouple.html">activity_decouple()</a></code>, <code><a href="reference/activity_progeny.html">activity_progeny()</a></code>, <code><a href="reference/activity_tf.html">activity_tf()</a></code>
 </td>
-<td>decoupleR</td>
+<td><a href="https://bioconductor.org/packages/release/bioc/html/decoupleR.html" class="external-link">decoupleR</a></td>
 </tr>
 <tr>
 <td>Systems/subtypes</td>
 <td>
 <code><a href="reference/cluster_consensus.html">cluster_consensus()</a></code>, <code><a href="reference/cluster_nmf.html">cluster_nmf()</a></code>, <code><a href="reference/coexpr_wgcna.html">coexpr_wgcna()</a></code>, <code><a href="reference/coexpr_preservation.html">coexpr_preservation()</a></code>, <code><a href="reference/network_genie3.html">network_genie3()</a></code>
 </td>
-<td>ConsensusClusterPlus, NMF, WGCNA, GENIE3</td>
+<td>
+<a href="https://bioconductor.org/packages/release/bioc/html/ConsensusClusterPlus.html" class="external-link">ConsensusClusterPlus</a>, <a href="https://cran.r-project.org/package=NMF" class="external-link">NMF</a>, <a href="https://cran.r-project.org/package=WGCNA" class="external-link">WGCNA</a>, <a href="https://bioconductor.org/packages/release/bioc/html/GENIE3.html" class="external-link">GENIE3</a>
+</td>
 </tr>
 <tr>
 <td>Deconvolution</td>
 <td>
 <code><a href="reference/deconv_reference.html">deconv_reference()</a></code>, <code><a href="reference/deconv.html">deconv()</a></code>, <code><a href="reference/deconv_music.html">deconv_music()</a></code>, <code><a href="reference/deconv_bayesprism.html">deconv_bayesprism()</a></code>
 </td>
-<td>SingleCellExperiment, immunedeconv, MuSiC, BayesPrism</td>
+<td>
+<a href="https://bioconductor.org/packages/release/bioc/html/SingleCellExperiment.html" class="external-link">SingleCellExperiment</a>, <a href="https://omnideconv.org/immunedeconv/" class="external-link">immunedeconv</a>, <a href="https://xuranw.github.io/MuSiC/" class="external-link">MuSiC</a>, <a href="https://github.com/Danko-Lab/BayesPrism" class="external-link">BayesPrism</a>
+</td>
 </tr>
 <tr>
 <td>Clinical</td>
 <td>
 <code><a href="reference/score_signature.html">score_signature()</a></code>, <code><a href="reference/surv_formula.html">surv_formula()</a></code>, <code><a href="reference/surv_cox.html">surv_cox()</a></code>, <code><a href="reference/meta_collect.html">meta_collect()</a></code>, <code><a href="reference/meta_effect.html">meta_effect()</a></code>, <code><a href="reference/drug_lincs.html">drug_lincs()</a></code>
 </td>
-<td>survival, glmnet, timeROC, metafor, signatureSearch</td>
+<td>
+<a href="https://cran.r-project.org/package=survival" class="external-link">survival</a>, <a href="https://cran.r-project.org/package=glmnet" class="external-link">glmnet</a>, <a href="https://cran.r-project.org/package=timeROC" class="external-link">timeROC</a>, <a href="https://wviechtb.github.io/metafor/" class="external-link">metafor</a>, <a href="https://bioconductor.org/packages/release/bioc/html/signatureSearch.html" class="external-link">signatureSearch</a>
+</td>
 </tr>
 </tbody>
 </table>
-<p><code><a href="reference/activity_decouple.html">activity_decouple()</a></code> is intentionally cross-cutting. Its <code>statistics</code> argument can select enrichment-style algorithms (<code>aucell</code>, <code>fgsea</code>, <code>gsva</code>, <code>ora</code>) or network-aware activity estimators (<code>mlm</code>, <code>ulm</code>, <code>viper</code>, <code>wmean</code>, <code>wsum</code>), and can ask decoupleR for a consensus. Use <code><a href="reference/activity_methods.html">activity_methods()</a></code> to inspect the methods supported by the installed decoupleR release. For signed or weighted methods, map the resource’s weight column explicitly with <code>mor = "weight"</code> (or the corresponding column name).</p>
-<p><code><a href="reference/coexpr_wgcna.html">coexpr_wgcna()</a></code> automatically applies <code>goodSamplesGenes()</code> filtering. It warns when samples or features are removed and appends their names plus the native quality result to the returned WGCNA list; it does not pause for confirmation.</p>
+<p>Each backend name links to its official package page. Official pages for wrappers outside this table are <a href="https://bioconductor.org/packages/release/bioc/html/RUVSeq.html" class="external-link">RUVSeq</a>, <a href="https://bioconductor.org/packages/release/bioc/html/ReactomePA.html" class="external-link">ReactomePA</a>, <a href="https://bioconductor.org/packages/release/bioc/html/singscore.html" class="external-link">singscore</a>, <a href="https://bioconductor.org/packages/release/bioc/html/STRINGdb.html" class="external-link">STRINGdb</a>, <a href="https://cibersortx.stanford.edu/" class="external-link">CIBERSORTx</a>, <a href="https://cran.r-project.org/package=uwot" class="external-link">uwot</a>, <a href="https://cran.r-project.org/package=Rtsne" class="external-link">Rtsne</a>, and <a href="https://bioconductor.org/packages/release/bioc/html/OmnipathR.html" class="external-link">OmnipathR</a>.</p>
+<p><code><a href="reference/activity_decouple.html">activity_decouple()</a></code> can run enrichment-style statistics (<code>aucell</code>, <code>fgsea</code>, <code>gsva</code>, <code>ora</code>) or network-aware estimators (<code>mlm</code>, <code>ulm</code>, <code>viper</code>, <code>wmean</code>, <code>wsum</code>), and can ask decoupleR for a consensus. Use <code><a href="reference/activity_methods.html">activity_methods()</a></code> to list methods in the installed decoupleR release. For signed or weighted methods, map the resource weight column with <code>mor = "weight"</code> or the matching column name.</p>
+<p><code><a href="reference/coexpr_wgcna.html">coexpr_wgcna()</a></code> applies <code>goodSamplesGenes()</code> before the network fit. It warns when samples or features are removed and appends their names plus the native quality result to the returned list.</p>
 </div>
 <div class="section level2">
-<h2 id="minimal-example">Minimal example<a class="anchor" aria-label="anchor" href="#minimal-example"></a>
+<h2 id="call-shape">Call shape<a class="anchor" aria-label="anchor" href="#call-shape"></a>
 </h2>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://younthing.github.io/bulkMAE/">bulkMAE</a></span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">1</span><span class="op">)</span></span>
-<span><span class="va">sample_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
-<span>  condition <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"control"</span>, <span class="st">"treated"</span><span class="op">)</span>, each <span class="op">=</span> <span class="fl">4</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>  batch <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"A"</span>, <span class="st">"B"</span><span class="op">)</span>, times <span class="op">=</span> <span class="fl">4</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>  row.names <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/sprintf.html" class="external-link">sprintf</a></span><span class="op">(</span><span class="st">"sample%02d"</span>, <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="fl">8</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="op">)</span></span>
-<span><span class="va">counts</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/stats/NegBinomial.html" class="external-link">rnbinom</a></span><span class="op">(</span><span class="fl">120</span> <span class="op">*</span> <span class="fl">8</span>, mu <span class="op">=</span> <span class="fl">100</span>, size <span class="op">=</span> <span class="fl">5</span><span class="op">)</span>,</span>
-<span>  nrow <span class="op">=</span> <span class="fl">120</span>,</span>
-<span>  dimnames <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span>
-<span>    <span class="fu"><a href="https://rdrr.io/r/base/sprintf.html" class="external-link">sprintf</a></span><span class="op">(</span><span class="st">"gene%03d"</span>, <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="fl">120</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>    <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">sample_data</span><span class="op">)</span></span>
-<span>  <span class="op">)</span></span>
-<span><span class="op">)</span></span>
-<span><span class="va">feature_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
-<span>  gene_length <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">500</span>, <span class="fl">2500</span>, length.out <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">counts</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>  row.names <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">counts</span><span class="op">)</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">mae</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/mae_from_matrix.html">mae_from_matrix</a></span><span class="op">(</span></span>
-<span>  expression <span class="op">=</span> <span class="va">counts</span>,</span>
-<span>  samples <span class="op">=</span> <span class="va">sample_data</span>,</span>
-<span>  row_data <span class="op">=</span> <span class="va">feature_data</span>,</span>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">result</span> <span class="op">&lt;-</span> <span class="fu">analysis_function</span><span class="op">(</span></span>
+<span>  x <span class="op">=</span> <span class="va">mae</span>,</span>
 <span>  experiment <span class="op">=</span> <span class="st">"rna"</span>,</span>
-<span>  assay <span class="op">=</span> <span class="st">"counts"</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">tpm</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/normalize_tpm.html">normalize_tpm</a></span><span class="op">(</span><span class="va">mae</span>, <span class="st">"rna"</span>, lengths <span class="op">=</span> <span class="st">"gene_length"</span><span class="op">)</span></span>
-<span><span class="va">mae_with_tpm</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/mae_add_assay.html">mae_add_assay</a></span><span class="op">(</span><span class="va">mae</span>, <span class="st">"rna"</span>, <span class="va">tpm</span>, name <span class="op">=</span> <span class="st">"tpm"</span><span class="op">)</span></span>
-<span><span class="va">mae_small</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/mae_subset_features.html">mae_subset_features</a></span><span class="op">(</span></span>
-<span>  <span class="va">mae_with_tpm</span>,</span>
-<span>  <span class="st">"rna"</span>,</span>
-<span>  features <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">counts</span><span class="op">)</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="fl">50</span><span class="op">)</span><span class="op">]</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu"><a href="reference/mae_assays.html">mae_assays</a></span><span class="op">(</span><span class="va">mae_with_tpm</span>, <span class="st">"rna"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="fu"><a href="reference/mae_pull_assay.html">mae_pull_assay</a></span><span class="op">(</span><span class="va">mae_small</span>, <span class="st">"rna"</span>, <span class="st">"tpm"</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/colSums.html" class="external-link">colSums</a></span><span class="op">(</span><span class="fu"><a href="reference/mae_pull_assay.html">mae_pull_assay</a></span><span class="op">(</span><span class="va">mae_with_tpm</span>, <span class="st">"rna"</span>, <span class="st">"tpm"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
-<p>These helpers return modified copies: <code>mae</code> remains the raw-count input, while <code>mae_with_tpm</code> and <code>mae_small</code> make each added or filtered data state explicit.</p>
+<span>  assay <span class="op">=</span> <span class="st">"counts"</span>,</span>
+<span>  <span class="va">...</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<ul>
+<li>
+<code>x</code> is the MAE that holds samples and assays.</li>
+<li>
+<code>experiment</code> is always named. There is no hidden active assay.</li>
+<li>
+<code>assay</code> is named whenever more than one scale is plausible.</li>
+<li>Samples are aligned with <code><a href="https://github.com/waldronlab/MultiAssayExperiment/reference/MultiAssayExperiment-helpers.html" class="external-link">MultiAssayExperiment::getWithColData()</a></code>.</li>
+<li>Fits and transformed matrices are returned. They are not written back.</li>
+</ul>
+<p>Bridges that used to be assembled by hand include <code><a href="reference/de_design.html">de_design()</a></code>, <code><a href="reference/de_contrast.html">de_contrast()</a></code>, <code><a href="reference/de_masigpro_design.html">de_masigpro_design()</a></code>, <code><a href="reference/adjust_covariates.html">adjust_covariates()</a></code>, <code><a href="reference/gene_sets_prepare.html">gene_sets_prepare()</a></code>, <code><a href="reference/annotation_orgdb.html">annotation_orgdb()</a></code>, <code><a href="reference/annotate_rekey.html">annotate_rekey()</a></code>, <code><a href="reference/deconv_reference.html">deconv_reference()</a></code>, <code><a href="reference/surv_formula.html">surv_formula()</a></code>, <code><a href="reference/de_table.html">de_table()</a></code>, and <code><a href="reference/coexpr_modules.html">coexpr_modules()</a></code>.</p>
 </div>
 <div class="section level2">
-<h2 id="publication-size-plots">Publication-size plots<a class="anchor" aria-label="anchor" href="#publication-size-plots"></a>
+<h2 id="what-you-supply">What you supply<a class="anchor" aria-label="anchor" href="#what-you-supply"></a>
 </h2>
-<p>Every <code>plot_*()</code> helper returns a standard ggplot object and carries a recommended physical size tuned to that plot family. Continue styling with ordinary ggplot2 syntax, then let <code><a href="reference/plot_save.html">plot_save()</a></code> export at that final size:</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">qc_plot</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/plot_qc_library.html">plot_qc_library</a></span><span class="op">(</span><span class="fu"><a href="reference/qc_library.html">qc_library</a></span><span class="op">(</span><span class="va">mae</span>, <span class="st">"rna"</span>, <span class="st">"counts"</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu">labs</span><span class="op">(</span>title <span class="op">=</span> <span class="st">"Library QC"</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu">theme</span><span class="op">(</span>legend.position <span class="op">=</span> <span class="st">"bottom"</span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu"><a href="reference/plot_save.html">plot_save</a></span><span class="op">(</span><span class="st">"library-qc.pdf"</span>, <span class="va">qc_plot</span><span class="op">)</span></span></code></pre></div>
-<p>The default is <code>scale = 1</code>; PDF output uses Cairo when available. Override either dimension explicitly when a journal requires an exact layout:</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="reference/plot_save.html">plot_save</a></span><span class="op">(</span><span class="st">"library-qc.pdf"</span>, <span class="va">qc_plot</span>, width <span class="op">=</span> <span class="fl">8.5</span>, height <span class="op">=</span> <span class="fl">11</span>, units <span class="op">=</span> <span class="st">"cm"</span><span class="op">)</span></span></code></pre></div>
-<p><code><a href="reference/theme_bulkmae.html">theme_bulkmae()</a></code> uses publication-oriented 6 pt base text, and data labels drawn by bulkMAE use point units explicitly. A theme controls styling but not the physical graphics device: RStudio’s plot pane and knitr chunks therefore do not read the recommended dimensions. Use <code><a href="reference/plot_save.html">plot_save()</a></code> for exact files, and set chunk <code>fig.width</code> / <code>fig.height</code> explicitly when document previews also need a fixed aspect ratio.</p>
-<p>Specialized enrichment constructors keep method-specific inputs and statistics explicit:</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="reference/plot_gsea_classic.html">plot_gsea_classic</a></span><span class="op">(</span><span class="va">gsea_result</span>, term <span class="op">=</span> <span class="st">"HALLMARK_INFLAMMATORY_RESPONSE"</span><span class="op">)</span></span>
-<span><span class="fu"><a href="reference/plot_gsea_ridge.html">plot_gsea_ridge</a></span><span class="op">(</span><span class="va">gsea_result</span>, terms <span class="op">=</span> <span class="va">pathway_ids</span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu"><a href="reference/plot_ora_bubble.html">plot_ora_bubble</a></span><span class="op">(</span><span class="va">ora_result</span>, terms <span class="op">=</span> <span class="va">pathway_ids</span><span class="op">)</span></span>
-<span><span class="fu"><a href="reference/plot_ora_network.html">plot_ora_network</a></span><span class="op">(</span><span class="va">ora_result</span>, terms <span class="op">=</span> <span class="va">pathway_ids</span>, feature_values <span class="op">=</span> <span class="va">effects</span><span class="op">)</span></span>
-<span><span class="fu"><a href="reference/plot_ora_radial.html">plot_ora_radial</a></span><span class="op">(</span></span>
+<p>Expression and sample metadata do not determine study facts or reference biology. Survival outcomes, pairing and time semantics, RUV negative controls, locked signature weights, transcript or effective lengths, a tissue-matched single-cell reference, validation cohorts, and cross-study effect estimates must come from the study or a declared resource.</p>
+<p>BioMart, KEGG, STRING, OmniPath, MSigDB, and LINCS are online or cache-backed. CIBERSORTx execution is external. <code>bulkMAE</code> does not fill those gaps with simulation.</p>
+</div>
+<div class="section level2">
+<h2 id="plots">Plots<a class="anchor" aria-label="anchor" href="#plots"></a>
+</h2>
+<p>The landing gallery uses the four publication views most papers need. A volcano of differential effects, a selected-feature heatmap, an ORA community network, and a GSEA rank-metric ridge.</p>
+<p align="center">
+<img src="reference/figures/readme-volcano.png" alt="Volcano plot of effect estimates and raw p-values" width="49%"><img src="reference/figures/readme-heatmap.png" alt="Row-scaled heatmap split by condition" width="49%"></p>
+<p align="center">
+<img src="reference/figures/readme-ora-network.png" alt="ORA term-feature community network" width="49%"><img src="reference/figures/readme-gsea-ridge.png" alt="GSEA rank-metric ridge plot" width="49%"></p>
+<p>Every <code>plot_*()</code> helper returns a standard ggplot object and attaches a recommended physical size. Style it with ordinary ggplot2 syntax, then write the file with <code><a href="reference/plot_save.html">plot_save()</a></code>:</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">volcano</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/plot_de_volcano.html">plot_de_volcano</a></span><span class="op">(</span><span class="va">de_result</span>, label_features <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"IL6"</span>, <span class="st">"CXCL8"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">heatmap</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/plot_assay_heatmap.html">plot_assay_heatmap</a></span><span class="op">(</span></span>
+<span>  <span class="va">mae</span>,</span>
+<span>  <span class="st">"rna"</span>,</span>
+<span>  <span class="st">"log_expression"</span>,</span>
+<span>  features <span class="op">=</span> <span class="va">selected</span>,</span>
+<span>  column_split <span class="op">=</span> <span class="st">"condition"</span></span>
+<span><span class="op">)</span></span>
+<span><span class="va">network</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/plot_ora_network.html">plot_ora_network</a></span><span class="op">(</span></span>
 <span>  <span class="va">ora_result</span>,</span>
 <span>  terms <span class="op">=</span> <span class="va">pathway_ids</span>,</span>
-<span>  feature_values <span class="op">=</span> <span class="va">effects</span>,</span>
-<span>  label_features <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"IL6"</span>, <span class="st">"CXCL8"</span><span class="op">)</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-<p>Every selection is explicit. A native clusterProfiler GSEA object carries its ranked vector, gene sets, and weighting exponent; a tabular fgsea result does not, so classic plots require those analysis inputs to be supplied rather than reconstructing them heuristically. ORA bubbles distinguish rich factor, gene ratio, and fold enrichment. Community-network term edges use Jaccard overlap from complete enriched-feature membership, while radial term edges encode the number of shared enriched features.</p>
-<p>Read the <a href="https://younthing.github.io/bulkMAE/articles/getting-started.html">Chinese executable getting-started guide</a>, the <a href="https://younthing.github.io/bulkMAE/articles/airway-qc-de.html">airway QC and paired differential-expression tutorial</a>, the <a href="https://younthing.github.io/bulkMAE/articles/enrichment-analysis.html">airway GO ORA、GSEA 与绘图教程</a>, the <a href="https://github.com/Younthing/bulkMAE/blob/main/inst/guides/expanded-methods-zh.md" class="external-link">method-selection guide</a>, and the <a href="https://github.com/Younthing/bulkMAE/blob/main/inst/guides/input-completeness-zh.md" class="external-link">input-completeness and resource-boundary audit</a>, plus the <a href="https://github.com/Younthing/bulkMAE/blob/main/inst/guides/official-sources.md" class="external-link">implementation-to-documentation audit map</a>. Users upgrading from 0.3 or earlier should also read the <a href="https://github.com/Younthing/bulkMAE/blob/main/inst/guides/naming-migration-zh.md" class="external-link">0.4 naming migration map</a>. After installation, the audit files are also available under <code>system.file("guides", package = "bulkMAE")</code>.</p>
+<span>  feature_values <span class="op">=</span> <span class="va">effects</span></span>
+<span><span class="op">)</span></span>
+<span><span class="va">ridge</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/plot_gsea_ridge.html">plot_gsea_ridge</a></span><span class="op">(</span><span class="va">gsea_result</span>, terms <span class="op">=</span> <span class="va">pathway_ids</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="reference/plot_save.html">plot_save</a></span><span class="op">(</span><span class="st">"volcano.pdf"</span>, <span class="va">volcano</span><span class="op">)</span></span></code></pre></div>
+<p>The default scale is <code>1</code>. PDF output uses Cairo when available. Override a dimension when a journal requires an exact layout:</p>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="reference/plot_save.html">plot_save</a></span><span class="op">(</span><span class="st">"volcano.pdf"</span>, <span class="va">volcano</span>, width <span class="op">=</span> <span class="fl">8.5</span>, height <span class="op">=</span> <span class="fl">11</span>, units <span class="op">=</span> <span class="st">"cm"</span><span class="op">)</span></span></code></pre></div>
+<p><code><a href="reference/theme_bulkmae.html">theme_bulkmae()</a></code> uses 6 pt base text. A theme does not set the graphics device size, so the RStudio plot pane and knitr chunks do not read the recommended dimensions. Use <code><a href="reference/plot_save.html">plot_save()</a></code> for exact files. Set chunk <code>fig.width</code> and <code>fig.height</code> when a document preview also needs a fixed aspect ratio.</p>
+<p>A native clusterProfiler GSEA object already carries its ranked vector, gene sets, and weighting exponent. A tabular fgsea result does not, so ridge and classic plots require those inputs. ORA network edges use Jaccard overlap from complete enriched-feature membership. Classic GSEA, ORA bubble, and radial views are in the <a href="https://younthing.github.io/bulkMAE/articles/enrichment-analysis.html">enrichment tutorial</a>.</p>
 </div>
 <div class="section level2">
-<h2 id="continuous-integration">Continuous integration<a class="anchor" aria-label="anchor" href="#continuous-integration"></a>
+<h2 id="documentation">Documentation<a class="anchor" aria-label="anchor" href="#documentation"></a>
 </h2>
-<p>Pull requests and the default branch run a cross-platform R CMD check against the package’s hard dependencies. A separate Ubuntu job installs every optional offline analysis backend with <code>pak</code>, while the coverage workflow exercises the same full backend set. Network-backed tests remain opt-in so transient failures from BioMart, KEGG, STRING, OmniPath, or LINCS do not block ordinary changes.</p>
-<p>The <a href="https://younthing.github.io/bulkMAE/">pkgdown website</a> is rebuilt from <code>main</code> and published from the generated <code>gh-pages</code> branch.</p>
+<ul>
+<li>
+<a href="https://younthing.github.io/bulkMAE/articles/getting-started.html">Getting started</a> (Chinese executable guide)</li>
+<li><a href="https://younthing.github.io/bulkMAE/articles/airway-qc-de.html">airway QC and paired differential expression</a></li>
+<li><a href="https://younthing.github.io/bulkMAE/articles/enrichment-analysis.html">airway GO ORA, GSEA, and plots</a></li>
+<li><a href="https://github.com/Younthing/bulkMAE/blob/main/inst/guides/expanded-methods-zh.md" class="external-link">Method-selection guide</a></li>
+<li><a href="https://github.com/Younthing/bulkMAE/blob/main/inst/guides/input-completeness-zh.md" class="external-link">Input-completeness audit</a></li>
+<li><a href="https://github.com/Younthing/bulkMAE/blob/main/inst/guides/official-sources.md" class="external-link">Adapter-to-source map</a></li>
+<li>
+<a href="https://younthing.github.io/bulkMAE/articles/naming-migration.html">0.4 naming migration</a> for upgrades from 0.3 or earlier. Call <code><a href="reference/bulkmae_rename.html">bulkmae_rename()</a></code> to map an old name.</li>
+</ul>
+<p>Installed copies also live under <code>system.file("guides", package = "bulkMAE")</code>.</p>
 </div>
 <div class="section level2">
-<h2 id="dependency-policy">Dependency policy<a class="anchor" aria-label="anchor" href="#dependency-policy"></a>
+<h2 id="tests-and-ci">Tests and CI<a class="anchor" aria-label="anchor" href="#tests-and-ci"></a>
 </h2>
-<p>Only MAE/SE infrastructure and ggplot2 are imported. Analysis engines are optional and checked when their wrapper is called. This lets users install only the methods needed for a project instead of forcing one large, conflict-prone environment.</p>
-<p>MuSiC, immunedeconv, and BayesPrism are declared optional dependencies but are not available from every standard Bioconductor/CRAN repository. Their wrappers resolve the installed backend only when called and restore any temporary search path compatibility changes; install them from their official repositories and record the commit or release in the project lockfile.</p>
-<p>See the <a href="https://github.com/Younthing/bulkMAE/blob/main/inst/guides/dependency-installation-zh.md" class="external-link">Chinese pak dependency installation guide</a> for the complete CRAN/Bioconductor backend list, verified GitHub package specifications, and notes about resources that package installation cannot provide.</p>
+<p>Pull requests run one Ubuntu R-release CMD check against hard dependencies. After merge, <code>main</code> runs macOS, Windows, and Ubuntu-devel portability checks, the full-backend job, coverage, pkgdown, and BiocCheck. Those heavier workflows also run nightly or from <strong>Actions → Run workflow</strong>. Network-backed tests stay opt-in so BioMart, KEGG, STRING, OmniPath, or LINCS outages do not block ordinary changes.</p>
+<p>The <a href="https://younthing.github.io/bulkMAE/">pkgdown site</a> rebuilds from <code>main</code> and from a published Release, then deploys to <code>gh-pages</code>.</p>
+</div>
+<div class="section level2">
+<h2 id="dependencies">Dependencies<a class="anchor" aria-label="anchor" href="#dependencies"></a>
+</h2>
+<p>Hard imports are MAE and SE infrastructure plus ggplot2. Analysis engines are checked when their wrapper is called.</p>
+<p><a href="https://xuranw.github.io/MuSiC/" class="external-link">MuSiC</a>, <a href="https://omnideconv.org/immunedeconv/" class="external-link">immunedeconv</a>, and <a href="https://github.com/Danko-Lab/BayesPrism" class="external-link">BayesPrism</a> are optional and are not on every standard Bioconductor or CRAN repository. Install them from their official sources and record the commit or release in the project lockfile.</p>
+<p>The <a href="https://github.com/Younthing/bulkMAE/blob/main/inst/guides/dependency-installation-zh.md" class="external-link">Chinese pak installation guide</a> lists CRAN and Bioconductor backends, verified GitHub specifications, and resources that package installation cannot provide.</p>
+</div>
+<div class="section level2">
+<h2 id="license">License<a class="anchor" aria-label="anchor" href="#license"></a>
+</h2>
+<p><code>bulkMAE</code> is released under the <a href="https://opensource.org/licenses/Artistic-2.0" class="external-link">Artistic License 2.0</a>.</p>
 </div>
 </div>
   </main><aside class="col-md-3"></aside>
@@ -277,7 +317,7 @@
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by Younthing.</p>
+  <p>Developed by Fan XingFu.</p>
 </div>
 
 <div class="pkgdown-footer-right">

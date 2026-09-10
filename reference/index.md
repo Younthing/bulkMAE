@@ -74,6 +74,8 @@ enrichment, and assays.
   : Apply an identifier mapping to common gene-level values
 - [`annotation_orgdb()`](https://younthing.github.io/bulkMAE/reference/annotation_orgdb.md)
   : Resolve a local organism annotation database
+- [`bulkmae_rename()`](https://younthing.github.io/bulkMAE/reference/bulkmae_rename.md)
+  : Look up the 0.4 name for a pre-0.4 function
 - [`cluster_consensus()`](https://younthing.github.io/bulkMAE/reference/cluster_consensus.md)
   : Run consensus clustering
 - [`cluster_consensus_classes()`](https://younthing.github.io/bulkMAE/reference/cluster_consensus_classes.md)

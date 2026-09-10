@@ -5,6 +5,7 @@
 <url><loc>https://younthing.github.io/bulkMAE/articles/enrichment-analysis.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/articles/getting-started.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/articles/index.html</loc></url>
+<url><loc>https://younthing.github.io/bulkMAE/articles/naming-migration.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/authors.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/index.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/news/index.html</loc></url>
@@ -28,6 +29,7 @@
 <url><loc>https://younthing.github.io/bulkMAE/reference/annotate_rekey.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/reference/annotation_orgdb.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/reference/bulkMAE-package.html</loc></url>
+<url><loc>https://younthing.github.io/bulkMAE/reference/bulkmae_rename.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/reference/cluster_consensus.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/reference/cluster_consensus_classes.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/reference/cluster_consensus_diagnostics.html</loc></url>

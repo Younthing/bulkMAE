@@ -397,14 +397,14 @@ plot_save("pca.pdf", custom_pca)
 构建代码、ID 版本、assay 尺度、feature
 选择、模型公式、contrast、随机种子以及外部资源版本。
 
-本文使用 bulkMAE 0.4.0。完整会话信息如下：
+本文使用 bulkMAE 0.4.1。完整会话信息如下：
 
 ``` r
 
 sessionInfo()
 #> R version 4.6.1 (2026-06-24)
 #> Platform: x86_64-pc-linux-gnu
-#> Running under: Ubuntu 24.04.4 LTS
+#> Running under: Ubuntu 24.04.5 LTS
 #> 
 #> Matrix products: default
 #> BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3 
@@ -423,7 +423,7 @@ sessionInfo()
 #> [1] stats     graphics  grDevices utils     datasets  methods   base     
 #> 
 #> other attached packages:
-#> [1] ggplot2_4.0.3 bulkMAE_0.4.0
+#> [1] ggplot2_4.0.3 bulkMAE_0.4.1
 #> 
 #> loaded via a namespace (and not attached):
 #>  [1] sass_0.4.10                 generics_0.1.4             

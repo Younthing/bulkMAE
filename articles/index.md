@@ -7,3 +7,8 @@
 - [从样本质控到配对差异表达](https://younthing.github.io/bulkMAE/articles/airway-qc-de.md):
 - [airway 富集分析：ORA、GSEA
   与图形](https://younthing.github.io/bulkMAE/articles/enrichment-analysis.md):
+
+### Guides
+
+- [0.4 API
+  命名迁移](https://younthing.github.io/bulkMAE/articles/naming-migration.md):

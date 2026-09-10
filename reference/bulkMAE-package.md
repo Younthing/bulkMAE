@@ -26,4 +26,4 @@ and are checked only when their adapter is called.
 
 ## Author
 
-**Maintainer**: Younthing <fanxingfu3344@gmail.com>
+**Maintainer**: Fan XingFu <fanxingfu3344@gmail.com>
