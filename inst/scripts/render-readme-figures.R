@@ -102,11 +102,24 @@ ora_result <- data.frame(
   geneID = vapply(ora_sets, paste, character(1), collapse = "/"),
   stringsAsFactors = FALSE
 )
-network <- square_panel(plot_ora_network(
+network <- plot_ora_network(
   ora_result,
   terms = names(ora_sets),
   feature_values = ora_effects
-))
+) +
+  theme_void(base_size = 8) +
+  theme(
+    legend.position = "none",
+    plot.background = element_rect(fill = "white", colour = NA),
+    panel.background = element_rect(fill = "white", colour = NA),
+    panel.border = element_blank(),
+    panel.grid = element_blank(),
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    axis.line = element_blank(),
+    plot.margin = margin(6, 6, 6, 6)
+  )
 
 n_ranks <- 240L
 rank_ids <- sprintf("G%03d", seq_len(n_ranks))
