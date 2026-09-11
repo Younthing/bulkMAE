@@ -17,11 +17,20 @@ set.seed(20260911)
 out_dir <- file.path("man", "figures")
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
-square_panel <- function(plot) {
+# Adjacent left/right plot.margins are 40 pt + 40 pt = 80 pt of column gap.
+# patchwork treats unit(..., "pt") in widths as relative shares, so do not
+# insert an 80 pt plot_spacer() column.
+square_panel <- function(plot, side = c("left", "right")) {
+  side <- match.arg(side)
+  panel_margin <- if (identical(side, "left")) {
+    margin(6, 40, 6, 6)
+  } else {
+    margin(6, 6, 6, 40)
+  }
   plot +
     theme_bulkmae(base_size = 8) +
     theme(
-      plot.margin = margin(6, 6, 6, 6),
+      plot.margin = panel_margin,
       legend.text = element_text(size = 7),
       legend.title = element_text(size = 8)
     )
@@ -51,7 +60,7 @@ volcano <- square_panel(plot_de_volcano(
   fdr = 0.05,
   min_abs_effect = 1,
   label_features = marker_ids
-)) +
+), side = "left") +
   theme(
     legend.position = "bottom",
     legend.direction = "horizontal"
@@ -67,7 +76,7 @@ heatmap <- square_panel(plot_assay_heatmap(
   features = heat_features,
   cluster_rows = TRUE,
   cluster_columns = TRUE
-)) +
+), side = "right") +
   theme(
     axis.text.x = element_text(size = 7, angle = 45, hjust = 1),
     axis.text.y = element_text(size = 7)
@@ -118,7 +127,7 @@ network <- plot_ora_network(
     axis.text = element_blank(),
     axis.ticks = element_blank(),
     axis.line = element_blank(),
-    plot.margin = margin(6, 6, 6, 6)
+    plot.margin = margin(6, 40, 6, 6)
   )
 
 n_ranks <- 240L
@@ -167,7 +176,7 @@ ridge <- square_panel(plot_gsea_ridge(
   membership = "gene_set",
   term_labels = ridge_labels,
   show_statistics = FALSE
-))
+), side = "right")
 
 gallery <- (volcano + heatmap) / (network + ridge) +
   plot_layout(widths = c(1, 1), heights = c(1, 1)) +
