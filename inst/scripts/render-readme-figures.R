@@ -17,15 +17,15 @@ set.seed(20260911)
 out_dir <- file.path("man", "figures")
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
-# Adjacent left/right plot.margins are 10 pt + 10 pt = 20 pt of column gap.
+# Adjacent left/right plot.margins are 40 pt + 40 pt = 80 pt of column gap.
 # patchwork treats unit(..., "pt") in widths as relative shares, so do not
-# insert a 20 pt plot_spacer() column.
+# insert an 80 pt plot_spacer() column.
 square_panel <- function(plot, side = c("left", "right")) {
   side <- match.arg(side)
   panel_margin <- if (identical(side, "left")) {
-    margin(6, 10, 6, 6)
+    margin(6, 40, 6, 6)
   } else {
-    margin(6, 6, 6, 10)
+    margin(6, 6, 6, 40)
   }
   plot +
     theme_bulkmae(base_size = 8) +
@@ -127,7 +127,7 @@ network <- plot_ora_network(
     axis.text = element_blank(),
     axis.ticks = element_blank(),
     axis.line = element_blank(),
-    plot.margin = margin(6, 10, 6, 6)
+    plot.margin = margin(6, 40, 6, 6)
   )
 
 n_ranks <- 240L
