@@ -185,65 +185,8 @@ those gaps with simulation.
 
 ## Plots
 
-The landing gallery uses the four publication views most papers need. A
-volcano of differential effects, a selected-feature heatmap, an ORA
-community network, and a GSEA rank-metric ridge.
-
-![Volcano plot of effect estimates and raw
-p-values](reference/figures/readme-volcano.png)![Row-scaled heatmap
-split by condition](reference/figures/readme-heatmap.png)
-
-![ORA term-feature community
-network](reference/figures/readme-ora-network.png)![GSEA rank-metric
-ridge plot](reference/figures/readme-gsea-ridge.png)
-
-Every `plot_*()` helper returns a standard ggplot object and attaches a
-recommended physical size. Style it with ordinary ggplot2 syntax, then
-write the file with
-[`plot_save()`](https://younthing.github.io/bulkMAE/reference/plot_save.md):
-
-``` r
-
-volcano <- plot_de_volcano(de_result, label_features = c("IL6", "CXCL8"))
-heatmap <- plot_assay_heatmap(
-  mae,
-  "rna",
-  "log_expression",
-  features = selected,
-  column_split = "condition"
-)
-network <- plot_ora_network(
-  ora_result,
-  terms = pathway_ids,
-  feature_values = effects
-)
-ridge <- plot_gsea_ridge(gsea_result, terms = pathway_ids)
-
-plot_save("volcano.pdf", volcano)
-```
-
-The default scale is `1`. PDF output uses Cairo when available. Override
-a dimension when a journal requires an exact layout:
-
-``` r
-
-plot_save("volcano.pdf", volcano, width = 8.5, height = 11, units = "cm")
-```
-
-[`theme_bulkmae()`](https://younthing.github.io/bulkMAE/reference/theme_bulkmae.md)
-uses 6 pt base text. A theme does not set the graphics device size, so
-the RStudio plot pane and knitr chunks do not read the recommended
-dimensions. Use
-[`plot_save()`](https://younthing.github.io/bulkMAE/reference/plot_save.md)
-for exact files. Set chunk `fig.width` and `fig.height` when a document
-preview also needs a fixed aspect ratio.
-
-A native clusterProfiler GSEA object already carries its ranked vector,
-gene sets, and weighting exponent. A tabular fgsea result does not, so
-ridge and classic plots require those inputs. ORA network edges use
-Jaccard overlap from complete enriched-feature membership. Classic GSEA,
-ORA bubble, and radial views are in the [enrichment
-tutorial](https://younthing.github.io/bulkMAE/articles/enrichment-analysis.html).
+![Volcano, heatmap, ORA community network, and GSEA ridge plots from
+bulkMAE](reference/figures/readme-gallery.png)
 
 ## Documentation
 

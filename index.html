@@ -248,34 +248,7 @@
 <div class="section level2">
 <h2 id="plots">Plots<a class="anchor" aria-label="anchor" href="#plots"></a>
 </h2>
-<p>The landing gallery uses the four publication views most papers need. A volcano of differential effects, a selected-feature heatmap, an ORA community network, and a GSEA rank-metric ridge.</p>
-<p align="center">
-<img src="reference/figures/readme-volcano.png" alt="Volcano plot of effect estimates and raw p-values" width="49%"><img src="reference/figures/readme-heatmap.png" alt="Row-scaled heatmap split by condition" width="49%"></p>
-<p align="center">
-<img src="reference/figures/readme-ora-network.png" alt="ORA term-feature community network" width="49%"><img src="reference/figures/readme-gsea-ridge.png" alt="GSEA rank-metric ridge plot" width="49%"></p>
-<p>Every <code>plot_*()</code> helper returns a standard ggplot object and attaches a recommended physical size. Style it with ordinary ggplot2 syntax, then write the file with <code><a href="reference/plot_save.html">plot_save()</a></code>:</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">volcano</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/plot_de_volcano.html">plot_de_volcano</a></span><span class="op">(</span><span class="va">de_result</span>, label_features <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"IL6"</span>, <span class="st">"CXCL8"</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="va">heatmap</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/plot_assay_heatmap.html">plot_assay_heatmap</a></span><span class="op">(</span></span>
-<span>  <span class="va">mae</span>,</span>
-<span>  <span class="st">"rna"</span>,</span>
-<span>  <span class="st">"log_expression"</span>,</span>
-<span>  features <span class="op">=</span> <span class="va">selected</span>,</span>
-<span>  column_split <span class="op">=</span> <span class="st">"condition"</span></span>
-<span><span class="op">)</span></span>
-<span><span class="va">network</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/plot_ora_network.html">plot_ora_network</a></span><span class="op">(</span></span>
-<span>  <span class="va">ora_result</span>,</span>
-<span>  terms <span class="op">=</span> <span class="va">pathway_ids</span>,</span>
-<span>  feature_values <span class="op">=</span> <span class="va">effects</span></span>
-<span><span class="op">)</span></span>
-<span><span class="va">ridge</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/plot_gsea_ridge.html">plot_gsea_ridge</a></span><span class="op">(</span><span class="va">gsea_result</span>, terms <span class="op">=</span> <span class="va">pathway_ids</span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu"><a href="reference/plot_save.html">plot_save</a></span><span class="op">(</span><span class="st">"volcano.pdf"</span>, <span class="va">volcano</span><span class="op">)</span></span></code></pre></div>
-<p>The default scale is <code>1</code>. PDF output uses Cairo when available. Override a dimension when a journal requires an exact layout:</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="reference/plot_save.html">plot_save</a></span><span class="op">(</span><span class="st">"volcano.pdf"</span>, <span class="va">volcano</span>, width <span class="op">=</span> <span class="fl">8.5</span>, height <span class="op">=</span> <span class="fl">11</span>, units <span class="op">=</span> <span class="st">"cm"</span><span class="op">)</span></span></code></pre></div>
-<p><code><a href="reference/theme_bulkmae.html">theme_bulkmae()</a></code> uses 6 pt base text. A theme does not set the graphics device size, so the RStudio plot pane and knitr chunks do not read the recommended dimensions. Use <code><a href="reference/plot_save.html">plot_save()</a></code> for exact files. Set chunk <code>fig.width</code> and <code>fig.height</code> when a document preview also needs a fixed aspect ratio.</p>
-<p>A native clusterProfiler GSEA object already carries its ranked vector, gene sets, and weighting exponent. A tabular fgsea result does not, so ridge and classic plots require those inputs. ORA network edges use Jaccard overlap from complete enriched-feature membership. Classic GSEA, ORA bubble, and radial views are in the <a href="https://younthing.github.io/bulkMAE/articles/enrichment-analysis.html">enrichment tutorial</a>.</p>
+<p><img src="reference/figures/readme-gallery.png" alt="Volcano, heatmap, ORA community network, and GSEA ridge plots from bulkMAE"></p>
 </div>
 <div class="section level2">
 <h2 id="documentation">Documentation<a class="anchor" aria-label="anchor" href="#documentation"></a>
