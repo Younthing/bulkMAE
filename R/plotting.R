@@ -415,12 +415,12 @@ plot_de_volcano <- function(
   floor <- if (length(positive)) min(positive) / 10 else .Machine$double.xmin
   table$minus_log10_p <- -log10(pmax(table$p_value, floor, na.rm = FALSE))
   table$label <- .plot_feature_labels(table$feature_id, label_features, feature_labels, result)
-  plot <- ggplot2::ggplot(table, ggplot2::aes(
-    x = .data[["effect"]], y = .data[["minus_log10_p"]],
-    colour = .data[["direction"]]
-  )) +
-    ggplot2::geom_point(alpha = 0.72, size = 1.6, na.rm = TRUE) +
-    ggplot2::geom_vline(xintercept = c(-min_abs_effect, min_abs_effect), linetype = 2, colour = "#777777") +
+  plot <- ggplot2::ggplot(table) +
+    .plot_de_points(table, "effect", "minus_log10_p") +
+    ggplot2::geom_vline(
+      xintercept = c(-min_abs_effect, min_abs_effect),
+      linetype = 2, colour = "#777777", linewidth = 0.3
+    ) +
     .plot_de_scale() +
     ggplot2::labs(
       x = "Effect estimate", y = expression(-log[10](italic(p))),
@@ -433,8 +433,9 @@ plot_de_volcano <- function(
     if (x_limit == 0) x_limit <- 1
     plot <- plot + ggplot2::coord_cartesian(xlim = c(-x_limit, x_limit))
   }
+  plot <- .plot_de_counts(plot, table, "effect", "minus_log10_p")
   plot <- .plot_add_feature_text(plot, table, "minus_log10_p")
-  .plot_with_dimensions(plot, width = 8.5, height = 7)
+  .plot_with_dimensions(plot, width = 8, height = 7)
 }
 
 #' Plot a differential-expression MA plot
@@ -484,13 +485,12 @@ plot_de_ma <- function(
       table$abundance[zero_abundance] <- NA_real_
     }
   }
-  plot <- ggplot2::ggplot(table, ggplot2::aes(
-    x = .data[["abundance"]], y = .data[["effect"]],
-    colour = .data[["direction"]]
-  )) +
-    ggplot2::geom_point(alpha = 0.72, size = 1.6, na.rm = TRUE) +
-    ggplot2::geom_hline(yintercept = c(-min_abs_effect, 0, min_abs_effect),
-                        linetype = c(2, 1, 2), colour = "#777777") +
+  plot <- ggplot2::ggplot(table) +
+    .plot_de_points(table, "abundance", "effect") +
+    ggplot2::geom_hline(
+      yintercept = c(-min_abs_effect, 0, min_abs_effect),
+      linetype = c(2, 1, 2), colour = "#777777", linewidth = 0.3
+    ) +
     .plot_de_scale() +
     ggplot2::labs(
       x = "Mean abundance", y = "Effect estimate", colour = "Direction",
@@ -499,7 +499,7 @@ plot_de_ma <- function(
     .plot_de_theme()
   if (transform == "log10") plot <- plot + ggplot2::scale_x_log10()
   plot <- .plot_add_feature_text(plot, table, "effect")
-  .plot_with_dimensions(plot, width = 8.5, height = 7)
+  .plot_with_dimensions(plot, width = 8, height = 7)
 }
 
 #' Plot selected assay features as a heatmap
@@ -591,7 +591,9 @@ plot_assay_heatmap <- function(
   plot <- ggplot2::ggplot(data, ggplot2::aes(
     x = .data[["sample"]], y = .data[["feature"]], fill = .data[["value"]]
   )) +
-    ggplot2::geom_tile() +
+    ggplot2::geom_tile(colour = NA) +
+    ggplot2::scale_x_discrete(expand = c(0, 0)) +
+    ggplot2::scale_y_discrete(expand = c(0, 0)) +
     ggplot2::labs(
       x = "Sample", y = "Feature",
       alt = "A heatmap of explicitly selected assay features across samples."
@@ -599,6 +601,9 @@ plot_assay_heatmap <- function(
     theme_bulkmae() +
     ggplot2::theme(
       panel.grid = ggplot2::element_blank(),
+      panel.border = ggplot2::element_rect(colour = "#222222", fill = NA, linewidth = 0.25),
+      panel.background = ggplot2::element_rect(fill = "white", colour = NA),
+      plot.background = ggplot2::element_rect(fill = "white", colour = NA),
       axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)
     )
   plot <- if (scale == "row") {
@@ -619,6 +624,126 @@ plot_assay_heatmap <- function(
                                     minimum = 10, maximum = 18),
     height = .plot_clamped_dimension(nrow(matrix), base = 4, per_item = 0.28,
                                      minimum = 8, maximum = 20)
+  )
+}
+
+#' Plot selected assay features by sample group
+#'
+#' Draws one panel per explicit feature from an already-computed assay. Features
+#' are never selected from a result table inside this function.
+#'
+#' @inheritParams plot_assay_heatmap
+#' @param colour Optional discrete sample-metadata column used for the x axis
+#'   and the colour scale. When omitted, each sample is drawn on the x axis.
+#' @param geom `"boxplot"` or `"violin"`. Both add a jittered point layer.
+#'
+#' @return An unprinted standard ggplot object carrying recommended physical
+#'   dimensions for [plot_save()].
+#' @family plotting
+#' @export
+plot_assay_expression <- function(
+    x,
+    experiment,
+    assay,
+    features,
+    colour = NULL,
+    feature_label = NULL,
+    geom = c("boxplot", "violin")
+) {
+  geom <- match.arg(geom)
+  if (is.null(features) || !length(features)) {
+    stop("`features` must explicitly contain at least one feature.", call. = FALSE)
+  }
+  matrix <- .select_features(.pull_matrix(x, experiment, assay), features)
+  if (any(!is.finite(matrix))) {
+    stop("The expression assay must contain finite values.", call. = FALSE)
+  }
+  labels <- .plot_mae_annotation(
+    feature_label, mae_feature_data(x, experiment), rownames(matrix),
+    "feature_label", "feature"
+  )
+  if (is.null(labels)) labels <- stats::setNames(rownames(matrix), rownames(matrix))
+  samples <- mae_samples(x, experiment)
+  if (!is.null(colour)) {
+    .assert_scalar_character(colour, "colour")
+    .plot_require_columns(samples, colour, "sample metadata")
+    group <- samples[[colour]]
+    if (!(is.factor(group) || is.character(group) || is.logical(group))) {
+      stop(
+        "`mae_samples()$", colour, "` mapped to colour must be discrete; ",
+        "convert it to a factor.",
+        call. = FALSE
+      )
+    }
+    x_name <- colour
+  } else {
+    group <- NULL
+    x_name <- "Sample"
+  }
+  display <- stats::setNames(
+    make.unique(as.character(labels[rownames(matrix)])),
+    rownames(matrix)
+  )
+  data <- expand.grid(
+    feature_id = rownames(matrix),
+    sample = colnames(matrix),
+    stringsAsFactors = FALSE
+  )
+  data$value <- matrix[cbind(
+    match(data$feature_id, rownames(matrix)),
+    match(data$sample, colnames(matrix))
+  )]
+  data$feature <- factor(
+    unname(display[data$feature_id]),
+    levels = unname(display[rownames(matrix)])
+  )
+  data$group <- if (is.null(group)) {
+    factor(data$sample, levels = colnames(matrix))
+  } else {
+    group[match(data$sample, rownames(samples))]
+  }
+  plot <- ggplot2::ggplot(data, ggplot2::aes(
+    x = .data[["group"]],
+    y = .data[["value"]],
+    colour = .data[["group"]],
+    fill = .data[["group"]]
+  ))
+  plot <- if (identical(geom, "violin")) {
+    plot + ggplot2::geom_violin(alpha = 0.22, colour = NA, width = 0.86)
+  } else {
+    plot + ggplot2::geom_boxplot(
+      alpha = 0.22, width = 0.62, outlier.shape = NA, linewidth = 0.25
+    )
+  }
+  plot <- plot +
+    ggplot2::geom_jitter(
+      width = 0.12, height = 0, size = 1.15, alpha = 0.9, stroke = 0
+    ) +
+    ggplot2::facet_wrap(ggplot2::vars(.data[["feature"]]), scales = "free_y") +
+    ggplot2::scale_colour_manual(values = .plot_discrete_values(data$group)) +
+    ggplot2::scale_fill_manual(values = .plot_discrete_values(data$group)) +
+    ggplot2::labs(
+      x = x_name, y = "Assay value", colour = x_name, fill = x_name,
+      alt = "Assay values for explicitly selected features, grouped by sample metadata."
+    ) +
+    theme_bulkmae() +
+    ggplot2::theme(
+      panel.border = ggplot2::element_rect(colour = "#222222", fill = NA, linewidth = 0.25),
+      panel.background = ggplot2::element_rect(fill = "white", colour = NA),
+      plot.background = ggplot2::element_rect(fill = "white", colour = NA),
+      legend.position = "top",
+      legend.direction = "horizontal",
+      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)
+    )
+  n_features <- nrow(matrix)
+  .plot_with_dimensions(
+    plot,
+    width = .plot_clamped_dimension(
+      n_features, base = 5.5, per_item = 2.2, minimum = 8, maximum = 16
+    ),
+    height = .plot_clamped_dimension(
+      ceiling(n_features / 3), base = 5, per_item = 3.2, minimum = 6.5, maximum = 16
+    )
   )
 }
 
@@ -804,8 +929,66 @@ plot_assay_heatmap <- function(
   theme_bulkmae() +
     ggplot2::theme(
       legend.position = "top",
-      legend.direction = "horizontal"
+      legend.direction = "horizontal",
+      panel.border = ggplot2::element_rect(colour = "#222222", fill = NA, linewidth = 0.25),
+      panel.background = ggplot2::element_rect(fill = "white", colour = NA),
+      plot.background = ggplot2::element_rect(fill = "white", colour = NA),
+      panel.grid.major.y = ggplot2::element_line(colour = "#E6E6E6", linewidth = 0.2)
     )
+}
+
+.plot_de_points <- function(table, x, y) {
+  ns <- table[as.character(table$direction) == "Not significant", , drop = FALSE]
+  sig <- table[as.character(table$direction) != "Not significant", , drop = FALSE]
+  list(
+    ggplot2::geom_point(
+      data = ns,
+      mapping = ggplot2::aes(
+        x = .data[[x]], y = .data[[y]], colour = .data[["direction"]]
+      ),
+      alpha = 0.40, size = 1.05, stroke = 0, na.rm = TRUE
+    ),
+    ggplot2::geom_point(
+      data = sig,
+      mapping = ggplot2::aes(
+        x = .data[[x]], y = .data[[y]], colour = .data[["direction"]]
+      ),
+      alpha = 0.88, size = 1.55, stroke = 0, na.rm = TRUE
+    )
+  )
+}
+
+.plot_de_counts <- function(plot, table, x, y) {
+  n_up <- sum(as.character(table$direction) == "Up")
+  n_down <- sum(as.character(table$direction) == "Down")
+  x_values <- table[[x]][is.finite(table[[x]])]
+  y_values <- table[[y]][is.finite(table[[y]])]
+  if (!length(x_values) || !length(y_values)) return(plot)
+  x_range <- range(x_values)
+  y_range <- range(y_values)
+  pad_x <- diff(x_range) * 0.02
+  pad_y <- diff(y_range) * 0.05
+  if (!is.finite(pad_x) || pad_x == 0) pad_x <- 0.1
+  if (!is.finite(pad_y) || pad_y == 0) pad_y <- 0.1
+  counts <- data.frame(
+    x = c(x_range[[1L]] + pad_x, x_range[[2L]] - pad_x),
+    y = c(y_range[[2L]] - pad_y, y_range[[2L]] - pad_y),
+    label = c(paste0("Down ", n_down), paste0("Up ", n_up)),
+    hjust = c(0, 1),
+    stringsAsFactors = FALSE
+  )
+  plot + ggplot2::geom_text(
+    data = counts,
+    mapping = ggplot2::aes(
+      x = .data[["x"]], y = .data[["y"]], label = .data[["label"]],
+      hjust = .data[["hjust"]]
+    ),
+    inherit.aes = FALSE,
+    vjust = 1,
+    size = .bulkmae_text_size_pt,
+    size.unit = "pt",
+    colour = "#333333"
+  )
 }
 
 .plot_feature_labels <- function(ids, selected, labels, result) {
@@ -837,19 +1020,20 @@ plot_assay_heatmap <- function(
   labelled <- !is.na(data$label) &
     is.finite(data[[x_column]]) & is.finite(data[[y_column]])
   if (!any(labelled)) return(plot)
-  y_values <- data[[y_column]][is.finite(data[[y_column]])]
-  y_range <- diff(range(y_values))
-  nudge_y <- if (is.finite(y_range) && y_range > 0) y_range * 0.025 else 0
-  plot + ggplot2::geom_text(
+  plot + ggrepel::geom_text_repel(
     data = data[labelled, , drop = FALSE],
     mapping = ggplot2::aes(
       x = .data[[x_column]],
       y = .data[[y_column]], label = .data[["label"]]
     ),
-    nudge_y = nudge_y,
-    size = .bulkmae_text_size_pt,
-    size.unit = "pt",
-    check_overlap = TRUE, show.legend = FALSE, na.rm = TRUE
+    size = .plot_pt_to_mm(.bulkmae_text_size_pt),
+    segment.size = 0.2,
+    min.segment.length = 0,
+    box.padding = 0.22,
+    max.overlaps = Inf,
+    seed = 1L,
+    show.legend = FALSE,
+    na.rm = TRUE
   )
 }
 

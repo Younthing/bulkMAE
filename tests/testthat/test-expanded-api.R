@@ -67,7 +67,7 @@ test_that("public API follows discoverable analysis families", {
     "meta_collect", "meta_effect", "ml_glmnet",
     "network_genie3", "network_genie3_links", "network_string",
     "normalize_deseq", "normalize_tmm", "normalize_tpm", "qc_correlation", "qc_library",
-    "qc_outliers", "plot_assay_heatmap", "plot_de_ma", "plot_de_volcano",
+    "qc_outliers", "plot_assay_expression", "plot_assay_heatmap", "plot_de_ma", "plot_de_volcano",
     "plot_embedding", "plot_gsea_classic",
     "plot_gsea_ridge", "plot_ora_bubble", "plot_ora_network",
     "plot_ora_radial", "plot_qc_correlation", "plot_qc_library",

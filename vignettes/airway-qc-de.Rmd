@@ -188,7 +188,7 @@ top_table <- top_table[, c(
 knitr::kable(top_table, digits = 4, caption = "按 adjusted p-value 排序的前 10 个基因")
 ```
 
-# MA、火山图与描述性热图
+# MA、火山图、指定基因与描述性热图
 
 CRISPLD2（Ensembl `ENSG00000103196`）由原研究预先指定为关注基因，而不是看完当前结果后再挑出的标签。
 
@@ -223,9 +223,21 @@ plot_de_volcano(
   labs(title = "Dexamethasone differential expression")
 ```
 
+```{r expression-plot, fig.cap="图 7：预先指定的 CRISPLD2 在 VST 尺度上按处理分组。", fig.alt="CRISPLD2 的 VST 表达箱线图，按 dexamethasone 处理分组，并叠加各样本点。"}
+plot_assay_expression(
+  mae_vst,
+  "airway",
+  "vst",
+  features = crispld2,
+  colour = "dex",
+  feature_label = "display_label"
+) +
+  labs(title = "CRISPLD2 expression")
+```
+
 最后选择 adjusted p-value 最小的 30 个基因，并在 VST 尺度上按行标准化。这里必须显式传入 feature ID；绘图函数不会暗中选择“最显著”基因。
 
-```{r heatmap, fig.height=7, fig.cap="图 7：adjusted p-value 最小的 30 个基因的 VST 行标准化热图。", fig.alt="三十个差异最显著基因在八个 airway 样本中的 VST 行 z-score 热图，按处理分面。"}
+```{r heatmap, fig.height=7, fig.cap="图 8：adjusted p-value 最小的 30 个基因的 VST 行标准化热图。", fig.alt="三十个差异最显著基因在八个 airway 样本中的 VST 行 z-score 热图，按处理分面。"}
 heatmap_features <- de_results$feature_id[top_order[seq_len(min(30L, length(top_order)))]]
 plot_assay_heatmap(
   mae_vst,
