@@ -1,9 +1,10 @@
 # Compose the README gallery: four near-square panels in one patchwork figure.
+# Volcano and heatmap come from the airway dexamethasone experiment.
 # Run from the repository root:
 #   R_LIBS_USER="$HOME/R/library" Rscript inst/scripts/render-readme-figures.R
 
 .libPaths(c(Sys.getenv("R_LIBS_USER", unset = .libPaths()[[1L]]), .libPaths()))
-needed <- c("bulkMAE", "ggplot2", "patchwork")
+needed <- c("bulkMAE", "ggplot2", "patchwork", "airway", "DESeq2", "edgeR")
 missing <- needed[!vapply(needed, requireNamespace, logical(1), quietly = TRUE)]
 if (length(missing)) {
   stop("Install packages first: ", paste(missing, collapse = ", "), call. = FALSE)
@@ -36,46 +37,68 @@ square_panel <- function(plot, side = c("left", "right")) {
     )
 }
 
-n_features <- 420L
-feature_ids <- sprintf("GENE%04d", seq_len(n_features))
-marker_ids <- c("IL6", "CXCL8", "TNF", "STAT1")
-feature_ids[seq_along(marker_ids)] <- marker_ids
-effect <- stats::rnorm(n_features, mean = 0, sd = 0.65)
-up <- seq_len(24L)
-down <- 25L:48L
-effect[up] <- stats::runif(length(up), 1.2, 2.8)
-effect[down] <- stats::runif(length(down), -2.8, -1.2)
-z_score <- effect / 0.48 + stats::rnorm(n_features, mean = 0, sd = 0.8)
-p_value <- pmin(pmax(2 * stats::pnorm(-abs(z_score)), 1e-16), 1)
-de_table <- data.frame(
-  feature_id = feature_ids,
-  effect = effect,
-  p_value = p_value,
-  adjusted_p_value = stats::p.adjust(p_value, method = "BH"),
-  row.names = feature_ids,
-  check.names = FALSE
+# Volcano and heatmap use the airway dexamethasone experiment. The ORA and
+# GSEA panels stay schematic: a landing-page gallery should not rerun GO.
+data("airway", package = "airway")
+counts <- SummarizedExperiment::assay(airway, "counts")
+sample_data <- as.data.frame(SummarizedExperiment::colData(airway), optional = TRUE)
+feature_data <- as.data.frame(SummarizedExperiment::rowData(airway), optional = TRUE)[
+  , c("gene_id", "gene_name", "symbol", "gene_biotype"),
+  drop = FALSE
+]
+sample_data$dex <- factor(sample_data$dex, levels = c("untrt", "trt"))
+sample_data$cell <- factor(sample_data$cell)
+feature_data$display_label <- as.character(feature_data$symbol)
+missing_label <- is.na(feature_data$display_label) | !nzchar(feature_data$display_label)
+feature_data$display_label[missing_label] <- feature_data$gene_id[missing_label]
+feature_data$display_label <- make.unique(feature_data$display_label)
+mae <- mae_from_matrix(counts, sample_data, feature_data, "airway", "counts")
+keep <- filter_expr(mae, "airway", group = "dex")
+mae_filtered <- mae_subset_features(mae, "airway", names(keep)[keep])
+vst <- transform_vst(mae_filtered, "airway", blind = FALSE, design = ~ cell + dex)
+mae_vst <- mae_add_assay(mae_filtered, "airway", vst, name = "vst")
+fit <- de_deseq2(
+  mae_filtered, "airway",
+  design = ~ cell + dex, fitType = "parametric", quiet = TRUE
 )
+de_result <- de_deseq2_results(fit, contrast = c("dex", "trt", "untrt"), alpha = 0.05)
+crispld2 <- "ENSG00000103196"
+nominated <- c(
+  CRISPLD2 = crispld2,
+  FKBP5 = "ENSG00000096060",
+  TSC22D3 = "ENSG00000157514",
+  DUSP1 = "ENSG00000120129",
+  PER1 = "ENSG00000179094",
+  IL6 = "ENSG00000136244"
+)
+feature_labels <- stats::setNames(
+  mae_feature_data(mae_filtered, "airway")$display_label,
+  rownames(mae_feature_data(mae_filtered, "airway"))
+)
+feature_labels[crispld2] <- "CRISPLD2"
+
 volcano <- square_panel(plot_de_volcano(
-  de_table,
+  de_result,
   fdr = 0.05,
   min_abs_effect = 1,
-  label_features = marker_ids
+  label_features = crispld2,
+  feature_labels = feature_labels
 ), side = "left") +
   theme(
     legend.position = "bottom",
     legend.direction = "horizontal"
   )
 
-mae <- mae_simulate(n_features = 60L, n_samples = 8L, seed = 20260911L)
-log_expr <- mae_pull_assay(mae, "rna", "log_expression")
-heat_features <- names(sort(apply(log_expr, 1L, stats::sd), decreasing = TRUE))[seq_len(8L)]
 heatmap <- square_panel(plot_assay_heatmap(
-  mae,
-  "rna",
-  "log_expression",
-  features = heat_features,
+  mae_vst,
+  "airway",
+  "vst",
+  features = unname(nominated),
+  scale = "row",
   cluster_rows = TRUE,
-  cluster_columns = TRUE
+  cluster_columns = TRUE,
+  column_split = "dex",
+  feature_label = "display_label"
 ), side = "right") +
   theme(
     axis.text.x = element_text(size = 7, angle = 45, hjust = 1),

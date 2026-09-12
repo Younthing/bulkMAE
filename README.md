@@ -157,7 +157,7 @@ simulation.
 
 ## Plots
 
-<img src="man/figures/readme-gallery.png" alt="Volcano, heatmap, ORA community network, and GSEA ridge plots from bulkMAE">
+<img src="man/figures/readme-gallery.png" alt="Airway dexamethasone volcano and nominated-gene heatmap, plus schematic ORA network and GSEA ridge plots from bulkMAE">
 
 ## Documentation
 
