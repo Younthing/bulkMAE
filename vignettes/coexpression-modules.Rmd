@@ -1,0 +1,263 @@
+---
+title: "P0: co-expression modules on airway"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    number_sections: true
+vignette: >
+  %\VignetteIndexEntry{P0: co-expression modules on airway}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 4.8,
+  dpi = 120,
+  fig.retina = 2
+)
+set.seed(20260912)
+library(bulkMAE)
+library(ggplot2)
+has_wgcna <- requireNamespace("WGCNA", quietly = TRUE)
+```
+
+# Question and data
+
+This article runs the P0 co-expression route on the Bioconductor
+[`airway`](https://bioconductor.org/packages/release/data/experiment/html/airway.html)
+ExperimentData package: four cell lines, each with an untreated and a
+dexamethasone-treated RNA-seq sample. Counts, `~ cell + dex`, and
+`filterByExpr()` follow the
+[airway QC/DE tutorial](airway-qc-de.html). Installation can use the
+network; rendering after that does not.
+
+The scientific limit is the sample size. Eight samples cannot support a
+scale-free network claim or an independent preservation test. Power and
+module labels here are a runnable demonstration, not a published WGCNA
+analysis.
+
+```{r install, eval=FALSE}
+BiocManager::install(c("airway", "edgeR", "DESeq2", "WGCNA"))
+```
+
+```{r load-airway}
+data("airway", package = "airway")
+counts <- SummarizedExperiment::assay(airway, "counts")
+sample_data <- as.data.frame(
+  SummarizedExperiment::colData(airway),
+  optional = TRUE
+)
+feature_data <- as.data.frame(
+  SummarizedExperiment::rowData(airway),
+  optional = TRUE
+)[, c("gene_id", "gene_name", "symbol", "gene_biotype"), drop = FALSE]
+sample_data$dex <- factor(sample_data$dex, levels = c("untrt", "trt"))
+sample_data$cell <- factor(sample_data$cell)
+
+mae <- mae_from_matrix(
+  expression = counts,
+  samples = sample_data,
+  row_data = feature_data,
+  experiment = "airway",
+  assay = "counts"
+)
+keep <- filter_expr(mae, "airway", group = "dex")
+mae_filtered <- mae_subset_features(mae, "airway", names(keep)[keep])
+vst <- transform_vst(
+  mae_filtered,
+  "airway",
+  blind = FALSE,
+  design = ~ cell + dex
+)
+mae_vst <- mae_add_assay(mae_filtered, "airway", vst, name = "vst")
+hvg <- mae_variable_features(mae_vst, "airway", "vst", top_n = 300L)
+```
+
+Filtering retains `r format(sum(keep), big.mark = ",")` /
+`r format(length(keep), big.mark = ",")` genes. Module detection uses the
+`r length(hvg)` most variable VST features, chosen before the network fit.
+
+# Soft-threshold diagnostics, then WGCNA
+
+```{r wgcna, eval = has_wgcna}
+# Same VST matrix as the QC/DE tutorial, then goodSamplesGenes() inside
+# coexpr_pick_power() / coexpr_wgcna(). Eight samples cannot support a
+# scale-free claim; the 0.8 reference line is drawn so that failure is visible.
+power_features <- mae_variable_features(mae_vst, "airway", "vst", top_n = 500L)
+power <- suppressWarnings(coexpr_pick_power(
+  mae_subset_features(mae_vst, "airway", power_features),
+  "airway",
+  assay = "vst",
+  powers = c(seq_len(10L), seq(12L, 20L, by = 2L)),
+  verbose = 0
+))
+# n = 8 does not produce a usable scale-free fit; 6 is a conventional
+# signed-network starting value for the demonstration, not a selected model.
+fit <- suppressWarnings(coexpr_wgcna(
+  mae_vst,
+  "airway",
+  assay = "vst",
+  power = 6,
+  top_n = 300L,
+  min_module_size = 12L,
+  numeric_labels = FALSE,
+  verbose = 0,
+  maxBlockSize = 400L
+))
+modules <- coexpr_modules(fit)
+traits <- mae_samples(mae_vst, "airway")[, c("dex", "cell"), drop = FALSE]
+trait <- coexpr_module_trait(fit, traits)
+membership <- coexpr_membership(fit, mae_vst, "airway", "vst")
+dex_code <- stats::setNames(
+  as.integer(mae_samples(mae_vst, "airway")$dex),
+  rownames(mae_samples(mae_vst, "airway"))
+)
+gene_significance <- stats::cor(
+  t(mae_pull_assay(mae_vst, "airway", "vst")[rownames(membership), names(dex_code)]),
+  dex_code
+)[, 1L]
+hubs <- coexpr_hubs(membership, modules, n = 3L)
+expr_for_tom <- t(mae_pull_assay(mae_vst, "airway", "vst")[names(modules), , drop = FALSE])
+tom <- WGCNA::TOMsimilarityFromExpr(
+  expr_for_tom,
+  power = 6,
+  networkType = "signed",
+  TOMType = "signed",
+  verbose = 0
+)
+dimnames(tom) <- list(names(modules), names(modules))
+```
+
+```{r placeholder, eval = !has_wgcna}
+# Placeholder extractors on the same airway HVG IDs so the default plots
+# still build when WGCNA is not installed. Not a network fit.
+features <- hvg[seq_len(18L)]
+modules <- stats::setNames(
+  rep(c("turquoise", "blue", "grey"), each = 6L),
+  features
+)
+power <- list(
+  fitIndices = data.frame(
+    Power = c(seq_len(10L), seq(12L, 20L, by = 2L)),
+    SFT.R.sq = c(
+      0.04, 0.07, 0.09, 0.11, 0.10, 0.08, 0.07, 0.06, 0.05, 0.04,
+      0.03, 0.03, 0.02, 0.02, 0.02
+    ),
+    mean.k. = c(140, 95, 70, 54, 43, 35, 29, 24, 21, 18, 14, 11, 9, 7, 6)
+  ),
+  powerEstimate = NA_real_
+)
+trait <- list(
+  correlation = matrix(
+    c(0.96, -0.27, -1.00, -0.03, 0.14, -0.78),
+    nrow = 3L,
+    dimnames = list(
+      c("MEturquoise", "MEblue", "MEbrown"),
+      c("dex", "cell")
+    )
+  ),
+  p_value = matrix(
+    c(0.01, 0.50, 0.01, 0.90, 0.70, 0.02),
+    nrow = 3L,
+    dimnames = list(
+      c("MEturquoise", "MEblue", "MEbrown"),
+      c("dex", "cell")
+    )
+  )
+)
+membership <- matrix(
+  seq(-0.7, 0.7, length.out = 54L),
+  nrow = 18L,
+  dimnames = list(features, c("MEturquoise", "MEblue", "MEbrown"))
+)
+gene_significance <- stats::setNames(as.numeric(scale(seq_len(18L))), features)
+hubs <- coexpr_hubs(membership, modules, n = 2L)
+tree <- stats::hclust(stats::dist(matrix(seq_len(3L * length(features)), nrow = length(features))))
+tree$labels <- features
+tom <- matrix(
+  0.15,
+  nrow = length(features),
+  ncol = length(features),
+  dimnames = list(features, features)
+)
+tom[1:6, 1:6] <- 0.65
+tom[7:12, 7:12] <- 0.55
+diag(tom) <- 1
+```
+
+```{r pick-module}
+module_for_plot <- {
+  labels <- unique(as.character(modules))
+  preferred <- setdiff(labels, c("grey", "0", "ME0"))
+  if (length(preferred)) preferred[[1L]] else labels[[1L]]
+}
+```
+
+# Required default plots
+
+```{r power-plot, fig.cap = "Soft-threshold diagnostics on airway VST HVGs after filterByExpr() and goodSamplesGenes(). Panel (a) is scale-free R-squared with a dashed 0.8 reference; panel (b) is mean connectivity. Eight samples do not reach a usable scale-free fit; power 6 is a conventional signed-network starting value, not a selected model.", fig.alt = "Dual-panel WGCNA diagnostics labelled (a) scale-free R-squared with a 0.8 reference line and (b) mean connectivity versus power."}
+plot_coexpr_power(power) +
+  labs(title = "Soft-threshold diagnostics")
+```
+
+```{r module-plot, fig.cap = "Feature counts in each WGCNA module (or the placeholder colours when WGCNA is absent).", fig.alt = "A bar chart of module sizes coloured by conventional WGCNA module colours."}
+plot_coexpr_modules(modules) +
+  labs(title = "Module sizes")
+```
+
+```{r trait-plot, fig.cap = "Module eigengene correlations with dexamethasone treatment and cell line. Cells show Pearson r and significance stars (* P < 0.05, ** P < 0.01, *** P < 0.001). These are the same eight samples used to build the network.", fig.alt = "A heatmap of Pearson correlations between module eigengenes and dex or cell line, with significance stars."}
+plot_coexpr_trait(trait) +
+  labs(title = "Module–trait correlations")
+```
+
+```{r membership-plot, fig.cap = "Module membership versus gene significance for dexamethasone on one module. Labels are descriptive of this matrix, not an external hub validation.", fig.alt = "A scatter plot of kME against the feature–dexamethasone correlation, with a linear fit."}
+plot_coexpr_membership(membership, gene_significance, module = module_for_plot) +
+  labs(title = paste(module_for_plot, "MM vs GS"))
+```
+
+```{r dendrogram-plot, fig.height = 5.2, fig.cap = "Gene dendrogram for the WGCNA block, with a module colour bar. Eight samples; descriptive of this fit only.", fig.alt = "A dendrogram of co-expression features with a module colour bar under the tree."}
+if (has_wgcna) {
+  plot_coexpr_dendrogram(fit, modules) +
+    labs(title = "Module dendrogram")
+} else {
+  plot_coexpr_dendrogram(tree, modules) +
+    labs(title = "Module dendrogram")
+}
+```
+
+```{r tom-plot, fig.height = 5.2, fig.cap = "Topological overlap for the same features used in module detection, ordered by module. A display subset of the network, not an independent validation.", fig.alt = "A TOM heatmap with a module colour bar."}
+tom_features <- names(modules)[seq_len(min(60L, length(modules)))]
+plot_coexpr_tom(
+  tom[tom_features, tom_features, drop = FALSE],
+  modules = modules[tom_features]
+) +
+  labs(title = "Topological overlap")
+```
+
+```{r hubs}
+knitr::kable(
+  utils::head(hubs, 12L),
+  caption = "Top intramodular features from coexpr_hubs(). IDs are Ensembl gene IDs from airway."
+)
+```
+
+Module preservation needs a second, independent MAE. `coexpr_preservation()`
+is the existing wrapper; this eight-sample experiment is not split into a
+fake validation cohort.
+
+# Limits
+
+- Eight samples are too few for a scale-free topology decision. The
+  dashed 0.8 line on panel (a) is a reference, not a reached threshold.
+- Modules, dendrogram order, TOM, and hub ranks come from the same VST
+  matrix as the trait correlations. That is description, not external
+  validation.
+- `airway` is human airway smooth muscle, not a tumour cohort.
+
+```{r session-info}
+sessionInfo()
+```

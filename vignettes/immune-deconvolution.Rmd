@@ -1,0 +1,164 @@
+---
+title: "P0: immune deconvolution with mae_simulate"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    number_sections: true
+vignette: >
+  %\VignetteIndexEntry{P0: immune deconvolution with mae_simulate}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 4.8,
+  dpi = 120,
+  fig.retina = 2
+)
+set.seed(20260912)
+library(bulkMAE)
+library(ggplot2)
+has_sce <- requireNamespace("SingleCellExperiment", quietly = TRUE)
+has_music <- requireNamespace("MuSiC", quietly = TRUE)
+```
+
+# Question and data
+
+The P0 immune / TME route is: pin a reference → `deconv_reference()` →
+`deconv()` / `deconv_music()` / `deconv_bayesprism()` → `deconv_fractions()`
+→ associate with subtype or clinical columns.
+
+Bioconductor [`airway`](https://bioconductor.org/packages/release/data/experiment/html/airway.html)
+is the preferred ExperimentData package for the other P0 articles, but it
+has **no** tissue-matched single-cell atlas. Rather than add a second
+simulator, this article uses the existing in-package helper
+`mae_simulate()` for bulk counts and sample metadata. Grouping columns
+come from that MAE. The numbers are not immune infiltration.
+
+CIBERSORTx is not the default. `deconv_cibersortx_input()` only prepares a
+local mixture table.
+
+```{r install, eval=FALSE}
+# Optional backends. A real study pins the reference atlas and MuSiC commit.
+# BiocManager::install("SingleCellExperiment")
+```
+
+```{r load-simulate}
+mae <- mae_simulate(n_features = 80L, n_samples = 8L, seed = 20260912L)
+sample_table <- mae_samples(mae, "rna")
+bulk <- mae_pull_assay(mae, "rna", "counts")
+genes <- rownames(bulk)
+samples <- rownames(sample_table)
+knitr::kable(
+  sample_table[, c("condition", "batch"), drop = FALSE],
+  caption = "mae_simulate() sample metadata used for grouping. Synthetic; not a clinical cohort."
+)
+```
+
+# Pin the reference, then extract fractions
+
+`deconv_reference()` only standardizes a user-supplied count matrix. The
+tiny reference below shares `mae_simulate()` gene IDs so a later MuSiC
+call can run. It is built in this article, not by a new package helper,
+and it is not a biological atlas.
+
+```{r reference, eval = has_sce}
+cell_types <- c("B_cell", "T_cell", "Myeloid")
+n_donors <- 4L
+cells_per_type <- 3L
+n_cells <- n_donors * length(cell_types) * cells_per_type
+cell_names <- sprintf("cell%03d", seq_len(n_cells))
+cell_type <- rep(rep(cell_types, each = cells_per_type), n_donors)
+donor <- rep(
+  sprintf("donor%02d", seq_len(n_donors)),
+  each = length(cell_types) * cells_per_type
+)
+type_mean <- c(B_cell = 12, T_cell = 20, Myeloid = 35)
+sc_counts <- matrix(
+  stats::rnbinom(length(genes) * n_cells, mu = type_mean[cell_type], size = 8),
+  nrow = length(genes),
+  dimnames = list(genes, cell_names)
+)
+storage.mode(sc_counts) <- "integer"
+cell_data <- data.frame(
+  cell_type = cell_type,
+  sample_id = donor,
+  row.names = cell_names,
+  check.names = FALSE
+)
+sc_reference <- deconv_reference(
+  counts = sc_counts,
+  cell_data = cell_data,
+  cell_type = "cell_type",
+  sample = "sample_id"
+)
+sc_reference
+```
+
+```{r music, eval = has_sce && has_music}
+music <- deconv_music(
+  mae,
+  "rna",
+  sc_reference = sc_reference,
+  assay = "counts"
+)
+fractions <- deconv_fractions(music)
+```
+
+```{r aligned-fractions, eval = !(has_sce && has_music)}
+# Stand-in matrix so the default plots run without MuSiC. Columns are the
+# mae_simulate() sample names; values follow condition. Not a backend fit.
+treated <- as.integer(sample_table$condition == "treated")
+fractions <- rbind(
+  B_cell = 0.42 - 0.18 * treated,
+  T_cell = 0.36 - 0.04 * treated,
+  Myeloid = 0.22 + 0.22 * treated
+)
+colnames(fractions) <- samples
+fractions <- deconv_fractions(fractions)
+```
+
+```{r groups}
+group <- stats::setNames(sample_table$condition, samples)
+batch <- stats::setNames(sample_table$batch, samples)
+identical(colnames(fractions), samples)
+```
+
+A real study records the atlas name, species, tissue, identifier type, and
+backend version. Signature methods such as quanTIseq still go through
+`deconv()` and need HGNC symbols plus a non-log TPM-like assay.
+
+# Required default plots
+
+```{r stacked, fig.cap = "Stacked estimated fractions aligned to mae_simulate() samples. Synthetic mixture; not a deconvolution of a biological TME cohort.", fig.alt = "Stacked bars of B-cell, T-cell, and myeloid estimated fractions across eight simulated samples."}
+plot_deconv_stacked(fractions) +
+  labs(title = "Estimated fractions by sample")
+```
+
+```{r box, fig.cap = "Estimated fractions compared by the mae_simulate() condition column, with jittered sample points. Synthetic; not real immune infiltration.", fig.alt = "Boxplots with jitter of each cell type split into control versus treated simulated samples."}
+plot_deconv_box(fractions, group) +
+  labs(title = "Estimated fractions by condition")
+```
+
+```{r heatmap, fig.height = 4.6, fig.cap = "Estimated-fraction heatmap split by the mae_simulate() batch column. Fill values remain synthetic unless MuSiC ran.", fig.alt = "A heatmap of estimated cell-type fractions with columns faceted by simulated batch."}
+plot_deconv_heatmap(fractions, column_split = batch) +
+  labs(title = "Estimated fractions by batch")
+```
+
+# Limits
+
+- `mae_simulate()` annotations and any stand-in fractions are not TME
+  biology and must not be cited as infiltration.
+- `airway` remains the bulk source for the other P0 articles; it is
+  skipped here only because it has no single-cell reference.
+- xCell scores are enrichments, not fractions; the stacked helper labels
+  the y-axis `Estimated value` when columns do not sum to one.
+- No CIBERSORTx upload is performed.
+
+```{r session-info}
+sessionInfo()
+```

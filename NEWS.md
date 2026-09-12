@@ -1,5 +1,30 @@
 # bulkMAE (development version)
 
+- Adds the smallest P0-route extractors so one co-expression, subtyping, and
+  deconvolution path can be chained: `mae_variable_features()`,
+  `coexpr_module_trait()`, `coexpr_membership()`, `coexpr_hubs()`, and
+  `deconv_fractions()`.
+- Adds publication-default ggplot helpers for those routes
+  (`plot_coexpr_*()`, `plot_cluster_*()`, `plot_deconv_*()`).
+- Figure-audit follow-up: soft-threshold plots are dual-panel (a)/(b) with a
+  0.8 reference line and panel y-axis names; ME–trait cells show significance
+  stars; consensus CDF uses a proper multi-k ECDF plus delta-area and PAC
+  helpers; consensus/expression heatmaps accept annotation bars and gene
+  symbols; deconvolution boxplots overlay jitter and share an
+  `Estimated fraction` axis. Adds `plot_coexpr_dendrogram()`,
+  `plot_coexpr_tom()`, `plot_cluster_delta()`, `plot_cluster_pac()`,
+  `cluster_consensus_delta_area()`, and `cluster_consensus_pac()`.
+  Tiny-n airway power selection remains a labelled diagnostic, not a
+  scale-free claim. TOM hides feature IDs by default and keeps the module
+  colour legend filled; split expression heatmaps drop the clipped
+  Annotation strip label.
+- Runs the three P0 routes on Bioconductor `airway` where that dataset
+  is enough (same filter/VST design as the QC/DE tutorial). Deconvolution
+  uses existing `mae_simulate()` because `airway` has no single-cell
+  reference; grouping columns stay aligned to that MAE. CIBERSORTx is
+  still input-only.
+- Records the reuse-first gap table in `docs/p0-route-gaps.md`.
+
 - Rewrites the README as a landing page with official backend links and one
   square patchwork gallery of volcano, heatmap, ORA network, and GSEA ridge
   plots.

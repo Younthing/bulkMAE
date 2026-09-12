@@ -139,6 +139,110 @@ test_that("activity, WGCNA, and NMF outputs have public downstream accessors", {
   expect_error(coexpr_modules(list(colors = c("blue", "brown"))), "named")
 })
 
+test_that("WGCNA module-trait and hub extractors align by identifier", {
+  mes <- matrix(
+    c(0.1, 0.8, 0.2, 0.7, 0.9, 0.3, 0.4, 0.6),
+    nrow = 4L,
+    dimnames = list(paste0("sample", 1:4), c("MEblue", "MEbrown"))
+  )
+  fit <- list(
+    colors = c(gene1 = "blue", gene2 = "brown", gene3 = "blue"),
+    MEs = mes
+  )
+  traits <- data.frame(
+    condition = c(0, 0, 1, 1),
+    row.names = paste0("sample", 4:1)
+  )
+  trait <- coexpr_module_trait(fit, traits)
+  expect_identical(dim(trait$correlation), c(2L, 1L))
+  expect_identical(rownames(trait$correlation), c("MEblue", "MEbrown"))
+  expect_true(is.finite(trait$correlation[1L, 1L]))
+  expect_true(is.finite(trait$p_value[1L, 1L]))
+
+  mae <- make_toy_mae(n_features = 3L, n_samples = 4L)
+  membership <- coexpr_membership(fit, mae, "rna", "log_expression")
+  expect_identical(rownames(membership), c("gene1", "gene2", "gene3"))
+  expect_identical(colnames(membership), c("MEblue", "MEbrown"))
+
+  hubs <- coexpr_hubs(membership, fit$colors, n = 1L)
+  expect_identical(names(hubs), c("feature", "module", "membership"))
+  expect_identical(nrow(hubs), 2L)
+  expect_setequal(hubs$module, c("blue", "brown"))
+  expect_error(coexpr_module_trait(list(colors = fit$colors), traits), "MEs")
+  expect_error(coexpr_hubs(membership, c("blue", "brown"), n = 1L), "named")
+})
+
+test_that("deconv_fractions extracts cell-by-sample matrices", {
+  table <- data.frame(
+    cell_type = c("B_cell", "T_cell"),
+    sample2 = c(0.2, 0.8),
+    sample1 = c(0.3, 0.7),
+    check.names = FALSE
+  )
+  from_table <- deconv_fractions(table)
+  expect_identical(rownames(from_table), c("B_cell", "T_cell"))
+  expect_identical(colnames(from_table), c("sample2", "sample1"))
+  expect_equal(from_table["B_cell", "sample1"], 0.3)
+
+  music <- list(Est.prop.weighted = t(from_table))
+  from_music <- deconv_fractions(music)
+  expect_equal(from_music, from_table)
+
+  from_matrix <- deconv_fractions(
+    t(from_table),
+    orientation = "samples_by_cells"
+  )
+  expect_equal(from_matrix, from_table)
+  expect_error(deconv_fractions(list(other = 1)), "Est.prop.weighted")
+  expect_error(
+    deconv_fractions(matrix(-1, 1L, 1L, dimnames = list("a", "b"))),
+    "non-negative"
+  )
+})
+
+test_that("deconvolution plots align to mae_simulate sample metadata", {
+  mae <- mae_simulate(n_features = 40L, n_samples = 8L, seed = 7L)
+  sample_table <- mae_samples(mae, "rna")
+  treated <- as.integer(sample_table$condition == "treated")
+  fractions <- rbind(
+    B_cell = 0.42 - 0.18 * treated,
+    T_cell = 0.36 - 0.04 * treated,
+    Myeloid = 0.22 + 0.22 * treated
+  )
+  colnames(fractions) <- rownames(sample_table)
+  extracted <- deconv_fractions(fractions)
+  expect_identical(colnames(extracted), rownames(sample_table))
+  expect_equal(colSums(extracted), rep(1, 8L), tolerance = 1e-8, ignore_attr = TRUE)
+
+  group <- stats::setNames(sample_table$condition, rownames(sample_table))
+  boxed <- plot_deconv_box(extracted, group)
+  expect_s3_class(boxed, "ggplot")
+
+  if (requireNamespace("SingleCellExperiment", quietly = TRUE)) {
+    genes <- rownames(mae_pull_assay(mae, "rna", "counts"))
+    cells <- paste0("cell", seq_len(6L))
+    counts <- matrix(
+      1L,
+      nrow = length(genes),
+      ncol = 6L,
+      dimnames = list(genes, cells)
+    )
+    cell_data <- data.frame(
+      cell_type = rep(c("B_cell", "T_cell"), each = 3L),
+      sample_id = rep(c("donor1", "donor2"), each = 3L),
+      row.names = cells
+    )
+    reference <- deconv_reference(
+      counts,
+      cell_data,
+      cell_type = "cell_type",
+      sample = "sample_id"
+    )
+    expect_true(methods::is(reference, "SingleCellExperiment"))
+    expect_identical(rownames(SummarizedExperiment::assay(reference)), genes)
+  }
+})
+
 test_that("NMF native fits expose named sample and feature classes", {
   skip_if_not_installed("NMF")
   mae <- mae_simulate(n_features = 30L, n_samples = 8L, seed = 95L)

@@ -1,0 +1,216 @@
+---
+title: "P0: molecular subtyping on airway"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    number_sections: true
+vignette: >
+  %\VignetteIndexEntry{P0: molecular subtyping on airway}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 4.8,
+  dpi = 120,
+  fig.retina = 2
+)
+set.seed(20260912)
+library(bulkMAE)
+library(ggplot2)
+has_ccp <- requireNamespace("ConsensusClusterPlus", quietly = TRUE)
+```
+
+# Question and data
+
+This article runs the P0 subtyping route on
+[`airway`](https://bioconductor.org/packages/release/data/experiment/html/airway.html):
+HVG features → `cluster_consensus()` → sample labels → existing DE / clinical
+helpers for characterization. Data construction matches the
+[airway QC/DE tutorial](airway-qc-de.html).
+
+Eight paired samples cannot define a molecular subtype system. `k` is
+shown as a diagnostic, not selected as a biological truth. UMAP and t-SNE
+remain exploratory and are not required figures.
+
+```{r install, eval=FALSE}
+BiocManager::install(c("airway", "edgeR", "DESeq2", "ConsensusClusterPlus"))
+```
+
+```{r load-airway}
+data("airway", package = "airway")
+counts <- SummarizedExperiment::assay(airway, "counts")
+sample_data <- as.data.frame(
+  SummarizedExperiment::colData(airway),
+  optional = TRUE
+)
+feature_data <- as.data.frame(
+  SummarizedExperiment::rowData(airway),
+  optional = TRUE
+)[, c("gene_id", "gene_name", "symbol", "gene_biotype"), drop = FALSE]
+sample_data$dex <- factor(sample_data$dex, levels = c("untrt", "trt"))
+sample_data$cell <- factor(sample_data$cell)
+
+mae <- mae_from_matrix(
+  expression = counts,
+  samples = sample_data,
+  row_data = feature_data,
+  experiment = "airway",
+  assay = "counts"
+)
+keep <- filter_expr(mae, "airway", group = "dex")
+mae_filtered <- mae_subset_features(mae, "airway", names(keep)[keep])
+vst <- transform_vst(
+  mae_filtered,
+  "airway",
+  blind = FALSE,
+  design = ~ cell + dex
+)
+mae_vst <- mae_add_assay(mae_filtered, "airway", vst, name = "vst")
+hvg <- mae_variable_features(mae_vst, "airway", "vst", top_n = 150L)
+heatmap_features <- hvg[seq_len(20L)]
+cluster_mae <- mae_subset_features(mae_vst, "airway", hvg)
+```
+
+The clustering matrix uses `r length(hvg)` HVGs. The heatmap below uses the
+first `r length(heatmap_features)` of that same list, fixed before looking
+at cluster labels.
+
+# Consensus clustering
+
+```{r consensus, eval = has_ccp}
+output_directory <- tempfile("bulkmae-airway-subtype-")
+dir.create(output_directory)
+fit <- cluster_consensus(
+  cluster_mae,
+  "airway",
+  assay = "vst",
+  max_k = 5L,
+  repetitions = 50L,
+  item_fraction = 0.8,
+  seed = 20260912L,
+  title = output_directory,
+  plot = NULL
+)
+classes <- cluster_consensus_classes(fit, k = 2L)
+```
+
+```{r placeholder, eval = !has_ccp}
+samples <- rownames(mae_samples(cluster_mae, "airway"))
+make_consensus <- function(seed) {
+  set.seed(seed)
+  value <- matrix(
+    stats::runif(length(samples)^2, 0.25, 0.95),
+    nrow = length(samples)
+  )
+  value <- (value + t(value)) / 2
+  diag(value) <- 1
+  dimnames(value) <- list(samples, samples)
+  value
+}
+fit <- vector("list", 5L)
+for (k in 2:5) {
+  fit[[k]] <- list(
+    consensusMatrix = make_consensus(20L + k),
+    consensusClass = stats::setNames(
+      rep(seq_len(k), length.out = length(samples)),
+      samples
+    )
+  )
+}
+fit[[2]]$consensusClass <- stats::setNames(
+  as.integer(mae_samples(cluster_mae, "airway")$dex),
+  samples
+)
+classes <- cluster_consensus_classes(fit, k = 2L)
+```
+
+```{r attach}
+labeled <- mae_add_sample_data(cluster_mae, "airway", classes, name = "subtype")
+sample_table <- mae_samples(labeled, "airway")
+knitr::kable(
+  table(subtype = sample_table$subtype, dex = sample_table$dex),
+  caption = "Consensus classes versus dexamethasone. Same samples; not a validation cohort."
+)
+```
+
+GSVA / eigengene features can replace HVGs by adding a score matrix with
+`mae_add_experiment()` and clustering that leaf. `cluster_nmf()` is the
+alternate factorization path on a non-negative assay.
+
+# Required default plots
+
+```{r consensus-heatmap, fig.height = 5.2, fig.cap = "Pairwise consensus matrix for k = 2 on 150 airway HVGs, with a subtype annotation bar.", fig.alt = "A heatmap of sample-to-sample consensus values for the k = 2 solution with a class annotation bar."}
+plot_cluster_consensus(
+  fit,
+  k = 2L,
+  annotation = sample_table[, c("subtype", "dex"), drop = FALSE]
+) +
+  labs(title = "Consensus matrix, k = 2")
+```
+
+```{r consensus-cdf, fig.cap = "Consensus CDF for k = 2 to k = 5. With eight samples these curves are a diagnostic, not a k-selection proof.", fig.alt = "Step functions of pairwise consensus values from k = 2 through k = 5."}
+plot_cluster_cdf(fit) +
+  labs(title = "Consensus CDF")
+```
+
+```{r consensus-delta, fig.cap = "Relative delta area of the consensus CDF. Shown as a diagnostic beside PAC; k is not selected from this curve.", fig.alt = "A line plot of relative delta area versus k."}
+plot_cluster_delta(fit) +
+  labs(title = "Relative delta area")
+```
+
+```{r consensus-pac, fig.cap = "Proportion of ambiguous clustering (PAC; consensus in (0.1, 0.9)). Lower is more decisive. Eight samples; not a subtype discovery.", fig.alt = "A bar chart of PAC at each candidate k."}
+plot_cluster_pac(fit) +
+  labs(title = "Proportion of ambiguous clustering")
+```
+
+```{r subtype-sizes, fig.cap = "Subtype counts split by dexamethasone treatment.", fig.alt = "Stacked bars of consensus class membership split by untreated versus treated."}
+plot_cluster_sizes(
+  classes,
+  group = stats::setNames(sample_table$dex, rownames(sample_table))
+) +
+  labs(title = "Subtype sample distribution")
+```
+
+```{r subtype-heatmap, fig.height = 5.5, fig.cap = "Row-scaled heatmap of 20 pre-declared HVGs with gene symbols, split by consensus class and annotated by dexamethasone. Descriptive of the same matrix used to define the classes.", fig.alt = "A heatmap of 20 highly variable airway genes labelled by symbol, with subtype facets and a dexamethasone annotation bar."}
+feature_table <- mae_feature_data(labeled, "airway")[heatmap_features, , drop = FALSE]
+symbol_labels <- as.character(feature_table$symbol)
+gene_names <- as.character(feature_table$gene_name)
+missing_symbol <- is.na(symbol_labels) | !nzchar(symbol_labels)
+symbol_labels[missing_symbol] <- gene_names[missing_symbol]
+still_missing <- is.na(symbol_labels) | !nzchar(symbol_labels)
+symbol_labels[still_missing] <- heatmap_features[still_missing]
+names(symbol_labels) <- heatmap_features
+plot_assay_heatmap(
+  labeled,
+  "airway",
+  assay = "vst",
+  features = heatmap_features,
+  column_split = "subtype",
+  column_annotation = "dex",
+  feature_label = symbol_labels
+) +
+  labs(title = "HVG heatmap by subtype")
+```
+
+# Characterization without a new API
+
+`mae_add_sample_data()` writes the class vector onto the leaf. Downstream
+`de_*()` calls can include `subtype` in a design if a study needs that
+contrast; on these eight samples that contrast is the same experiment, not
+an independent lock. This article stops at the cross-tab with `dex`.
+
+# Limits
+
+- `k` is not chosen automatically and is not a subtype discovery.
+  CDF, delta area, and PAC are shown together as diagnostics.
+- Classes and the feature heatmap share one matrix.
+- Do not treat UMAP/t-SNE as a required subtype figure.
+
+```{r session-info}
+sessionInfo()
+```
