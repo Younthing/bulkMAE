@@ -513,6 +513,9 @@ plot_de_ma <- function(
 #'   hierarchical clustering. Dendrograms are not drawn.
 #' @param column_split Optional sample metadata column or complete sample-named
 #'   vector used to split the x axis.
+#' @param column_annotation Optional sample metadata column name, character
+#'   vector of metadata columns, sample-named vector, or sample-row data frame
+#'   drawn as annotation bars above the heatmap.
 #' @param feature_label Optional feature metadata column or complete
 #'   feature-named labels. Duplicate display labels are made unique.
 #'
@@ -529,6 +532,7 @@ plot_assay_heatmap <- function(
     cluster_rows = TRUE,
     cluster_columns = TRUE,
     column_split = NULL,
+    column_annotation = NULL,
     feature_label = NULL
 ) {
   scale <- match.arg(scale)
@@ -588,6 +592,13 @@ plot_assay_heatmap <- function(
   )
   data$sample <- factor(data$sample, levels = column_order)
   if (!is.null(split)) data$split <- split[as.character(data$sample)]
+  tracks <- .plot_mae_column_annotation(
+    column_annotation,
+    mae_samples(x, experiment),
+    column_order
+  )
+  component_levels <- if (is.null(tracks)) "Expression" else c("Annotation", "Expression")
+  data$component <- factor("Expression", levels = component_levels)
   plot <- ggplot2::ggplot(data, ggplot2::aes(
     x = .data[["sample"]], y = .data[["feature"]], fill = .data[["value"]]
   )) +
@@ -609,17 +620,69 @@ plot_assay_heatmap <- function(
   } else {
     plot + ggplot2::scale_fill_viridis_c(name = "Assay value")
   }
-  if (!is.null(split)) {
-    plot <- plot + ggplot2::facet_grid(cols = ggplot2::vars(.data[["split"]]),
-                                      scales = "free_x", space = "free_x")
+  if (!is.null(tracks)) {
+    styled <- .plot_annotation_style(tracks, column_order)
+    styled$data$component <- factor("Annotation", levels = component_levels)
+    if (!is.null(split)) {
+      styled$data$split <- split[as.character(styled$data$sample)]
+    }
+    plot <- plot +
+      ggplot2::geom_tile(
+        data = styled$data,
+        mapping = ggplot2::aes(
+          x = .data[["sample"]],
+          y = .data[["track"]],
+          colour = .data[["legend"]]
+        ),
+        fill = styled$data$fill_colour,
+        linewidth = 0.15,
+        inherit.aes = FALSE
+      ) +
+      ggplot2::scale_colour_manual(values = styled$legend_fills, name = "Annotation")
+  }
+  if (!is.null(split) && !is.null(tracks)) {
+    plot <- plot + ggplot2::facet_grid(
+      rows = ggplot2::vars(.data[["component"]]),
+      cols = ggplot2::vars(.data[["split"]]),
+      scales = "free",
+      space = "free"
+    )
+  } else if (!is.null(split)) {
+    plot <- plot + ggplot2::facet_grid(
+      cols = ggplot2::vars(.data[["split"]]),
+      scales = "free_x",
+      space = "free_x"
+    )
+  } else if (!is.null(tracks)) {
+    plot <- plot + ggplot2::facet_grid(
+      rows = ggplot2::vars(.data[["component"]]),
+      scales = "free_y",
+      space = "free_y"
+    )
   }
   .plot_with_dimensions(
     plot,
     width = .plot_clamped_dimension(ncol(matrix), base = 5, per_item = 0.5,
                                     minimum = 10, maximum = 18),
     height = .plot_clamped_dimension(nrow(matrix), base = 4, per_item = 0.28,
-                                     minimum = 8, maximum = 20)
+                                     minimum = 8, maximum = 20) +
+      if (is.null(tracks)) 0 else 1.1
   )
+}
+
+.plot_mae_column_annotation <- function(column_annotation, sample_data, ids) {
+  if (is.null(column_annotation)) {
+    return(NULL)
+  }
+  if (is.character(column_annotation) && is.null(names(column_annotation))) {
+    .plot_require_columns(sample_data, column_annotation, "sample metadata")
+    if (!all(ids %in% rownames(sample_data))) {
+      stop("Metadata do not contain all selected samples.", call. = FALSE)
+    }
+    frame <- sample_data[ids, column_annotation, drop = FALSE]
+    return(.plot_annotation_frame(frame, ids, "column_annotation"))
+  }
+  .plot_annotation_frame(column_annotation, ids, "column_annotation")
 }
 
 .bulkmae_colours <- c(

@@ -1,14 +1,25 @@
 #' Plot WGCNA soft-threshold diagnostics
 #'
+#' Two panels share the candidate-power x axis: (a) scale-free topology
+#' model fit and (b) mean connectivity. A dashed reference line marks the
+#' conventional R-squared cut. The helper does not choose a power.
+#'
 #' @param fit A native list returned by [coexpr_pick_power()].
+#' @param r_squared Horizontal reference drawn only on panel (a).
 #'
 #' @return An unprinted standard ggplot object carrying recommended physical
 #'   dimensions for [plot_save()].
 #' @family plotting
 #' @export
-plot_coexpr_power <- function(fit) {
+plot_coexpr_power <- function(fit, r_squared = 0.8) {
   if (!is.list(fit) || is.null(fit$fitIndices)) {
     stop("`fit` must be a pickSoftThreshold list containing `fitIndices`.", call. = FALSE)
+  }
+  if (
+    !is.numeric(r_squared) || length(r_squared) != 1L || is.na(r_squared) ||
+      !is.finite(r_squared) || r_squared < 0 || r_squared > 1
+  ) {
+    stop("`r_squared` must be one finite number in [0, 1].", call. = FALSE)
   }
   indices <- as.data.frame(fit$fitIndices, optional = TRUE)
   required <- c("Power", "SFT.R.sq", "mean.k.")
@@ -16,39 +27,57 @@ plot_coexpr_power <- function(fit) {
   .plot_assert_finite_numeric(indices$Power, "`fit$fitIndices$Power`")
   .plot_assert_finite_numeric(indices$SFT.R.sq, "`fit$fitIndices$SFT.R.sq`")
   .plot_assert_finite_numeric(indices$mean.k., "`fit$fitIndices$mean.k.`")
+  panel_levels <- c("(a) Scale-free R\u00b2", "(b) Mean connectivity")
   data <- rbind(
     data.frame(
       power = indices$Power,
       value = indices$SFT.R.sq,
-      metric = "Scale-free R\u00b2",
+      panel = panel_levels[[1L]],
       stringsAsFactors = FALSE
     ),
     data.frame(
       power = indices$Power,
       value = indices$mean.k.,
-      metric = "Mean connectivity",
+      panel = panel_levels[[2L]],
       stringsAsFactors = FALSE
     )
   )
-  data$metric <- factor(
-    data$metric,
-    levels = c("Scale-free R\u00b2", "Mean connectivity")
+  data$panel <- factor(data$panel, levels = panel_levels)
+  reference <- data.frame(
+    panel = factor(panel_levels[[1L]], levels = panel_levels),
+    y = r_squared
   )
   plot <- ggplot2::ggplot(data, ggplot2::aes(
     x = .data[["power"]], y = .data[["value"]]
   )) +
+    ggplot2::geom_hline(
+      data = reference,
+      mapping = ggplot2::aes(yintercept = .data[["y"]]),
+      colour = "#666666",
+      linetype = "dashed",
+      linewidth = 0.35
+    ) +
     ggplot2::geom_line(colour = .bulkmae_qualitative[["blue"]], linewidth = 0.4) +
     ggplot2::geom_point(colour = .bulkmae_qualitative[["blue"]], size = 1.2) +
-    ggplot2::facet_wrap(ggplot2::vars(.data[["metric"]]), scales = "free_y") +
+    ggplot2::facet_wrap(
+      ggplot2::vars(.data[["panel"]]),
+      scales = "free_y",
+      nrow = 1,
+      strip.position = "left"
+    ) +
     ggplot2::labs(
       x = "Soft-threshold power",
-      y = "Diagnostic value",
+      y = NULL,
       alt = paste(
-        "Scale-free topology R-squared and mean connectivity",
-        "across candidate WGCNA soft-threshold powers."
+        "Dual-panel WGCNA soft-threshold diagnostics: scale-free R-squared",
+        "with a reference line, and mean connectivity versus power."
       )
     ) +
-    theme_bulkmae()
+    theme_bulkmae() +
+    ggplot2::theme(
+      strip.placement = "outside",
+      strip.background = ggplot2::element_blank()
+    )
   .plot_with_dimensions(plot, width = 12, height = 5.5)
 }
 
@@ -130,9 +159,14 @@ plot_coexpr_trait <- function(trait) {
     match(data$module, rownames(p_value)),
     match(data$trait, colnames(p_value))
   )]
+  data$stars <- .plot_significance_stars(data$p_value)
   data$label <- ifelse(
     is.finite(data$correlation),
-    sprintf("%.2f", data$correlation),
+    ifelse(
+      nzchar(data$stars),
+      paste0(sprintf("%.2f", data$correlation), "\n", data$stars),
+      sprintf("%.2f", data$correlation)
+    ),
     ""
   )
   data$module <- factor(data$module, levels = rev(rownames(correlation)))
@@ -155,7 +189,10 @@ plot_coexpr_trait <- function(trait) {
     ggplot2::labs(
       x = "Trait",
       y = "Module",
-      alt = "A heatmap of Pearson correlations between module eigengenes and sample traits."
+      alt = paste(
+        "A heatmap of Pearson correlations between module eigengenes",
+        "and sample traits, with significance stars in each cell."
+      )
     ) +
     theme_bulkmae() +
     ggplot2::theme(
@@ -235,18 +272,225 @@ plot_coexpr_membership <- function(membership, gene_significance, module) {
   .plot_with_dimensions(plot, width = 8, height = 8)
 }
 
+#' Plot a WGCNA gene dendrogram with a module colour bar
+#'
+#' @param dendrogram An `hclust` or `dendrogram` object, or a
+#'   [coexpr_wgcna()] list containing `dendrograms`.
+#' @param modules Optional feature-named module vector used as a colour bar.
+#'   When `dendrogram` is a WGCNA list, [coexpr_modules()] is used by default.
+#'
+#' @return An unprinted standard ggplot object carrying recommended physical
+#'   dimensions for [plot_save()].
+#' @family plotting
+#' @export
+plot_coexpr_dendrogram <- function(dendrogram, modules = NULL) {
+  if (is.list(dendrogram) && !is.null(dendrogram$dendrograms)) {
+    if (is.null(modules) && !is.null(dendrogram$colors)) {
+      modules <- coexpr_modules(dendrogram)
+    }
+    trees <- dendrogram$dendrograms
+    if (!length(trees)) {
+      stop("The WGCNA fit has no `dendrograms`.", call. = FALSE)
+    }
+    dendrogram <- trees[[1L]]
+  }
+  tree <- .plot_as_hclust(dendrogram)
+  labels <- tree$labels
+  if (is.null(labels) || anyNA(labels) || any(!nzchar(labels))) {
+    stop("The dendrogram must have unique, non-missing leaf labels.", call. = FALSE)
+  }
+  .plot_assert_ids(labels, "Dendrogram leaf labels")
+  segments <- .plot_hclust_segments(tree)
+  leaf_order <- labels[tree$order]
+  segments$component <- factor("Dendrogram", levels = c("Dendrogram", "Module"))
+  plot <- ggplot2::ggplot() +
+    ggplot2::geom_segment(
+      data = segments,
+      mapping = ggplot2::aes(
+        x = .data[["x"]], xend = .data[["xend"]],
+        y = .data[["y"]], yend = .data[["yend"]]
+      ),
+      colour = "#222222",
+      linewidth = 0.25
+    )
+  if (!is.null(modules)) {
+    modules <- .plot_named_labels(modules, "modules")
+    if (!setequal(names(modules), labels)) {
+      stop("`modules` names must match dendrogram leaves exactly.", call. = FALSE)
+    }
+    bar <- data.frame(
+      feature = leaf_order,
+      x = seq_along(leaf_order),
+      module = as.character(unname(modules[leaf_order])),
+      component = factor("Module", levels = c("Dendrogram", "Module")),
+      stringsAsFactors = FALSE
+    )
+    fills <- .plot_module_colours(unique(bar$module))
+    plot <- plot +
+      ggplot2::geom_tile(
+        data = bar,
+        mapping = ggplot2::aes(
+          x = .data[["x"]], y = 0.5, fill = .data[["module"]]
+        ),
+        height = 1,
+        colour = "#222222",
+        linewidth = 0.05
+      ) +
+      ggplot2::scale_fill_manual(values = fills, name = "Module")
+  }
+  plot <- plot +
+    ggplot2::facet_grid(
+      rows = ggplot2::vars(.data[["component"]]),
+      scales = "free_y",
+      space = "free_y"
+    ) +
+    ggplot2::scale_x_continuous(expand = c(0.01, 0)) +
+    ggplot2::labs(
+      x = "Feature",
+      y = "Height",
+      alt = "A gene dendrogram with an optional WGCNA module colour bar."
+    ) +
+    theme_bulkmae() +
+    ggplot2::theme(
+      panel.grid = ggplot2::element_blank(),
+      axis.text.x = ggplot2::element_blank(),
+      axis.ticks.x = ggplot2::element_blank()
+    )
+  .plot_with_dimensions(
+    plot,
+    width = .plot_clamped_dimension(
+      length(leaf_order), base = 8, per_item = 0.04, minimum = 10, maximum = 18
+    ),
+    height = 7
+  )
+}
+
+#' Plot a topological-overlap matrix
+#'
+#' @param tom A feature-named square TOM or adjacency matrix.
+#' @param modules Optional feature-named module vector used to order features
+#'   and draw annotation bars.
+#' @param show_names Draw feature axis labels.
+#'
+#' @return An unprinted standard ggplot object carrying recommended physical
+#'   dimensions for [plot_save()].
+#' @family plotting
+#' @export
+plot_coexpr_tom <- function(tom, modules = NULL, show_names = FALSE) {
+  .plot_assert_flag(show_names, "show_names")
+  tom <- as.matrix(tom)
+  if (!is.numeric(tom) || nrow(tom) != ncol(tom) || !nrow(tom)) {
+    stop("`tom` must be a non-empty numeric square matrix.", call. = FALSE)
+  }
+  .plot_assert_ids(rownames(tom), "TOM row names")
+  .plot_assert_ids(colnames(tom), "TOM column names")
+  if (!setequal(rownames(tom), colnames(tom))) {
+    stop("TOM row and column names must contain the same features.", call. = FALSE)
+  }
+  tom <- tom[rownames(tom), rownames(tom), drop = FALSE]
+  if (any(!is.finite(tom)) || any(tom < 0 | tom > 1)) {
+    stop("TOM values must be finite and lie in [0, 1].", call. = FALSE)
+  }
+  order <- rownames(tom)
+  if (!is.null(modules)) {
+    modules <- .plot_named_labels(modules, "modules")
+    if (!setequal(names(modules), rownames(tom))) {
+      stop("`modules` names must match TOM features exactly.", call. = FALSE)
+    }
+    order <- names(sort(as.character(modules[order]), method = "radix"))
+    tom <- tom[order, order, drop = FALSE]
+  } else if (nrow(tom) > 2L) {
+    order <- rownames(tom)[stats::hclust(stats::dist(tom))$order]
+    tom <- tom[order, order, drop = FALSE]
+  }
+  data <- expand.grid(row = order, column = order, stringsAsFactors = FALSE)
+  data$value <- tom[cbind(
+    match(data$row, rownames(tom)),
+    match(data$column, colnames(tom))
+  )]
+  data$row <- factor(data$row, levels = rev(order))
+  data$column <- factor(data$column, levels = order)
+  data$component <- factor("TOM", levels = c("Module", "TOM"))
+  plot <- ggplot2::ggplot(data, ggplot2::aes(
+    x = .data[["column"]], y = .data[["row"]], fill = .data[["value"]]
+  )) +
+    ggplot2::geom_tile() +
+    ggplot2::scale_fill_gradient(
+      low = "#FFFFFF", high = "#B40426",
+      limits = c(0, 1), name = "TOM"
+    )
+  if (!is.null(modules)) {
+    bar <- data.frame(
+      column = factor(order, levels = order),
+      row = factor("Module", levels = "Module"),
+      module = as.character(unname(modules[order])),
+      component = factor("Module", levels = c("Module", "TOM")),
+      stringsAsFactors = FALSE
+    )
+    fills <- .plot_module_colours(unique(bar$module))
+    plot <- plot +
+      ggplot2::geom_tile(
+        data = bar,
+        mapping = ggplot2::aes(
+          x = .data[["column"]], y = .data[["row"]], colour = .data[["module"]]
+        ),
+        fill = unname(fills[bar$module]),
+        linewidth = 0,
+        inherit.aes = FALSE
+      ) +
+      ggplot2::scale_colour_manual(values = fills, name = "Module")
+  }
+  plot <- plot +
+    ggplot2::facet_grid(
+      rows = ggplot2::vars(.data[["component"]]),
+      scales = "free_y",
+      space = "free_y"
+    ) +
+    ggplot2::labs(
+      x = "Feature",
+      y = "Feature",
+      alt = "A heatmap of topological overlap with an optional module colour bar."
+    ) +
+    theme_bulkmae() +
+    ggplot2::theme(
+      panel.grid = ggplot2::element_blank(),
+      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)
+    )
+  if (!show_names) {
+    plot <- plot + ggplot2::theme(
+      axis.text = ggplot2::element_blank(),
+      axis.ticks = ggplot2::element_blank()
+    )
+  }
+  panel_size <- .plot_clamped_dimension(
+    nrow(tom), base = 6, per_item = 0.12, minimum = 8.5, maximum = 16
+  )
+  .plot_with_dimensions(
+    plot,
+    width = panel_size + 1.2,
+    height = panel_size + if (is.null(modules)) 0 else 1
+  )
+}
+
 #' Plot a consensus-clustering consensus matrix
 #'
 #' @param results A native [cluster_consensus()] list, or a square consensus
 #'   matrix with sample dimnames.
 #' @param k Cluster count used when `results` is a ConsensusClusterPlus list.
 #' @param show_names Draw sample axis labels.
+#' @param annotation Optional sample-named vector, sample-row data frame, or
+#'   named list of sample-named vectors drawn as annotation bars.
 #'
 #' @return An unprinted standard ggplot object carrying recommended physical
 #'   dimensions for [plot_save()].
 #' @family plotting
 #' @export
-plot_cluster_consensus <- function(results, k = NULL, show_names = FALSE) {
+plot_cluster_consensus <- function(
+    results,
+    k = NULL,
+    show_names = FALSE,
+    annotation = NULL
+) {
   .plot_assert_flag(show_names, "show_names")
   matrix <- .plot_consensus_matrix(results, k)
   order <- rownames(matrix)
@@ -257,6 +501,8 @@ plot_cluster_consensus <- function(results, k = NULL, show_names = FALSE) {
   )]
   data$row <- factor(data$row, levels = rev(order))
   data$column <- factor(data$column, levels = order)
+  component_levels <- if (is.null(annotation)) "Consensus" else c("Annotation", "Consensus")
+  data$component <- factor("Consensus", levels = component_levels)
   plot <- ggplot2::ggplot(data, ggplot2::aes(
     x = .data[["column"]], y = .data[["row"]], fill = .data[["value"]]
   )) +
@@ -264,8 +510,33 @@ plot_cluster_consensus <- function(results, k = NULL, show_names = FALSE) {
     ggplot2::scale_fill_gradient(
       low = "#FFFFFF", high = "#08306B",
       limits = c(0, 1), name = "Consensus"
-    ) +
-    ggplot2::coord_equal() +
+    )
+  if (!is.null(annotation)) {
+    tracks <- .plot_annotation_frame(annotation, order, "annotation")
+    styled <- .plot_annotation_style(tracks, order)
+    styled$data$component <- factor("Annotation", levels = component_levels)
+    plot <- plot +
+      ggplot2::geom_tile(
+        data = styled$data,
+        mapping = ggplot2::aes(
+          x = .data[["sample"]],
+          y = .data[["track"]],
+          colour = .data[["legend"]]
+        ),
+        fill = styled$data$fill_colour,
+        linewidth = 0.15,
+        inherit.aes = FALSE
+      ) +
+      ggplot2::scale_colour_manual(values = styled$legend_fills, name = "Annotation") +
+      ggplot2::facet_grid(
+        rows = ggplot2::vars(.data[["component"]]),
+        scales = "free_y",
+        space = "free_y"
+      )
+  } else {
+    plot <- plot + ggplot2::coord_equal()
+  }
+  plot <- plot +
     ggplot2::labs(
       x = "Sample",
       y = "Sample",
@@ -285,7 +556,11 @@ plot_cluster_consensus <- function(results, k = NULL, show_names = FALSE) {
   panel_size <- .plot_clamped_dimension(
     nrow(matrix), base = 5, per_item = 0.25, minimum = 8.5, maximum = 17
   )
-  .plot_with_dimensions(plot, width = panel_size + 1, height = panel_size)
+  .plot_with_dimensions(
+    plot,
+    width = panel_size + 1.4,
+    height = panel_size + if (is.null(annotation)) 0 else 1.2
+  )
 }
 
 #' Plot consensus CDFs across candidate k
@@ -297,46 +572,28 @@ plot_cluster_consensus <- function(results, k = NULL, show_names = FALSE) {
 #' @family plotting
 #' @export
 plot_cluster_cdf <- function(results) {
-  if (!is.list(results) || length(results) < 2L) {
-    stop("`results` must be a ConsensusClusterPlus result list.", call. = FALSE)
-  }
-  rows <- list()
-  for (index in seq_along(results)) {
-    if (index < 2L) {
-      next
-    }
-    solution <- results[[index]]
-    if (!is.list(solution) || is.null(solution$consensusMatrix)) {
-      next
-    }
-    matrix <- as.matrix(solution$consensusMatrix)
-    values <- matrix[upper.tri(matrix, diag = FALSE)]
-    values <- values[is.finite(values)]
-    if (!length(values)) {
-      next
-    }
-    if (any(values < 0 | values > 1)) {
-      stop("Consensus values must lie in [0, 1].", call. = FALSE)
-    }
-    ordered <- sort(values)
-    rows[[length(rows) + 1L]] <- data.frame(
-      k = as.character(index),
-      consensus = ordered,
-      cdf = seq_along(ordered) / length(ordered),
+  pairs <- .cluster_consensus_pair_values(results)
+  rows <- lapply(names(pairs), function(k) {
+    values <- sort(pairs[[k]])
+    unique_x <- c(0, unique(values), 1)
+    cdf <- vapply(unique_x, function(x) mean(values <= x), numeric(1))
+    data.frame(
+      k = k,
+      consensus = unique_x,
+      cdf = cdf,
       stringsAsFactors = FALSE
     )
-  }
-  if (!length(rows)) {
-    stop("No consensus matrices were available for k >= 2.", call. = FALSE)
-  }
+  })
   data <- do.call(rbind, rows)
   data$k <- factor(data$k, levels = unique(data$k))
   fills <- .plot_discrete_values(data$k)
   plot <- ggplot2::ggplot(data, ggplot2::aes(
     x = .data[["consensus"]], y = .data[["cdf"]], colour = .data[["k"]]
   )) +
-    ggplot2::geom_step(linewidth = 0.45) +
+    ggplot2::geom_step(linewidth = 0.45, direction = "hv") +
     ggplot2::scale_colour_manual(values = fills, name = "k") +
+    ggplot2::scale_x_continuous(limits = c(0, 1), expand = c(0.01, 0)) +
+    ggplot2::scale_y_continuous(limits = c(0, 1), expand = c(0.02, 0)) +
     ggplot2::labs(
       x = "Consensus",
       y = "CDF",
@@ -344,6 +601,67 @@ plot_cluster_cdf <- function(results) {
     ) +
     theme_bulkmae()
   .plot_with_dimensions(plot, width = 8.5, height = 6.5)
+}
+
+#' Plot relative delta area of consensus CDFs
+#'
+#' @param results A native [cluster_consensus()] list.
+#'
+#' @return An unprinted standard ggplot object carrying recommended physical
+#'   dimensions for [plot_save()].
+#' @family plotting
+#' @export
+plot_cluster_delta <- function(results) {
+  table <- cluster_consensus_delta_area(results)
+  table$k <- factor(table$k, levels = table$k)
+  plot <- ggplot2::ggplot(table, ggplot2::aes(
+    x = .data[["k"]], y = .data[["delta"]]
+  )) +
+    ggplot2::geom_line(
+      ggplot2::aes(group = 1),
+      colour = .bulkmae_qualitative[["blue"]],
+      linewidth = 0.4
+    ) +
+    ggplot2::geom_point(colour = .bulkmae_qualitative[["blue"]], size = 1.4) +
+    ggplot2::labs(
+      x = "k",
+      y = "Relative delta area",
+      alt = "Relative change in consensus CDF area across candidate k."
+    ) +
+    theme_bulkmae()
+  .plot_with_dimensions(plot, width = 8, height = 6.5)
+}
+
+#' Plot the proportion of ambiguous clustering
+#'
+#' @param results A native [cluster_consensus()] list.
+#' @inheritParams cluster_consensus_pac
+#'
+#' @return An unprinted standard ggplot object carrying recommended physical
+#'   dimensions for [plot_save()].
+#' @family plotting
+#' @export
+plot_cluster_pac <- function(results, lower = 0.1, upper = 0.9) {
+  pac <- cluster_consensus_pac(results, lower = lower, upper = upper)
+  data <- data.frame(
+    k = factor(names(pac), levels = names(pac)),
+    pac = unname(pac),
+    stringsAsFactors = FALSE
+  )
+  plot <- ggplot2::ggplot(data, ggplot2::aes(x = .data[["k"]], y = .data[["pac"]])) +
+    ggplot2::geom_col(
+      fill = unname(.bulkmae_qualitative[["blue"]]),
+      colour = "#222222",
+      linewidth = 0.2,
+      width = 0.72
+    ) +
+    ggplot2::labs(
+      x = "k",
+      y = "PAC",
+      alt = "Proportion of ambiguous pairwise consensus values at each k."
+    ) +
+    theme_bulkmae()
+  .plot_with_dimensions(plot, width = 8, height = 6.5)
 }
 
 #' Plot subtype sample counts
@@ -416,8 +734,6 @@ plot_cluster_sizes <- function(classes, group = NULL) {
 #' @export
 plot_deconv_stacked <- function(fractions) {
   data <- .plot_fraction_frame(fractions)
-  totals <- tapply(data$fraction, data$sample, sum)
-  y_name <- if (all(abs(totals - 1) <= 0.05)) "Fraction" else "Estimated value"
   cells <- unique(as.character(data$cell_type))
   data$cell_type <- factor(data$cell_type, levels = cells)
   fills <- .plot_discrete_values(data$cell_type)
@@ -428,11 +744,10 @@ plot_deconv_stacked <- function(fractions) {
     ggplot2::scale_fill_manual(values = fills, name = "Cell type") +
     ggplot2::labs(
       x = "Sample",
-      y = y_name,
+      y = .plot_fraction_axis_name(data),
       alt = "Stacked bars of estimated cell-type values for each sample."
     ) +
-    theme_bulkmae() +
-    ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1))
+    .plot_deconv_theme()
   .plot_with_dimensions(
     plot,
     width = .plot_clamped_dimension(
@@ -463,18 +778,28 @@ plot_deconv_box <- function(fractions, group) {
     x = .data[["cell_type"]], y = .data[["fraction"]], fill = .data[["group"]]
   )) +
     ggplot2::geom_boxplot(
-      outlier.size = 0.6,
+      outlier.shape = NA,
       linewidth = 0.3,
       width = 0.7
     ) +
+    ggplot2::geom_jitter(
+      ggplot2::aes(colour = .data[["group"]]),
+      position = ggplot2::position_jitterdodge(
+        jitter.width = 0.18,
+        dodge.width = 0.75
+      ),
+      size = 0.7,
+      alpha = 0.8,
+      show.legend = FALSE
+    ) +
     ggplot2::scale_fill_manual(values = fills, name = "Group") +
+    ggplot2::scale_colour_manual(values = fills, guide = "none") +
     ggplot2::labs(
       x = "Cell type",
-      y = "Estimated value",
-      alt = "Boxplots of estimated cell-type values grouped by a sample annotation."
+      y = "Estimated fraction",
+      alt = "Boxplots with jittered points of estimated cell-type fractions grouped by a sample annotation."
     ) +
-    theme_bulkmae() +
-    ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1))
+    .plot_deconv_theme()
   .plot_with_dimensions(
     plot,
     width = .plot_clamped_dimension(
@@ -516,17 +841,13 @@ plot_deconv_heatmap <- function(fractions, column_split = NULL) {
     x = .data[["sample"]], y = .data[["cell_type"]], fill = .data[["fraction"]]
   )) +
     ggplot2::geom_tile() +
-    ggplot2::scale_fill_viridis_c(name = "Estimated value") +
+    ggplot2::scale_fill_viridis_c(name = .plot_fraction_axis_name(data)) +
     ggplot2::labs(
       x = "Sample",
       y = "Cell type",
       alt = "A heatmap of estimated cell-type values across samples."
     ) +
-    theme_bulkmae() +
-    ggplot2::theme(
-      panel.grid = ggplot2::element_blank(),
-      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)
-    )
+    .plot_deconv_theme()
   if (!is.null(column_split)) {
     plot <- plot + ggplot2::facet_grid(
       cols = ggplot2::vars(.data[["split"]]),
@@ -668,4 +989,164 @@ plot_deconv_heatmap <- function(fractions, column_split = NULL) {
     fills[missing] <- unname(fallback[as.character(modules[missing])])
   }
   stats::setNames(unname(fills), modules)
+}
+
+.plot_significance_stars <- function(p_value) {
+  ifelse(
+    !is.finite(p_value),
+    "",
+    ifelse(
+      p_value < 0.001,
+      "***",
+      ifelse(p_value < 0.01, "**", ifelse(p_value < 0.05, "*", ""))
+    )
+  )
+}
+
+.plot_deconv_theme <- function() {
+  theme_bulkmae() +
+    ggplot2::theme(
+      panel.grid = ggplot2::element_blank(),
+      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)
+    )
+}
+
+.plot_fraction_axis_name <- function(data) {
+  totals <- tapply(data$fraction, data$sample, sum)
+  if (all(abs(totals - 1) <= 0.05)) "Estimated fraction" else "Estimated value"
+}
+
+.plot_annotation_frame <- function(annotation, ids, argument) {
+  if (is.atomic(annotation) && is.null(dim(annotation))) {
+    annotation <- .plot_align_named_labels(annotation, ids, argument)
+    return(data.frame(
+      sample = ids,
+      track = "Annotation",
+      label = as.character(unname(annotation[ids])),
+      stringsAsFactors = FALSE
+    ))
+  }
+  if (is.data.frame(annotation) || is.matrix(annotation)) {
+    annotation <- as.data.frame(annotation, optional = TRUE)
+    if (!ncol(annotation)) {
+      stop("`", argument, "` must contain at least one column.", call. = FALSE)
+    }
+    if (is.null(rownames(annotation))) {
+      stop("`", argument, "` must have sample row names.", call. = FALSE)
+    }
+    .plot_assert_ids(rownames(annotation), paste0("`", argument, "` row names"))
+    .plot_assert_ids(names(annotation), paste0("`", argument, "` column names"))
+    if (!setequal(rownames(annotation), ids)) {
+      stop(
+        "`", argument, "` row names must match the plotted samples exactly.",
+        call. = FALSE
+      )
+    }
+    annotation <- annotation[ids, , drop = FALSE]
+    rows <- lapply(names(annotation), function(track) {
+      values <- as.character(annotation[[track]])
+      if (anyNA(values) || any(!nzchar(values))) {
+        stop("`", argument, "` cannot contain missing or empty values.", call. = FALSE)
+      }
+      data.frame(
+        sample = ids,
+        track = track,
+        label = values,
+        stringsAsFactors = FALSE
+      )
+    })
+    return(do.call(rbind, rows))
+  }
+  if (is.list(annotation)) {
+    if (
+      is.null(names(annotation)) || anyNA(names(annotation)) ||
+        any(!nzchar(names(annotation))) || anyDuplicated(names(annotation))
+    ) {
+      stop("`", argument, "` list names must be unique and non-empty.", call. = FALSE)
+    }
+    rows <- lapply(names(annotation), function(track) {
+      value <- .plot_align_named_labels(
+        annotation[[track]],
+        ids,
+        paste0(argument, "$", track)
+      )
+      data.frame(
+        sample = ids,
+        track = track,
+        label = as.character(unname(value[ids])),
+        stringsAsFactors = FALSE
+      )
+    })
+    return(do.call(rbind, rows))
+  }
+  stop(
+    "`", argument, "` must be a named vector, data frame, or named list.",
+    call. = FALSE
+  )
+}
+
+.plot_annotation_colours <- function(labels) {
+  labels <- unique(as.character(labels))
+  n <- length(labels)
+  if (n <= length(.bulkmae_qualitative)) {
+    return(stats::setNames(unname(.bulkmae_qualitative[seq_len(n)]), labels))
+  }
+  hues <- grDevices::hcl(
+    h = seq(15, 375, length.out = n + 1L)[seq_len(n)],
+    c = 65,
+    l = 50
+  )
+  stats::setNames(hues, labels)
+}
+
+.plot_annotation_style <- function(tracks, ids) {
+  tracks$sample <- factor(tracks$sample, levels = ids)
+  tracks$track <- factor(tracks$track, levels = rev(unique(as.character(tracks$track))))
+  tracks$legend <- ifelse(
+    length(unique(tracks$track)) == 1L,
+    as.character(tracks$label),
+    paste0(tracks$track, ": ", tracks$label)
+  )
+  fills <- .plot_annotation_colours(tracks$legend)
+  tracks$fill_colour <- unname(fills[tracks$legend])
+  list(data = tracks, legend_fills = fills)
+}
+
+.plot_as_hclust <- function(tree) {
+  if (inherits(tree, "hclust")) {
+    return(tree)
+  }
+  if (inherits(tree, "dendrogram")) {
+    return(stats::as.hclust(tree))
+  }
+  stop("`dendrogram` must be an hclust, dendrogram, or WGCNA result list.", call. = FALSE)
+}
+
+.plot_hclust_segments <- function(tree) {
+  n <- length(tree$order)
+  leaf_x <- integer(n)
+  leaf_x[tree$order] <- seq_len(n)
+  merge <- tree$merge
+  height <- tree$height
+  node_x <- numeric(nrow(merge))
+  rows <- vector("list", nrow(merge))
+  for (i in seq_len(nrow(merge))) {
+    child <- function(index) {
+      if (index < 0L) {
+        c(x = leaf_x[[-index]], y = 0)
+      } else {
+        c(x = node_x[[index]], y = height[[index]])
+      }
+    }
+    left <- child(merge[i, 1L])
+    right <- child(merge[i, 2L])
+    node_x[[i]] <- mean(c(left[["x"]], right[["x"]]))
+    rows[[i]] <- data.frame(
+      x = c(left[["x"]], right[["x"]], left[["x"]]),
+      xend = c(left[["x"]], right[["x"]], right[["x"]]),
+      y = c(left[["y"]], right[["y"]], height[[i]]),
+      yend = c(height[[i]], height[[i]], height[[i]])
+    )
+  }
+  do.call(rbind, rows)
 }

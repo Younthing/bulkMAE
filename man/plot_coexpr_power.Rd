@@ -4,26 +4,34 @@
 \alias{plot_coexpr_power}
 \title{Plot WGCNA soft-threshold diagnostics}
 \usage{
-plot_coexpr_power(fit)
+plot_coexpr_power(fit, r_squared = 0.8)
 }
 \arguments{
 \item{fit}{A native list returned by \code{\link[=coexpr_pick_power]{coexpr_pick_power()}}.}
+
+\item{r_squared}{Horizontal reference drawn only on panel (a).}
 }
 \value{
 An unprinted standard ggplot object carrying recommended physical
 dimensions for \code{\link[=plot_save]{plot_save()}}.
 }
 \description{
-Plot WGCNA soft-threshold diagnostics
+Two panels share the candidate-power x axis: (a) scale-free topology
+model fit and (b) mean connectivity. A dashed reference line marks the
+conventional R-squared cut. The helper does not choose a power.
 }
 \seealso{
 Other plotting:
 \code{\link[=plot_assay_heatmap]{plot_assay_heatmap()}},
 \code{\link[=plot_cluster_cdf]{plot_cluster_cdf()}},
 \code{\link[=plot_cluster_consensus]{plot_cluster_consensus()}},
+\code{\link[=plot_cluster_delta]{plot_cluster_delta()}},
+\code{\link[=plot_cluster_pac]{plot_cluster_pac()}},
 \code{\link[=plot_cluster_sizes]{plot_cluster_sizes()}},
+\code{\link[=plot_coexpr_dendrogram]{plot_coexpr_dendrogram()}},
 \code{\link[=plot_coexpr_membership]{plot_coexpr_membership()}},
 \code{\link[=plot_coexpr_modules]{plot_coexpr_modules()}},
+\code{\link[=plot_coexpr_tom]{plot_coexpr_tom()}},
 \code{\link[=plot_coexpr_trait]{plot_coexpr_trait()}},
 \code{\link[=plot_de_ma]{plot_de_ma()}},
 \code{\link[=plot_de_volcano]{plot_de_volcano()}},

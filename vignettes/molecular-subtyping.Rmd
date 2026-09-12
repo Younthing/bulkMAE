@@ -89,7 +89,7 @@ fit <- cluster_consensus(
   cluster_mae,
   "airway",
   assay = "vst",
-  max_k = 3L,
+  max_k = 5L,
   repetitions = 50L,
   item_fraction = 0.8,
   seed = 20260912L,
@@ -112,17 +112,19 @@ make_consensus <- function(seed) {
   dimnames(value) <- list(samples, samples)
   value
 }
-fit <- vector("list", 3L)
-fit[[2]] <- list(
-  consensusMatrix = make_consensus(21L),
-  consensusClass = stats::setNames(
-    as.integer(mae_samples(cluster_mae, "airway")$dex),
-    samples
+fit <- vector("list", 5L)
+for (k in 2:5) {
+  fit[[k]] <- list(
+    consensusMatrix = make_consensus(20L + k),
+    consensusClass = stats::setNames(
+      rep(seq_len(k), length.out = length(samples)),
+      samples
+    )
   )
-)
-fit[[3]] <- list(
-  consensusMatrix = make_consensus(22L),
-  consensusClass = stats::setNames(rep(1:3, length.out = length(samples)), samples)
+}
+fit[[2]]$consensusClass <- stats::setNames(
+  as.integer(mae_samples(cluster_mae, "airway")$dex),
+  samples
 )
 classes <- cluster_consensus_classes(fit, k = 2L)
 ```
@@ -142,14 +144,24 @@ alternate factorization path on a non-negative assay.
 
 # Required default plots
 
-```{r consensus-heatmap, fig.height = 5.2, fig.cap = "Pairwise consensus matrix for k = 2 on 150 airway HVGs.", fig.alt = "A square heatmap of sample-to-sample consensus values for the k = 2 solution."}
-plot_cluster_consensus(fit, k = 2L) +
+```{r consensus-heatmap, fig.height = 5.2, fig.cap = "Pairwise consensus matrix for k = 2 on 150 airway HVGs, with a subtype annotation bar.", fig.alt = "A heatmap of sample-to-sample consensus values for the k = 2 solution with a class annotation bar."}
+plot_cluster_consensus(fit, k = 2L, annotation = classes) +
   labs(title = "Consensus matrix, k = 2")
 ```
 
-```{r consensus-cdf, fig.cap = "Consensus CDF for k = 2 and k = 3. With eight samples these curves are a diagnostic, not a k-selection proof.", fig.alt = "Step functions of pairwise consensus values at k = 2 and k = 3."}
+```{r consensus-cdf, fig.cap = "Consensus CDF for k = 2 to k = 5. With eight samples these curves are a diagnostic, not a k-selection proof.", fig.alt = "Step functions of pairwise consensus values from k = 2 through k = 5."}
 plot_cluster_cdf(fit) +
   labs(title = "Consensus CDF")
+```
+
+```{r consensus-delta, fig.cap = "Relative delta area of the consensus CDF. Shown as a diagnostic beside PAC; k is not selected from this curve.", fig.alt = "A line plot of relative delta area versus k."}
+plot_cluster_delta(fit) +
+  labs(title = "Relative delta area")
+```
+
+```{r consensus-pac, fig.cap = "Proportion of ambiguous clustering (PAC; consensus in (0.1, 0.9)). Lower is more decisive. Eight samples; not a subtype discovery.", fig.alt = "A bar chart of PAC at each candidate k."}
+plot_cluster_pac(fit) +
+  labs(title = "Proportion of ambiguous clustering")
 ```
 
 ```{r subtype-sizes, fig.cap = "Subtype counts split by dexamethasone treatment.", fig.alt = "Stacked bars of consensus class membership split by untreated versus treated."}
@@ -160,13 +172,23 @@ plot_cluster_sizes(
   labs(title = "Subtype sample distribution")
 ```
 
-```{r subtype-heatmap, fig.height = 5.5, fig.cap = "Row-scaled heatmap of 20 pre-declared HVGs, split by consensus class. Descriptive of the same matrix used to define the classes.", fig.alt = "A heatmap of 20 highly variable airway features with columns faceted by subtype."}
+```{r subtype-heatmap, fig.height = 5.5, fig.cap = "Row-scaled heatmap of 20 pre-declared HVGs with gene symbols, split by consensus class and annotated by dexamethasone. Descriptive of the same matrix used to define the classes.", fig.alt = "A heatmap of 20 highly variable airway genes labelled by symbol, with subtype facets and a dexamethasone annotation bar."}
+feature_table <- mae_feature_data(labeled, "airway")[heatmap_features, , drop = FALSE]
+symbol_labels <- as.character(feature_table$symbol)
+gene_names <- as.character(feature_table$gene_name)
+missing_symbol <- is.na(symbol_labels) | !nzchar(symbol_labels)
+symbol_labels[missing_symbol] <- gene_names[missing_symbol]
+still_missing <- is.na(symbol_labels) | !nzchar(symbol_labels)
+symbol_labels[still_missing] <- heatmap_features[still_missing]
+names(symbol_labels) <- heatmap_features
 plot_assay_heatmap(
   labeled,
   "airway",
   assay = "vst",
   features = heatmap_features,
-  column_split = "subtype"
+  column_split = "subtype",
+  column_annotation = "dex",
+  feature_label = symbol_labels
 ) +
   labs(title = "HVG heatmap by subtype")
 ```
@@ -181,6 +203,7 @@ an independent lock. This article stops at the cross-tab with `dex`.
 # Limits
 
 - `k` is not chosen automatically and is not a subtype discovery.
+  CDF, delta area, and PAC are shown together as diagnostics.
 - Classes and the feature heatmap share one matrix.
 - Do not treat UMAP/t-SNE as a required subtype figure.
 

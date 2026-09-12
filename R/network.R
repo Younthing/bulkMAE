@@ -158,6 +158,104 @@ cluster_consensus_classes <- function(results, k) {
   classes
 }
 
+#' Proportion of ambiguous clustering for each k
+#'
+#' PAC is the fraction of pairwise consensus values that fall in the open
+#' interval (`lower`, `upper`). Lower values indicate a more decisive
+#' consensus matrix. This is an extractor, not a new clustering method.
+#'
+#' @param results Result list returned by [cluster_consensus()].
+#' @param lower,upper Open interval bounds used to count ambiguous pairs.
+#'
+#' @return A named numeric vector of PAC values, one per available `k`.
+#' @export
+cluster_consensus_pac <- function(results, lower = 0.1, upper = 0.9) {
+  .network_assert_range(lower, "lower", lower = 0, upper = 1)
+  .network_assert_range(upper, "upper", lower = 0, upper = 1)
+  if (lower >= upper) {
+    stop("`lower` must be less than `upper`.", call. = FALSE)
+  }
+  pairs <- .cluster_consensus_pair_values(results)
+  vapply(
+    pairs,
+    function(values) mean(values > lower & values < upper),
+    numeric(1)
+  )
+}
+
+#' Consensus CDF area and relative delta area
+#'
+#' Integrates the empirical CDF of pairwise consensus values at each `k`.
+#' `delta` is the CDF area at `k = 2` and the relative increase
+#' `(area_k - area_{k-1}) / area_{k-1}` for larger `k`. This is an extractor,
+#' not an automatic k-selection rule.
+#'
+#' @param results Result list returned by [cluster_consensus()].
+#'
+#' @return A data frame with `k`, `area`, and `delta` columns.
+#' @export
+cluster_consensus_delta_area <- function(results) {
+  pairs <- .cluster_consensus_pair_values(results)
+  k <- as.integer(names(pairs))
+  area <- vapply(pairs, .cluster_consensus_cdf_area, numeric(1))
+  delta <- area
+  if (length(area) > 1L) {
+    previous <- area[-length(area)]
+    relative <- ifelse(
+      previous > 0,
+      (area[-1L] - previous) / previous,
+      NA_real_
+    )
+    delta[-1L] <- relative
+  }
+  data.frame(
+    k = k,
+    area = unname(area),
+    delta = unname(delta),
+    row.names = NULL
+  )
+}
+
+.cluster_consensus_pair_values <- function(results) {
+  if (!is.list(results) || length(results) < 2L) {
+    stop("`results` must be a ConsensusClusterPlus result list.", call. = FALSE)
+  }
+  out <- list()
+  for (index in seq_along(results)) {
+    if (index < 2L) {
+      next
+    }
+    solution <- results[[index]]
+    if (!is.list(solution) || is.null(solution$consensusMatrix)) {
+      next
+    }
+    matrix <- as.matrix(solution$consensusMatrix)
+    values <- matrix[upper.tri(matrix, diag = FALSE)]
+    values <- values[is.finite(values)]
+    if (!length(values)) {
+      next
+    }
+    if (any(values < 0 | values > 1)) {
+      stop("Consensus values must lie in [0, 1].", call. = FALSE)
+    }
+    out[[as.character(index)]] <- values
+  }
+  if (!length(out)) {
+    stop("No consensus matrices were available for k >= 2.", call. = FALSE)
+  }
+  out
+}
+
+.cluster_consensus_cdf_area <- function(values) {
+  values <- sort(as.numeric(values[is.finite(values)]))
+  x <- c(0, values, 1)
+  y <- c(0, seq_along(values) / length(values), 1)
+  keep <- !duplicated(x, fromLast = TRUE)
+  x <- x[keep]
+  y <- y[keep]
+  sum(diff(x) * y[-length(y)])
+}
+
 #' Test differential co-expression between two groups
 #'
 #' Uses the maintained Bioconductor `diffcoexp` implementation to identify

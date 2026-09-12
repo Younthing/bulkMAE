@@ -56,23 +56,24 @@ All return one unprinted `ggplot` with `theme_bulkmae()` and
 
 | Route | Helpers |
 |---|---|
-| Co-expression | `plot_coexpr_power()`, `plot_coexpr_modules()`, `plot_coexpr_trait()`, `plot_coexpr_membership()` |
-| Subtyping | `plot_cluster_consensus()`, `plot_cluster_cdf()`, `plot_cluster_sizes()`; feature heatmap reuses `plot_assay_heatmap()` |
+| Co-expression | `plot_coexpr_power()`, `plot_coexpr_modules()`, `plot_coexpr_trait()`, `plot_coexpr_membership()`, `plot_coexpr_dendrogram()`, `plot_coexpr_tom()` |
+| Subtyping | `plot_cluster_consensus()`, `plot_cluster_cdf()`, `plot_cluster_delta()`, `plot_cluster_pac()`, `plot_cluster_sizes()`; feature heatmap reuses `plot_assay_heatmap()` |
 | Deconvolution | `plot_deconv_stacked()`, `plot_deconv_box()`, `plot_deconv_heatmap()` |
 
 ## Gap table (after this PR)
 
 | Route | Existing functions | Bridge missing | Default plot fn missing | Suggested smallest fix |
 |---|---|---|---|---|
-| Co-expression modules | `transform_vst` → `mae_variable_features` → `coexpr_pick_power` → `coexpr_wgcna` → `coexpr_module_trait` / `coexpr_membership` / `coexpr_hubs` → optional `coexpr_preservation` | None for one airway path. Preservation still needs a second cohort. | None of the required types. Hub network intentionally omitted (MM vs GS). | Done on `airway`. n = 8 cannot support a scale-free power claim. |
-| Molecular subtyping | `mae_variable_features` → `mae_subset_features` → `cluster_consensus` → `cluster_consensus_classes` → `mae_add_sample_data` → `plot_assay_heatmap` | Optional `top_n` inside `cluster_consensus()` is still a convenience, not a blocker. GSVA path uses existing `score_gsva` + `mae_add_experiment`. | None of the required types. UMAP/t-SNE stay exploratory. | Done on `airway`. k is diagnostic, not a subtype discovery. |
+| Co-expression modules | `transform_vst` → `mae_variable_features` → `coexpr_pick_power` → `coexpr_wgcna` → `coexpr_module_trait` / `coexpr_membership` / `coexpr_hubs` → optional `coexpr_preservation` | None for one airway path. Preservation still needs a second cohort. | Dendrogram/TOM/GS-MM hooks are now `plot_coexpr_dendrogram()`, `plot_coexpr_tom()`, and existing `plot_coexpr_membership()`. | Done on `airway`. n = 8 cannot support a scale-free power claim; the 0.8 line is a visible miss. |
+| Molecular subtyping | `mae_variable_features` → `mae_subset_features` → `cluster_consensus` → `cluster_consensus_classes` → `mae_add_sample_data` → `plot_assay_heatmap` | Optional `top_n` inside `cluster_consensus()` is still a convenience, not a blocker. GSVA path uses existing `score_gsva` + `mae_add_experiment`. | Delta area and PAC are `cluster_consensus_delta_area()` / `cluster_consensus_pac()` plus matching plots. | Done on `airway`. k is diagnostic, not a subtype discovery. |
 | Immune / TME deconvolution | `mae_simulate` → `deconv_reference` → `deconv_fractions` → plots. Real backends (`deconv` / MuSiC / BayesPrism) remain optional. | BayesPrism `get.fraction()` adapter. No real atlas is bundled. | None of the required types. | `airway` has no scRNA reference, so the vignette uses existing `mae_simulate()` and aligns `condition` / `batch`. No new simulator. No CIBERSORTx upload. |
 
 ## What this PR implemented
 
 1. Extractors: `mae_variable_features()`, `coexpr_module_trait()`,
    `coexpr_membership()`, `coexpr_hubs()`, `deconv_fractions()`.
-2. Default `plot_*()` helpers listed above.
+2. Default `plot_*()` helpers listed above, including dendrogram/TOM,
+   delta-area/PAC, annotation bars, and deconvolution jitter.
 3. Co-expression and subtyping vignettes on Bioconductor `airway` (same
    `filter_expr()` / `transform_vst(~ cell + dex)` construction as the
    QC/DE tutorial). Deconvolution uses existing `mae_simulate()` because

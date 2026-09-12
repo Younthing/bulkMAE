@@ -13,6 +13,7 @@ plot_assay_heatmap(
   cluster_rows = TRUE,
   cluster_columns = TRUE,
   column_split = NULL,
+  column_annotation = NULL,
   feature_label = NULL
 )
 }
@@ -33,6 +34,10 @@ hierarchical clustering. Dendrograms are not drawn.}
 \item{column_split}{Optional sample metadata column or complete sample-named
 vector used to split the x axis.}
 
+\item{column_annotation}{Optional sample metadata column name, character
+vector of metadata columns, sample-named vector, or sample-row data frame
+drawn as annotation bars above the heatmap.}
+
 \item{feature_label}{Optional feature metadata column or complete
 feature-named labels. Duplicate display labels are made unique.}
 }
@@ -47,10 +52,14 @@ Plot selected assay features as a heatmap
 Other plotting:
 \code{\link[=plot_cluster_cdf]{plot_cluster_cdf()}},
 \code{\link[=plot_cluster_consensus]{plot_cluster_consensus()}},
+\code{\link[=plot_cluster_delta]{plot_cluster_delta()}},
+\code{\link[=plot_cluster_pac]{plot_cluster_pac()}},
 \code{\link[=plot_cluster_sizes]{plot_cluster_sizes()}},
+\code{\link[=plot_coexpr_dendrogram]{plot_coexpr_dendrogram()}},
 \code{\link[=plot_coexpr_membership]{plot_coexpr_membership()}},
 \code{\link[=plot_coexpr_modules]{plot_coexpr_modules()}},
 \code{\link[=plot_coexpr_power]{plot_coexpr_power()}},
+\code{\link[=plot_coexpr_tom]{plot_coexpr_tom()}},
 \code{\link[=plot_coexpr_trait]{plot_coexpr_trait()}},
 \code{\link[=plot_de_ma]{plot_de_ma()}},
 \code{\link[=plot_de_volcano]{plot_de_volcano()}},

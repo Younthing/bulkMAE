@@ -32,23 +32,31 @@
 
 .route_consensus <- function() {
   samples <- paste0("sample", 1:6)
-  make_matrix <- function(seed) {
+  make_matrix <- function(seed, k) {
     set.seed(seed)
-    value <- matrix(runif(36L, 0.2, 0.95), nrow = 6L)
+    value <- matrix(runif(36L, 0.05, 0.95), nrow = 6L)
     value <- (value + t(value)) / 2
+    classes <- rep(seq_len(k), length.out = 6L)
+    for (left in seq_len(6L)) {
+      for (right in seq_len(6L)) {
+        value[left, right] <- if (classes[[left]] == classes[[right]]) {
+          min(1, value[left, right] + 0.35)
+        } else {
+          value[left, right] * 0.45
+        }
+      }
+    }
     diag(value) <- 1
     dimnames(value) <- list(samples, samples)
     value
   }
-  results <- vector("list", 3L)
-  results[[2]] <- list(
-    consensusMatrix = make_matrix(11L),
-    consensusClass = stats::setNames(rep(1:2, each = 3L), samples)
-  )
-  results[[3]] <- list(
-    consensusMatrix = make_matrix(12L),
-    consensusClass = stats::setNames(rep(1:3, each = 2L), samples)
-  )
+  results <- vector("list", 5L)
+  for (k in 2:5) {
+    results[[k]] <- list(
+      consensusMatrix = make_matrix(10L + k, k),
+      consensusClass = stats::setNames(rep(seq_len(k), length.out = 6L), samples)
+    )
+  }
   results
 }
 
@@ -102,14 +110,45 @@ test_that("P0 co-expression plots build with stable labels", {
     expect_route_plot(plot)
   }
   expect_identical(power_plot$labels$x, "Soft-threshold power")
+  expect_identical(power_plot$labels$y, NULL)
   expect_identical(module_plot$labels$y, "Features")
   expect_identical(trait_plot$scales$get_scales("fill")$name, "Correlation")
   expect_identical(membership_plot$labels$x, "Module membership")
   expect_identical(trait_plot$layers[[2L]]$aes_params$size, 6)
   expect_identical(trait_plot$layers[[2L]]$geom_params$size.unit, "pt")
+  expect_true(any(grepl("*", trait_plot$data$label, fixed = TRUE)))
   expect_error(
     plot_coexpr_membership(membership, gene_significance[-1L], "blue"),
     "match membership features exactly"
+  )
+})
+
+test_that("P0 co-expression dendrogram and TOM helpers join by feature name", {
+  features <- paste0("gene", 1:8)
+  tree <- stats::hclust(stats::dist(matrix(seq_len(24L), nrow = 8L)))
+  tree$labels <- features
+  modules <- stats::setNames(
+    rep(c("turquoise", "blue"), each = 4L),
+    features
+  )
+  tom <- matrix(0.2, nrow = 8L, ncol = 8L, dimnames = list(features, features))
+  diag(tom) <- 1
+  tom[1:4, 1:4] <- 0.7
+  diag(tom) <- 1
+  dendro_plot <- plot_coexpr_dendrogram(tree, modules)
+  tom_plot <- plot_coexpr_tom(tom, modules = modules)
+  for (plot in list(dendro_plot, tom_plot)) {
+    expect_route_plot(plot)
+  }
+  expect_identical(dendro_plot$labels$y, "Height")
+  expect_identical(tom_plot$scales$get_scales("fill")$name, "TOM")
+  expect_error(
+    plot_coexpr_dendrogram(tree, modules[-1L]),
+    "match dendrogram leaves exactly"
+  )
+  expect_error(
+    plot_coexpr_tom(tom, modules = modules[-1L]),
+    "match TOM features exactly"
   )
 })
 
@@ -120,17 +159,31 @@ test_that("P0 subtype plots join consensus and class labels by name", {
     rep(c("control", "treated"), each = 3L),
     names(classes)
   )
-  consensus_plot <- plot_cluster_consensus(results, k = 2L, show_names = TRUE)
+  consensus_plot <- plot_cluster_consensus(
+    results,
+    k = 2L,
+    show_names = TRUE,
+    annotation = classes
+  )
   cdf_plot <- plot_cluster_cdf(results)
+  delta_plot <- plot_cluster_delta(results)
+  pac_plot <- plot_cluster_pac(results)
   size_plot <- plot_cluster_sizes(classes, group = group)
   matrix_plot <- plot_cluster_consensus(results[[2]]$consensusMatrix)
 
-  for (plot in list(consensus_plot, cdf_plot, size_plot, matrix_plot)) {
+  for (plot in list(
+    consensus_plot, cdf_plot, delta_plot, pac_plot, size_plot, matrix_plot
+  )) {
     expect_route_plot(plot)
   }
   expect_identical(consensus_plot$scales$get_scales("fill")$name, "Consensus")
   expect_identical(cdf_plot$labels$y, "CDF")
+  expect_identical(delta_plot$labels$y, "Relative delta area")
+  expect_identical(pac_plot$labels$y, "PAC")
   expect_identical(size_plot$labels$x, "Subtype")
+  expect_gt(nlevels(cdf_plot$data$k), 2L)
+  expect_identical(cluster_consensus_delta_area(results)$k, 2:5)
+  expect_named(cluster_consensus_pac(results), as.character(2:5))
   expect_error(plot_cluster_consensus(results), "`k` is required")
   expect_error(
     plot_cluster_sizes(classes, group = group[-1L]),
@@ -151,9 +204,15 @@ test_that("P0 deconvolution plots use cell-type by sample fractions", {
   for (plot in list(stacked, boxed, heat)) {
     expect_route_plot(plot)
   }
-  expect_identical(stacked$labels$y, "Fraction")
+  expect_identical(stacked$labels$y, "Estimated fraction")
+  expect_identical(boxed$labels$y, "Estimated fraction")
   expect_identical(boxed$labels$x, "Cell type")
   expect_identical(heat$labels$y, "Cell type")
+  expect_identical(heat$scales$get_scales("fill")$name, "Estimated fraction")
+  expect_true(any(vapply(boxed$layers, function(layer) {
+    inherits(layer$geom, "GeomPoint") || inherits(layer$position, "PositionJitterDodge") ||
+      inherits(layer$position, "PositionJitter")
+  }, logical(1))))
   expect_error(
     plot_deconv_box(fractions, group[-1L]),
     "match the plotted samples exactly"

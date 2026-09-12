@@ -43,6 +43,12 @@ test_that("consensus clustering and its extractors run offline", {
   expect_setequal(names(classes), paste0("sample", seq_len(12L)))
   expect_type(diagnostics, "list")
   expect_true(all(c("clusterConsensus", "itemConsensus") %in% names(diagnostics)))
+  pac <- cluster_consensus_pac(fit)
+  delta <- cluster_consensus_delta_area(fit)
+  expect_named(pac, c("2", "3"))
+  expect_true(all(is.finite(pac) & pac >= 0 & pac <= 1))
+  expect_identical(delta$k, c(2L, 3L))
+  expect_true(all(is.finite(delta$area)))
 })
 
 test_that("consensus clustering records removed constant features", {

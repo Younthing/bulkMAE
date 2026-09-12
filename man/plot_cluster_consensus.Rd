@@ -4,7 +4,12 @@
 \alias{plot_cluster_consensus}
 \title{Plot a consensus-clustering consensus matrix}
 \usage{
-plot_cluster_consensus(results, k = NULL, show_names = FALSE)
+plot_cluster_consensus(
+  results,
+  k = NULL,
+  show_names = FALSE,
+  annotation = NULL
+)
 }
 \arguments{
 \item{results}{A native \code{\link[=cluster_consensus]{cluster_consensus()}} list, or a square consensus
@@ -13,6 +18,9 @@ matrix with sample dimnames.}
 \item{k}{Cluster count used when \code{results} is a ConsensusClusterPlus list.}
 
 \item{show_names}{Draw sample axis labels.}
+
+\item{annotation}{Optional sample-named vector, sample-row data frame, or
+named list of sample-named vectors drawn as annotation bars.}
 }
 \value{
 An unprinted standard ggplot object carrying recommended physical
@@ -25,10 +33,14 @@ Plot a consensus-clustering consensus matrix
 Other plotting:
 \code{\link[=plot_assay_heatmap]{plot_assay_heatmap()}},
 \code{\link[=plot_cluster_cdf]{plot_cluster_cdf()}},
+\code{\link[=plot_cluster_delta]{plot_cluster_delta()}},
+\code{\link[=plot_cluster_pac]{plot_cluster_pac()}},
 \code{\link[=plot_cluster_sizes]{plot_cluster_sizes()}},
+\code{\link[=plot_coexpr_dendrogram]{plot_coexpr_dendrogram()}},
 \code{\link[=plot_coexpr_membership]{plot_coexpr_membership()}},
 \code{\link[=plot_coexpr_modules]{plot_coexpr_modules()}},
 \code{\link[=plot_coexpr_power]{plot_coexpr_power()}},
+\code{\link[=plot_coexpr_tom]{plot_coexpr_tom()}},
 \code{\link[=plot_coexpr_trait]{plot_coexpr_trait()}},
 \code{\link[=plot_de_ma]{plot_de_ma()}},
 \code{\link[=plot_de_volcano]{plot_de_volcano()}},

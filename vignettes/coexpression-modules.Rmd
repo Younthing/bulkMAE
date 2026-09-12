@@ -84,12 +84,15 @@ Filtering retains `r format(sum(keep), big.mark = ",")` /
 # Soft-threshold diagnostics, then WGCNA
 
 ```{r wgcna, eval = has_wgcna}
+# Same VST matrix as the QC/DE tutorial, then goodSamplesGenes() inside
+# coexpr_pick_power() / coexpr_wgcna(). Eight samples cannot support a
+# scale-free claim; the 0.8 reference line is drawn so that failure is visible.
+power_features <- mae_variable_features(mae_vst, "airway", "vst", top_n = 500L)
 power <- suppressWarnings(coexpr_pick_power(
-  mae_vst,
+  mae_subset_features(mae_vst, "airway", power_features),
   "airway",
   assay = "vst",
-  top_n = 300L,
-  powers = c(2, 4, 6, 8, 10),
+  powers = c(seq_len(10L), seq(12L, 20L, by = 2L)),
   verbose = 0
 ))
 # n = 8 does not produce a usable scale-free fit; 6 is a conventional
@@ -118,6 +121,15 @@ gene_significance <- stats::cor(
   dex_code
 )[, 1L]
 hubs <- coexpr_hubs(membership, modules, n = 3L)
+expr_for_tom <- t(mae_pull_assay(mae_vst, "airway", "vst")[names(modules), , drop = FALSE])
+tom <- WGCNA::TOMsimilarityFromExpr(
+  expr_for_tom,
+  power = 6,
+  networkType = "signed",
+  TOMType = "signed",
+  verbose = 0
+)
+dimnames(tom) <- list(names(modules), names(modules))
 ```
 
 ```{r placeholder, eval = !has_wgcna}
@@ -130,9 +142,12 @@ modules <- stats::setNames(
 )
 power <- list(
   fitIndices = data.frame(
-    Power = c(2, 4, 6, 8, 10),
-    SFT.R.sq = c(0.09, 0.15, 0.06, 0.02, 0.10),
-    mean.k. = c(111, 69, 50, 39, 33)
+    Power = c(seq_len(10L), seq(12L, 20L, by = 2L)),
+    SFT.R.sq = c(
+      0.04, 0.07, 0.09, 0.11, 0.10, 0.08, 0.07, 0.06, 0.05, 0.04,
+      0.03, 0.03, 0.02, 0.02, 0.02
+    ),
+    mean.k. = c(140, 95, 70, 54, 43, 35, 29, 24, 21, 18, 14, 11, 9, 7, 6)
   ),
   powerEstimate = NA_real_
 )
@@ -161,6 +176,17 @@ membership <- matrix(
 )
 gene_significance <- stats::setNames(as.numeric(scale(seq_len(18L))), features)
 hubs <- coexpr_hubs(membership, modules, n = 2L)
+tree <- stats::hclust(stats::dist(matrix(seq_len(3L * length(features)), nrow = length(features))))
+tree$labels <- features
+tom <- matrix(
+  0.15,
+  nrow = length(features),
+  ncol = length(features),
+  dimnames = list(features, features)
+)
+tom[1:6, 1:6] <- 0.65
+tom[7:12, 7:12] <- 0.55
+diag(tom) <- 1
 ```
 
 ```{r pick-module}
@@ -173,7 +199,7 @@ module_for_plot <- {
 
 # Required default plots
 
-```{r power-plot, fig.cap = "Soft-threshold diagnostics on 300 airway HVGs. With eight samples the scale-free R-squared stays low; the curve is a diagnostic, not a model-selection proof.", fig.alt = "Two panels of scale-free R-squared and mean connectivity versus candidate WGCNA powers."}
+```{r power-plot, fig.cap = "Soft-threshold diagnostics on airway VST HVGs after filterByExpr() and goodSamplesGenes(). Panel (a) is scale-free R-squared with a dashed 0.8 reference; panel (b) is mean connectivity. Eight samples do not reach a usable scale-free fit; power 6 is a conventional signed-network starting value, not a selected model.", fig.alt = "Dual-panel WGCNA diagnostics labelled (a) scale-free R-squared with a 0.8 reference line and (b) mean connectivity versus power."}
 plot_coexpr_power(power) +
   labs(title = "Soft-threshold diagnostics")
 ```
@@ -183,7 +209,7 @@ plot_coexpr_modules(modules) +
   labs(title = "Module sizes")
 ```
 
-```{r trait-plot, fig.cap = "Module eigengene correlations with dexamethasone treatment and cell line. These are the same eight samples used to build the network.", fig.alt = "A heatmap of Pearson correlations between module eigengenes and dex or cell line."}
+```{r trait-plot, fig.cap = "Module eigengene correlations with dexamethasone treatment and cell line. Cells show Pearson r and significance stars (* P < 0.05, ** P < 0.01, *** P < 0.001). These are the same eight samples used to build the network.", fig.alt = "A heatmap of Pearson correlations between module eigengenes and dex or cell line, with significance stars."}
 plot_coexpr_trait(trait) +
   labs(title = "Module–trait correlations")
 ```
@@ -191,6 +217,25 @@ plot_coexpr_trait(trait) +
 ```{r membership-plot, fig.cap = "Module membership versus gene significance for dexamethasone on one module. Labels are descriptive of this matrix, not an external hub validation.", fig.alt = "A scatter plot of kME against the feature–dexamethasone correlation, with a linear fit."}
 plot_coexpr_membership(membership, gene_significance, module = module_for_plot) +
   labs(title = paste(module_for_plot, "MM vs GS"))
+```
+
+```{r dendrogram-plot, fig.height = 5.2, fig.cap = "Gene dendrogram for the WGCNA block, with a module colour bar. Eight samples; descriptive of this fit only.", fig.alt = "A dendrogram of co-expression features with a module colour bar under the tree."}
+if (has_wgcna) {
+  plot_coexpr_dendrogram(fit, modules) +
+    labs(title = "Module dendrogram")
+} else {
+  plot_coexpr_dendrogram(tree, modules) +
+    labs(title = "Module dendrogram")
+}
+```
+
+```{r tom-plot, fig.height = 5.2, fig.cap = "Topological overlap for the same features used in module detection, ordered by module. A display subset of the network, not an independent validation.", fig.alt = "A TOM heatmap with a module colour bar."}
+tom_features <- names(modules)[seq_len(min(60L, length(modules)))]
+plot_coexpr_tom(
+  tom[tom_features, tom_features, drop = FALSE],
+  modules = modules[tom_features]
+) +
+  labs(title = "Topological overlap")
 ```
 
 ```{r hubs}
@@ -206,9 +251,11 @@ fake validation cohort.
 
 # Limits
 
-- Eight samples are too few for a scale-free topology decision.
-- Modules and hub ranks come from the same VST matrix as the trait
-  correlations. That is description, not external validation.
+- Eight samples are too few for a scale-free topology decision. The
+  dashed 0.8 line on panel (a) is a reference, not a reached threshold.
+- Modules, dendrogram order, TOM, and hub ranks come from the same VST
+  matrix as the trait correlations. That is description, not external
+  validation.
 - `airway` is human airway smooth muscle, not a tumour cohort.
 
 ```{r session-info}

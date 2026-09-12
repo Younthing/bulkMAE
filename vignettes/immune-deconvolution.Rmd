@@ -134,19 +134,19 @@ backend version. Signature methods such as quanTIseq still go through
 
 # Required default plots
 
-```{r stacked, fig.cap = "Stacked cell-type values aligned to mae_simulate() samples. These are not a deconvolution of a biological bulk cohort.", fig.alt = "Stacked bars of B-cell, T-cell, and myeloid values across eight simulated samples."}
+```{r stacked, fig.cap = "Stacked estimated fractions aligned to mae_simulate() samples. Synthetic mixture; not a deconvolution of a biological TME cohort.", fig.alt = "Stacked bars of B-cell, T-cell, and myeloid estimated fractions across eight simulated samples."}
 plot_deconv_stacked(fractions) +
-  labs(title = "Cell-type values by sample")
+  labs(title = "Estimated fractions by sample")
 ```
 
-```{r box, fig.cap = "Values compared by the mae_simulate() condition column.", fig.alt = "Boxplots of each cell type split into control versus treated simulated samples."}
+```{r box, fig.cap = "Estimated fractions compared by the mae_simulate() condition column, with jittered sample points. Synthetic; not real immune infiltration.", fig.alt = "Boxplots with jitter of each cell type split into control versus treated simulated samples."}
 plot_deconv_box(fractions, group) +
-  labs(title = "Values by condition")
+  labs(title = "Estimated fractions by condition")
 ```
 
-```{r heatmap, fig.height = 4.6, fig.cap = "Heatmap split by the mae_simulate() batch column. Fill values remain synthetic unless MuSiC ran.", fig.alt = "A heatmap of cell-type values with columns faceted by simulated batch."}
+```{r heatmap, fig.height = 4.6, fig.cap = "Estimated-fraction heatmap split by the mae_simulate() batch column. Fill values remain synthetic unless MuSiC ran.", fig.alt = "A heatmap of estimated cell-type fractions with columns faceted by simulated batch."}
 plot_deconv_heatmap(fractions, column_split = batch) +
-  labs(title = "Values by batch")
+  labs(title = "Estimated fractions by batch")
 ```
 
 # Limits
