@@ -185,6 +185,17 @@ test_that("P0 subtype plots join consensus and class labels by name", {
     expect_route_plot(plot)
   }
   expect_identical(consensus_plot$scales$get_scales("fill")$name, "Consensus")
+  two_tracks <- plot_cluster_consensus(
+    results,
+    k = 2L,
+    annotation = data.frame(
+      subtype = as.character(unname(classes)),
+      group = as.character(unname(group)),
+      row.names = names(classes)
+    )
+  )
+  expect_route_plot(two_tracks)
+  expect_gte(length(two_tracks$layers), 3L)
   expect_identical(cdf_plot$labels$y, "CDF")
   expect_identical(delta_plot$labels$y, "Relative delta area")
   expect_identical(pac_plot$labels$y, "PAC")

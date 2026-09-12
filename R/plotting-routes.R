@@ -1108,11 +1108,11 @@ plot_deconv_heatmap <- function(fractions, column_split = NULL) {
 .plot_annotation_style <- function(tracks, ids) {
   tracks$sample <- factor(tracks$sample, levels = ids)
   tracks$track <- factor(tracks$track, levels = rev(unique(as.character(tracks$track))))
-  tracks$legend <- ifelse(
-    length(unique(as.character(tracks$track))) == 1L,
-    as.character(tracks$label),
+  tracks$legend <- if (length(unique(as.character(tracks$track))) == 1L) {
+    as.character(tracks$label)
+  } else {
     paste0(tracks$track, ": ", tracks$label)
-  )
+  }
   fills <- .plot_annotation_colours(tracks$legend)
   tracks$fill_colour <- unname(fills[tracks$legend])
   list(data = tracks, legend_fills = fills)
