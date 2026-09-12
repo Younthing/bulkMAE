@@ -367,11 +367,17 @@ test_that("assay expression joins groups and adds a display comparison", {
     logical(1)
   )))
   expect_error(
-    plot_assay_expression(mae, "rna", "log_expression", features = character()),
+    plot_assay_expression(
+      mae, "rna", "log_expression",
+      features = character(), colour = "condition"
+    ),
     "explicitly contain"
   )
   expect_error(
-    plot_assay_expression(mae, "rna", "log_expression", features = "missing"),
+    plot_assay_expression(
+      mae, "rna", "log_expression",
+      features = "missing", colour = "condition"
+    ),
     "Unknown features"
   )
   expect_error(

@@ -835,7 +835,7 @@ plot_assay_expression <- function(
         .plot_format_pvalue(p_values[[index]])
       }
       data.frame(
-        feature = panel$feature[[1L]],
+        feature = panel$feature[1L],
         x = c(x1, x1, x2),
         xend = c(x1, x2, x2),
         y = c(y - tick, y, y),
