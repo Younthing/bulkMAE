@@ -4,8 +4,7 @@ Inventory of existing `bulkMAE` adapters against the three P0 routes in the
 direction doc: make those routes runnable and give them Nature/Cell-grade
 default plots. Do not stack new methods.
 
-Scan date: 2026-09-12. Sources: `NAMESPACE`, `R/`, `vignettes/`,
-`tests/testthat/`, `README.md`, `inst/guides/`.
+Scan date: 2026-09-12. Updated in this PR after the airway implementation.
 
 ## Existing inventory
 
@@ -17,17 +16,16 @@ Scan date: 2026-09-12. Sources: `NAMESPACE`, `R/`, `vignettes/`,
 | `coexpr_pick_power()` | `R/network.R` | `WGCNA::pickSoftThreshold()` + `goodSamplesGenes()` |
 | `coexpr_wgcna()` | `R/network.R` | `WGCNA::blockwiseModules()`; stores `colors`, `MEs`, QC |
 | `coexpr_modules()` | `R/result-inputs.R` | Named feature → module labels for preservation |
+| `coexpr_module_trait()` | `R/result-inputs.R` | Eigengene–trait Pearson `cor` / `cor.test` |
+| `coexpr_membership()`, `coexpr_hubs()` | `R/result-inputs.R` | kME matrix and intramodular hubs |
 | `coexpr_preservation()` | `R/network.R` | Two-MAE `WGCNA::modulePreservation()` |
 | `coexpr_differential()` | `R/network.R` | Two-group DCA via `diffcoexp` (not this P0 path) |
-
-WGCNA is optional (`Suggests`). Tests skip when it is missing. This Cloud
-image does not install it.
 
 ### Molecular subtyping (`cluster_*`, feature selection, scores)
 
 | Function | File | Role |
 |---|---|---|
-| `.top_variable_features()` | `R/qc.R` | Internal HVG subset used by PCA/UMAP/WGCNA |
+| `mae_variable_features()` | `R/access.R` | Public HVG names (row variance) |
 | `mae_subset_features()` | `R/access.R` | Row-subset one experiment by explicit IDs |
 | `mae_add_experiment()` | `R/workflow-inputs.R` | Add a GSVA/eigengene matrix as a new leaf |
 | `score_gsva()`, `score_ssgsea()`, `score_singscore()` | `R/enrichment.R` | Sample-level gene-set scores |
@@ -39,73 +37,59 @@ image does not install it.
 | `de_*`, `de_table()`, `de_selected()` | `R/differential.R` | Subtype characterization |
 | `reduce_umap()`, `reduce_tsne()`, `plot_embedding()` | `R/qc.R`, `R/plotting.R` | Exploratory only |
 
-ConsensusClusterPlus, NMF, and GSVA are optional. No public HVG name helper.
-
 ### Immune / TME deconvolution (`deconv_*`)
 
 | Function | File | Role |
 |---|---|---|
 | `deconv_reference()` | `R/deconvolution.R` | User-supplied scRNA → canonical SCE |
-| `deconv()` | `R/deconvolution.R` | `immunedeconv::deconvolute()` (EPIC, quanTIseq, xCell, …) |
+| `mae_deconv_toy()` | `R/simulate.R` | **Synthetic** counts, cell metadata, and fractions |
+| `deconv()` | `R/deconvolution.R` | `immunedeconv::deconvolute()` |
 | `deconv_music()` | `R/deconvolution.R` | `MuSiC::music_prop()` |
 | `deconv_bayesprism()` | `R/deconvolution.R` | `BayesPrism::new.prism()` + `run.prism()` |
+| `deconv_fractions()` | `R/deconvolution.R` | Cell-type × sample matrix from native results |
 | `deconv_cibersortx_input()` | `R/deconvolution.R` | Local mixture table only; no upload |
 
-No extractor that turns those native objects into a cell × sample fraction
-matrix. MuSiC / immunedeconv / BayesPrism are GitHub-or-heavy Suggests and
-are not in the default CI image.
+### Default P0 plots (this PR)
 
-### Plot helpers already present
+All return one unprinted `ggplot` with `theme_bulkmae()` and
+`bulkmae_dimensions`. They do not re-run analysis.
 
-`theme_bulkmae()`, `plot_save()`, QC/embedding/DE/assay/GSEA/ORA constructors
-in `R/plotting.R`, `R/plotting-gsea.R`, `R/plotting-ora.R`. Contract: one
-unprinted `ggplot`, no re-analysis, IDs joined by name, recommended cm size
-on `bulkmae_dimensions`.
+| Route | Helpers |
+|---|---|
+| Co-expression | `plot_coexpr_power()`, `plot_coexpr_modules()`, `plot_coexpr_trait()`, `plot_coexpr_membership()` |
+| Subtyping | `plot_cluster_consensus()`, `plot_cluster_cdf()`, `plot_cluster_sizes()`; feature heatmap reuses `plot_assay_heatmap()` |
+| Deconvolution | `plot_deconv_stacked()`, `plot_deconv_box()`, `plot_deconv_heatmap()` |
 
-**None** of the P0 required plot types exist. Closest reuse:
-`plot_assay_heatmap(..., column_split = subtype)` for a subtype feature
-heatmap; `plot_qc_correlation()` is a sample–sample matrix but is correlation,
-not consensus.
-
-### Vignettes
-
-`getting-started`, `airway-qc-de`, `enrichment-analysis`, `naming-migration`.
-No co-expression, subtyping, or deconvolution article.
-
-## Gap table
+## Gap table (after this PR)
 
 | Route | Existing functions | Bridge missing | Default plot fn missing | Suggested smallest fix |
 |---|---|---|---|---|
-| Co-expression modules | `transform_*` → `coexpr_pick_power` → `coexpr_wgcna` → `coexpr_modules` → optional `coexpr_preservation` | Module–trait correlation from `fit$MEs`; feature–module membership (kME); hub table | Soft-threshold / module-size colours; module–trait heatmap; MM vs GS scatter (prefer over a hub network) | Add `coexpr_module_trait()`, `coexpr_membership()`, `coexpr_hubs()` as extractors on the native WGCNA list. Add `plot_coexpr_power()`, `plot_coexpr_modules()`, `plot_coexpr_trait()`, `plot_coexpr_membership()`. |
-| Molecular subtyping | Internal HVG; `mae_subset_features`; `score_gsva`; `cluster_consensus` / `cluster_nmf` + class extractors; `mae_add_sample_data`; `de_*`; `plot_assay_heatmap`; `plot_embedding` | Public HVG name vector so HVG → subset → cluster can be chained without copying `.top_variable_features()` | Consensus heatmap; consensus CDF over `k`; subtype sample counts (optionally split by a clinical column). Feature heatmap: reuse `plot_assay_heatmap` | Add `mae_variable_features()`. Plots: `plot_cluster_consensus()`, `plot_cluster_cdf()`, `plot_cluster_sizes()`. Do not add a new heatmap API. UMAP/t-SNE stay exploratory. |
-| Immune / TME deconvolution | `deconv_reference`; `deconv` / `deconv_music` / `deconv_bayesprism`; `deconv_cibersortx_input` (prepare only) | Cell-type × sample fraction matrix from native immunedeconv / MuSiC / matrix results | Stacked fractions; group boxplots; subtype-split heatmap | Add `deconv_fractions()`. Plots: `plot_deconv_stacked()`, `plot_deconv_box()`, `plot_deconv_heatmap()`. Pin the reference in the vignette; do not default to CIBERSORTx upload. |
+| Co-expression modules | `transform_vst` → `mae_variable_features` → `coexpr_pick_power` → `coexpr_wgcna` → `coexpr_module_trait` / `coexpr_membership` / `coexpr_hubs` → optional `coexpr_preservation` | None for one airway path. Preservation still needs a second cohort. | None of the required types. Hub network intentionally omitted (MM vs GS). | Done on `airway`. n = 8 cannot support a scale-free power claim. |
+| Molecular subtyping | `mae_variable_features` → `mae_subset_features` → `cluster_consensus` → `cluster_consensus_classes` → `mae_add_sample_data` → `plot_assay_heatmap` | Optional `top_n` inside `cluster_consensus()` is still a convenience, not a blocker. GSVA path uses existing `score_gsva` + `mae_add_experiment`. | None of the required types. UMAP/t-SNE stay exploratory. | Done on `airway`. k is diagnostic, not a subtype discovery. |
+| Immune / TME deconvolution | `mae_deconv_toy` → `deconv_reference` → `deconv_fractions` → plots. Real backends (`deconv` / MuSiC / BayesPrism) remain optional. | BayesPrism `get.fraction()` adapter. No real atlas is bundled. | None of the required types. | `airway` has no scRNA reference, so the vignette pins `mae_deconv_toy()` as synthetic. No CIBERSORTx upload. |
 
-## What this PR will implement
+## What this PR implemented
 
-Highest-leverage missing pieces so **one path per P0** can be chained in a
-vignette stub. Prefer extractors and plots over new analysis backends.
-
-1. `mae_variable_features()` — public HVG names (reuses `.top_variable_features()`).
-2. `coexpr_module_trait()`, `coexpr_membership()`, `coexpr_hubs()` — WGCNA
-   list / MAE extractors; Pearson `cor` / `cor.test`, not a new S3 class.
-3. `deconv_fractions()` — cell × sample matrix from immunedeconv tables,
-   MuSiC `$Est.prop.weighted`, or an already-aligned matrix.
-4. Default `plot_*()` helpers above, all using `theme_bulkmae()` and
-   `bulkmae_dimensions`.
-5. Three executable vignette stubs on `mae_simulate()` objects. Backend
-   chunks run only when the Suggests package is installed; plot helpers
-   always run on constructed tables.
+1. Extractors: `mae_variable_features()`, `coexpr_module_trait()`,
+   `coexpr_membership()`, `coexpr_hubs()`, `deconv_fractions()`,
+   `mae_deconv_toy()`.
+2. Default `plot_*()` helpers listed above.
+3. Three executable vignettes on Bioconductor `airway` (same
+   `filter_expr()` / `transform_vst(~ cell + dex)` construction as the
+   QC/DE tutorial). WGCNA and ConsensusClusterPlus chunks run when those
+   Suggests are installed; CI extra-packages now include them plus
+   `SingleCellExperiment`.
+4. Deconvolution toy data is in-package and labelled synthetic in
+   `mae_deconv_toy()$source`.
 
 ## What should NOT be added (reuse-first)
 
 - MEGENA, CEMiTool, or other co-expression shells.
-- PPI / molecular-dynamics wrappers (`network_string()` already exists for
-  STRING and is out of this P0 path).
-- New enrichment database wrappers (GO/KEGG/Reactome/MSigDB already exist).
+- PPI / molecular-dynamics wrappers.
+- New enrichment database wrappers.
 - P1 activity (`activity_*`), survival (`surv_*`), or LINCS (`drug_*`)
   unless a one-line existing call is needed as a characterization bridge.
-- A CIBERSORTx upload / remote-execution default. Keep
-  `deconv_cibersortx_input()` as a local table helper only.
+- A CIBERSORTx upload / remote-execution default.
 - New result classes, `autoplot()` methods, or `theme_set()`.
 - A `view =` mega-plot that branches stacked / box / heatmap.
 - A second subtype feature heatmap; use `plot_assay_heatmap()`.
@@ -115,14 +99,12 @@ vignette stub. Prefer extractors and plots over new analysis backends.
 - Survival external-validation claims.
 - UMAP/t-SNE as a required subtype figure.
 
-## Next commits after this PR's first slice
+## Remaining follow-ups (not blockers)
 
-See the PR body. Expected follow-ups, not this slice:
-
-1. Optional `top_n` on `cluster_consensus()` so HVG can stay inside one call.
-2. Optional BayesPrism `get.fraction()` adapter inside `deconv_fractions()`
-   once that backend is on the full-backend image.
-3. Real-data (not `mae_simulate()`) tutorials once WGCNA / CCP / a pinned
-   reference are in the vignette CI extra-packages.
-4. Module-preservation plot helper if a second cohort is in scope.
-5. Publication PNG review under ignored `docs/plot-previews/`.
+1. Optional `top_n` on `cluster_consensus()`.
+2. BayesPrism `get.fraction()` adapter inside `deconv_fractions()`.
+3. Module-preservation plot if a second real cohort is in scope.
+4. Figure-audit review of the default plots (maintainer; not merged here).
+5. A licensed, tissue-matched single-cell reference if a later article
+   must show real TME fractions. Do not treat `mae_deconv_toy()` as that
+   reference.
