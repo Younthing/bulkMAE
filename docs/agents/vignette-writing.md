@@ -1,6 +1,11 @@
 # bulkMAE 可执行 vignette 写作经验
 
-本文总结真实分析教程形成过程中已经验证过的写作、渲染和 CI 经验。新增分析型 vignette 前，应结合本文阅读
+本文总结真实分析教程形成过程中已经验证过的写作、渲染和 CI 经验。新增一条分析主线时，先按
+[`AGENTS.md`](../../AGENTS.md) 的 Sequence an analysis mainline 节排序。先定主线，再起草
+vignette 以列出需要的分析和图。缺分析才加薄封装。最后按本文和
+[`plotting-functions.md`](plotting-functions.md) 画图并写完教程。本文只管 vignette 怎么写。
+
+新增分析型 vignette 前，应结合本文阅读
 [`vignettes/airway-qc-de.Rmd`](../../vignettes/airway-qc-de.Rmd)、
 [`vignettes/enrichment-analysis.Rmd`](../../vignettes/enrichment-analysis.Rmd)、
 [`DESCRIPTION`](../../DESCRIPTION) 和相关工作流配置。

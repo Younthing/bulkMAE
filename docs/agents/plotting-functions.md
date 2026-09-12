@@ -1,7 +1,10 @@
 # bulkMAE 绘图函数重构经验
 
-本文记录统一 ggplot2 绘图层形成过程中已经验证过的接口边界、实现方式和验收方法。新增或修改
-绘图相关接口前，应先阅读本文，并以当前的
+本文记录统一 ggplot2 绘图层形成过程中已经验证过的接口边界、实现方式和验收方法。先确认当前
+分析主线的 vignette 已经点名这张图，再改绘图层。不要为了补齐文献常见图型而先画图。主线顺序见
+[`AGENTS.md`](../../AGENTS.md) 的 Sequence an analysis mainline 节。
+
+新增或修改绘图相关接口前，应先阅读本文，并以当前的
 [`R/plotting.R`](../../R/plotting.R)、
 [`R/plotting-gsea.R`](../../R/plotting-gsea.R)、
 [`R/plotting-ora.R`](../../R/plotting-ora.R) 及其对应的
