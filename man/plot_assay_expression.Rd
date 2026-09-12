@@ -2,16 +2,19 @@
 % Please edit documentation in R/plotting.R
 \name{plot_assay_expression}
 \alias{plot_assay_expression}
-\title{Plot selected assay features by sample group}
+\title{Plot grouped assay values with a comparison statistic}
 \usage{
 plot_assay_expression(
   x,
   experiment,
   assay,
   features,
-  colour = NULL,
+  colour,
   feature_label = NULL,
-  geom = c("boxplot", "violin")
+  geom = c("boxplot", "violin"),
+  test = c("wilcoxon", "t", "none"),
+  p_adjust = c("BH", "holm", "none"),
+  stat_label = c("p", "significance")
 )
 }
 \arguments{
@@ -23,21 +26,32 @@ plot_assay_expression(
 
 \item{features}{Explicit feature identifiers to plot.}
 
-\item{colour}{Optional discrete sample-metadata column used for the x axis
-and the colour scale. When omitted, each sample is drawn on the x axis.}
+\item{colour}{Discrete sample-metadata column used as the comparison group.}
 
 \item{feature_label}{Optional feature metadata column or complete
 feature-named labels. Duplicate display labels are made unique.}
 
 \item{geom}{\code{"boxplot"} or \code{"violin"}. Both add a jittered point layer.}
+
+\item{test}{Display comparison on the plotted values. \code{"wilcoxon"} is a
+two-sample Wilcoxon rank-sum test. \code{"t"} is Welch's t-test. \code{"none"}
+draws groups without a bracket. More than two groups use pairwise tests.}
+
+\item{p_adjust}{Multiple-testing method for pairwise p-values when more than
+two groups are present. Ignored for a single two-group comparison.}
+
+\item{stat_label}{\code{"p"} prints a compact p-value. \code{"significance"} prints
+\code{ns}, \code{*}, \code{**}, or \code{***}.}
 }
 \value{
 An unprinted standard ggplot object carrying recommended physical
 dimensions for \code{\link[=plot_save]{plot_save()}}.
 }
 \description{
-Draws one panel per explicit feature from an already-computed assay. Features
-are never selected from a result table inside this function.
+Draws one panel per explicit feature from an already-computed assay. The
+comparison is a two-sample test on the plotted values. It is not the
+differential-expression model p-value. Features are never selected from a
+result table inside this function.
 }
 \seealso{
 Other plotting:

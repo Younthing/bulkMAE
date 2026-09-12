@@ -627,15 +627,23 @@ plot_assay_heatmap <- function(
   )
 }
 
-#' Plot selected assay features by sample group
+#' Plot grouped assay values with a comparison statistic
 #'
-#' Draws one panel per explicit feature from an already-computed assay. Features
-#' are never selected from a result table inside this function.
+#' Draws one panel per explicit feature from an already-computed assay. The
+#' comparison is a two-sample test on the plotted values. It is not the
+#' differential-expression model p-value. Features are never selected from a
+#' result table inside this function.
 #'
 #' @inheritParams plot_assay_heatmap
-#' @param colour Optional discrete sample-metadata column used for the x axis
-#'   and the colour scale. When omitted, each sample is drawn on the x axis.
+#' @param colour Discrete sample-metadata column used as the comparison group.
 #' @param geom `"boxplot"` or `"violin"`. Both add a jittered point layer.
+#' @param test Display comparison on the plotted values. `"wilcoxon"` is a
+#'   two-sample Wilcoxon rank-sum test. `"t"` is Welch's t-test. `"none"`
+#'   draws groups without a bracket. More than two groups use pairwise tests.
+#' @param p_adjust Multiple-testing method for pairwise p-values when more than
+#'   two groups are present. Ignored for a single two-group comparison.
+#' @param stat_label `"p"` prints a compact p-value. `"significance"` prints
+#'   `ns`, `*`, `**`, or `***`.
 #'
 #' @return An unprinted standard ggplot object carrying recommended physical
 #'   dimensions for [plot_save()].
@@ -646,11 +654,21 @@ plot_assay_expression <- function(
     experiment,
     assay,
     features,
-    colour = NULL,
+    colour,
     feature_label = NULL,
-    geom = c("boxplot", "violin")
+    geom = c("boxplot", "violin"),
+    test = c("wilcoxon", "t", "none"),
+    p_adjust = c("BH", "holm", "none"),
+    stat_label = c("p", "significance")
 ) {
   geom <- match.arg(geom)
+  test <- match.arg(test)
+  p_adjust <- match.arg(p_adjust)
+  stat_label <- match.arg(stat_label)
+  if (missing(colour) || is.null(colour)) {
+    stop("`colour` must name a discrete sample-metadata column.", call. = FALSE)
+  }
+  .assert_scalar_character(colour, "colour")
   if (is.null(features) || !length(features)) {
     stop("`features` must explicitly contain at least one feature.", call. = FALSE)
   }
@@ -664,21 +682,14 @@ plot_assay_expression <- function(
   )
   if (is.null(labels)) labels <- stats::setNames(rownames(matrix), rownames(matrix))
   samples <- mae_samples(x, experiment)
-  if (!is.null(colour)) {
-    .assert_scalar_character(colour, "colour")
-    .plot_require_columns(samples, colour, "sample metadata")
-    group <- samples[[colour]]
-    if (!(is.factor(group) || is.character(group) || is.logical(group))) {
-      stop(
-        "`mae_samples()$", colour, "` mapped to colour must be discrete; ",
-        "convert it to a factor.",
-        call. = FALSE
-      )
-    }
-    x_name <- colour
-  } else {
-    group <- NULL
-    x_name <- "Sample"
+  .plot_require_columns(samples, colour, "sample metadata")
+  group <- samples[[colour]]
+  if (!(is.factor(group) || is.character(group) || is.logical(group))) {
+    stop(
+      "`mae_samples()$", colour, "` mapped to colour must be discrete; ",
+      "convert it to a factor.",
+      call. = FALSE
+    )
   }
   display <- stats::setNames(
     make.unique(as.character(labels[rownames(matrix)])),
@@ -697,17 +708,23 @@ plot_assay_expression <- function(
     unname(display[data$feature_id]),
     levels = unname(display[rownames(matrix)])
   )
-  data$group <- if (is.null(group)) {
-    factor(data$sample, levels = colnames(matrix))
+  data$group <- droplevels(factor(group[match(data$sample, rownames(samples))]))
+  if (anyNA(data$group)) stop("Group values cannot be missing.", call. = FALSE)
+  n_groups <- nlevels(data$group)
+  if (n_groups < 2L) {
+    stop("`colour` must contain at least two groups.", call. = FALSE)
+  }
+  group_n <- table(data$group, useNA = "no")
+  if (any(group_n < 2L)) {
+    stop("Each group needs at least two samples for a comparison plot.", call. = FALSE)
+  }
+  stats <- if (identical(test, "none")) {
+    NULL
   } else {
-    group[match(data$sample, rownames(samples))]
+    .plot_expression_stats(data, test = test, p_adjust = p_adjust, stat_label = stat_label)
   }
-  if (identical(geom, "violin")) {
-    group_n <- table(data$group, useNA = "no")
-    if (any(group_n < 2L)) {
-      stop("`geom = \"violin\"` needs at least two samples in every group.", call. = FALSE)
-    }
-  }
+  x_angle <- if (n_groups > 3L) 45 else 0
+  x_hjust <- if (n_groups > 3L) 1 else 0.5
   plot <- ggplot2::ggplot(data, ggplot2::aes(
     x = .data[["group"]],
     y = .data[["value"]],
@@ -726,21 +743,46 @@ plot_assay_expression <- function(
       width = 0.12, height = 0, size = 1.15, alpha = 0.9, stroke = 0
     ) +
     ggplot2::facet_wrap(ggplot2::vars(.data[["feature"]]), scales = "free_y") +
-    ggplot2::scale_colour_manual(values = .plot_discrete_values(data$group)) +
-    ggplot2::scale_fill_manual(values = .plot_discrete_values(data$group)) +
+    ggplot2::scale_colour_manual(values = .plot_discrete_values(data$group), guide = "none") +
+    ggplot2::scale_fill_manual(values = .plot_discrete_values(data$group), guide = "none") +
+    ggplot2::scale_y_continuous(
+      expand = ggplot2::expansion(mult = if (is.null(stats)) c(0.05, 0.08) else c(0.05, 0.22))
+    ) +
     ggplot2::labs(
-      x = x_name, y = "Assay value", colour = x_name, fill = x_name,
-      alt = "Assay values for explicitly selected features, grouped by sample metadata."
+      x = colour, y = "Assay value",
+      alt = "Grouped assay values for explicitly selected features, with a display comparison on the plotted points."
     ) +
     theme_bulkmae() +
     ggplot2::theme(
       panel.border = ggplot2::element_rect(colour = "#222222", fill = NA, linewidth = 0.25),
       panel.background = ggplot2::element_rect(fill = "white", colour = NA),
       plot.background = ggplot2::element_rect(fill = "white", colour = NA),
-      legend.position = "top",
-      legend.direction = "horizontal",
-      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)
+      axis.text.x = ggplot2::element_text(angle = x_angle, hjust = x_hjust)
     )
+  if (!is.null(stats)) {
+    plot <- plot +
+      ggplot2::geom_segment(
+        data = stats,
+        mapping = ggplot2::aes(
+          x = .data[["x"]], xend = .data[["xend"]],
+          y = .data[["y"]], yend = .data[["yend"]]
+        ),
+        inherit.aes = FALSE,
+        linewidth = 0.25,
+        colour = "#333333"
+      ) +
+      ggplot2::geom_text(
+        data = unique(stats[c("feature", "label_x", "label_y", "label", "p_value")]),
+        mapping = ggplot2::aes(
+          x = .data[["label_x"]], y = .data[["label_y"]], label = .data[["label"]]
+        ),
+        inherit.aes = FALSE,
+        size = .bulkmae_text_size_pt,
+        size.unit = "pt",
+        colour = "#333333",
+        vjust = 0
+      )
+  }
   n_features <- nrow(matrix)
   .plot_with_dimensions(
     plot,
@@ -748,9 +790,94 @@ plot_assay_expression <- function(
       n_features, base = 5.5, per_item = 2.2, minimum = 8, maximum = 16
     ),
     height = .plot_clamped_dimension(
-      ceiling(n_features / 3), base = 5, per_item = 3.2, minimum = 6.5, maximum = 16
+      ceiling(n_features / 3), base = 5.5, per_item = 3.4, minimum = 6.5, maximum = 16
     )
   )
+}
+
+.plot_expression_stats <- function(data, test, p_adjust, stat_label) {
+  pieces <- lapply(split(data, data$feature, drop = TRUE), function(panel) {
+    groups <- levels(droplevels(panel$group))
+    pairs <- utils::combn(groups, 2L, simplify = FALSE)
+    if (length(groups) > 2L) {
+      adjacent <- lapply(seq_len(length(groups) - 1L), function(index) {
+        c(groups[[index]], groups[[index + 1L]])
+      })
+      distant <- Filter(function(pair) {
+        abs(match(pair[[1L]], groups) - match(pair[[2L]], groups)) > 1L
+      }, pairs)
+      pairs <- c(adjacent, distant)
+    }
+    p_values <- vapply(pairs, function(pair) {
+      .plot_two_group_p(
+        panel$value[as.character(panel$group) == pair[[1L]]],
+        panel$value[as.character(panel$group) == pair[[2L]]],
+        test
+      )
+    }, numeric(1))
+    if (length(p_values) > 1L && !identical(p_adjust, "none")) {
+      p_values <- stats::p.adjust(p_values, method = p_adjust)
+    }
+    y_range <- range(panel$value)
+    span <- diff(y_range)
+    if (!is.finite(span) || span == 0) span <- max(abs(y_range), 1)
+    pad <- span * 0.14
+    tick <- pad * 0.22
+    x_levels <- levels(panel$group)
+    do.call(rbind, lapply(seq_along(pairs), function(index) {
+      pair <- pairs[[index]]
+      x1 <- match(pair[[1L]], x_levels)
+      x2 <- match(pair[[2L]], x_levels)
+      y <- y_range[[2L]] + pad * index
+      label <- if (identical(stat_label, "significance")) {
+        .plot_significance_label(p_values[[index]])
+      } else {
+        .plot_format_pvalue(p_values[[index]])
+      }
+      data.frame(
+        feature = panel$feature[[1L]],
+        x = c(x1, x1, x2),
+        xend = c(x1, x2, x2),
+        y = c(y - tick, y, y),
+        yend = c(y, y, y - tick),
+        label_x = (x1 + x2) / 2,
+        label_y = y + pad * 0.08,
+        label = label,
+        p_value = p_values[[index]],
+        stringsAsFactors = FALSE
+      )
+    }))
+  })
+  out <- do.call(rbind, pieces)
+  rownames(out) <- NULL
+  out
+}
+
+.plot_two_group_p <- function(left, right, test) {
+  left <- left[is.finite(left)]
+  right <- right[is.finite(right)]
+  if (length(left) < 2L || length(right) < 2L) {
+    stop("Each compared group needs at least two finite values.", call. = FALSE)
+  }
+  result <- if (identical(test, "t")) {
+    stats::t.test(left, right)
+  } else {
+    stats::wilcox.test(left, right, exact = FALSE)
+  }
+  as.numeric(result$p.value)
+}
+
+.plot_format_pvalue <- function(p) {
+  if (!is.finite(p)) return("p = NA")
+  if (p < 0.001) return("p < 0.001")
+  paste0("p = ", formatC(p, digits = 2L, format = "fg"))
+}
+
+.plot_significance_label <- function(p) {
+  if (!is.finite(p) || p >= 0.05) return("ns")
+  if (p < 0.001) return("***")
+  if (p < 0.01) return("**")
+  "*"
 }
 
 .bulkmae_colours <- c(

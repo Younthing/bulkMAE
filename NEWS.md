@@ -1,9 +1,10 @@
 # bulkMAE (development version)
 
-- Adds `plot_assay_expression()` for explicitly selected features and brings
-  volcano, MA, and assay heatmap defaults closer to the literature DE figure
-  set. Non-significant points sit under significant points. Labels use
-  `ggrepel`. The volcano prints Down/Up counts. Heatmap tiles fill the panel.
+- Adds `plot_assay_expression()` for explicitly selected features as a grouped
+  comparison with a Wilcoxon or t-test bracket on the plotted values. Volcano,
+  MA, and assay heatmap defaults move closer to the literature DE figure set.
+  Non-significant points sit under significant points. Labels use `ggrepel`.
+  The volcano prints Down/Up counts. Heatmap tiles fill the panel.
 - Rewrites the README as a landing page with official backend links and one
   square patchwork gallery of volcano, heatmap, ORA network, and GSEA ridge
   plots.

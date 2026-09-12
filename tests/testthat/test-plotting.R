@@ -324,7 +324,7 @@ test_that("assay heatmap aligns annotations and removes constant scaled rows", {
   expect_no_error(ggplot2::ggplot_build(duplicate_plot))
 })
 
-test_that("assay expression joins groups by sample identifier", {
+test_that("assay expression joins groups and adds a display comparison", {
   mae <- make_toy_mae(n_features = 5L, n_samples = 4L)
   features <- c("gene1", "gene3")
   plot <- plot_assay_expression(
@@ -340,6 +340,32 @@ test_that("assay expression joins groups by sample identifier", {
     as.character(plot$data$group),
     as.character(mae_samples(mae, "rna")[as.character(plot$data$sample), "condition"])
   )
+  expect_true(any(vapply(
+    plot$layers,
+    function(layer) inherits(layer$geom, "GeomSegment"),
+    logical(1)
+  )))
+  text_layer <- Filter(
+    function(layer) inherits(layer$geom, "GeomText"),
+    plot$layers
+  )[[1L]]
+  expect_true(all(grepl("^p ", text_layer$data$label)))
+  values <- mae_pull_assay(mae, "rna", "log_expression")["gene1", ]
+  groups <- mae_samples(mae, "rna")$condition
+  expected <- stats::wilcox.test(
+    values[groups == "a"], values[groups == "b"], exact = FALSE
+  )$p.value
+  gene1_p <- text_layer$data$p_value[as.character(text_layer$data$feature) == "Gene 1"][[1L]]
+  expect_equal(gene1_p, expected)
+  none <- plot_assay_expression(
+    mae, "rna", "log_expression",
+    features = "gene2", colour = "condition", test = "none"
+  )
+  expect_false(any(vapply(
+    none$layers,
+    function(layer) inherits(layer$geom, "GeomSegment"),
+    logical(1)
+  )))
   expect_error(
     plot_assay_expression(mae, "rna", "log_expression", features = character()),
     "explicitly contain"
@@ -349,10 +375,8 @@ test_that("assay expression joins groups by sample identifier", {
     "Unknown features"
   )
   expect_error(
-    plot_assay_expression(
-      mae, "rna", "log_expression", features = "gene2", geom = "violin"
-    ),
-    "at least two samples"
+    plot_assay_expression(mae, "rna", "log_expression", features = "gene2"),
+    "discrete sample-metadata column"
   )
   expect_no_error(ggplot2::ggplot_build(
     plot_assay_expression(
