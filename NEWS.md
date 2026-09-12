@@ -6,10 +6,11 @@
   `deconv_fractions()`.
 - Adds publication-default ggplot helpers for those routes
   (`plot_coexpr_*()`, `plot_cluster_*()`, `plot_deconv_*()`).
-- Runs the three P0 routes on Bioconductor `airway` (same filter/VST
-  design as the QC/DE tutorial). Deconvolution uses `mae_deconv_toy()`
-  because `airway` has no single-cell reference; the helper is synthetic
-  and documented as such. CIBERSORTx is still input-only.
+- Runs the three P0 routes on Bioconductor `airway` where that dataset
+  is enough (same filter/VST design as the QC/DE tutorial). Deconvolution
+  uses existing `mae_simulate()` because `airway` has no single-cell
+  reference; grouping columns stay aligned to that MAE. CIBERSORTx is
+  still input-only.
 - Records the reuse-first gap table in `docs/p0-route-gaps.md`.
 
 - Rewrites the README as a landing page with official backend links and one

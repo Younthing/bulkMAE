@@ -1,11 +1,11 @@
 ---
-title: "P0: immune deconvolution on airway"
+title: "P0: immune deconvolution with mae_simulate"
 output:
   rmarkdown::html_vignette:
     toc: true
     number_sections: true
 vignette: >
-  %\VignetteIndexEntry{P0: immune deconvolution on airway}
+  %\VignetteIndexEntry{P0: immune deconvolution with mae_simulate}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -32,56 +32,67 @@ The P0 immune / TME route is: pin a reference → `deconv_reference()` →
 `deconv()` / `deconv_music()` / `deconv_bayesprism()` → `deconv_fractions()`
 → associate with subtype or clinical columns.
 
-Bulk airway counts come from
-[`airway`](https://bioconductor.org/packages/release/data/experiment/html/airway.html).
-That package has **no** tissue-matched single-cell atlas. The reference
-and the plotted fractions therefore come from `mae_deconv_toy()`, an
-in-package synthetic helper. Its `source` string says so. These numbers
-are not immune infiltration in airway smooth muscle.
+Bioconductor [`airway`](https://bioconductor.org/packages/release/data/experiment/html/airway.html)
+is the preferred ExperimentData package for the other P0 articles, but it
+has **no** tissue-matched single-cell atlas. Rather than add a second
+simulator, this article uses the existing in-package helper
+`mae_simulate()` for bulk counts and sample metadata. Grouping columns
+come from that MAE. The numbers are not immune infiltration.
 
 CIBERSORTx is not the default. `deconv_cibersortx_input()` only prepares a
 local mixture table.
 
 ```{r install, eval=FALSE}
-BiocManager::install(c("airway", "SingleCellExperiment"))
-# MuSiC is optional and GitHub-hosted; a real study pins its commit.
+# Optional backends. A real study pins the reference atlas and MuSiC commit.
+# BiocManager::install("SingleCellExperiment")
 ```
 
-```{r load-airway}
-data("airway", package = "airway")
-counts <- SummarizedExperiment::assay(airway, "counts")
-sample_data <- as.data.frame(
-  SummarizedExperiment::colData(airway),
-  optional = TRUE
+```{r load-simulate}
+mae <- mae_simulate(n_features = 80L, n_samples = 8L, seed = 20260912L)
+sample_table <- mae_samples(mae, "rna")
+bulk <- mae_pull_assay(mae, "rna", "counts")
+genes <- rownames(bulk)
+samples <- rownames(sample_table)
+knitr::kable(
+  sample_table[, c("condition", "batch"), drop = FALSE],
+  caption = "mae_simulate() sample metadata used for grouping. Synthetic; not a clinical cohort."
 )
-sample_data$dex <- factor(sample_data$dex, levels = c("untrt", "trt"))
-sample_data$cell <- factor(sample_data$cell)
-
-mae <- mae_from_matrix(
-  expression = counts,
-  samples = sample_data,
-  experiment = "airway",
-  assay = "counts"
-)
-samples <- rownames(mae_samples(mae, "airway"))
-toy <- mae_deconv_toy(
-  samples = samples,
-  genes = rownames(counts)[seq_len(80L)],
-  seed = 20260912L
-)
-toy$source
 ```
-
-`mae_deconv_toy()` reuses the first 80 airway Ensembl IDs only so a later
-MuSiC call would share identifiers. The counts and fractions themselves
-are simulated.
 
 # Pin the reference, then extract fractions
 
+`deconv_reference()` only standardizes a user-supplied count matrix. The
+tiny reference below shares `mae_simulate()` gene IDs so a later MuSiC
+call can run. It is built in this article, not by a new package helper,
+and it is not a biological atlas.
+
 ```{r reference, eval = has_sce}
+cell_types <- c("B_cell", "T_cell", "Myeloid")
+n_donors <- 4L
+cells_per_type <- 3L
+n_cells <- n_donors * length(cell_types) * cells_per_type
+cell_names <- sprintf("cell%03d", seq_len(n_cells))
+cell_type <- rep(rep(cell_types, each = cells_per_type), n_donors)
+donor <- rep(
+  sprintf("donor%02d", seq_len(n_donors)),
+  each = length(cell_types) * cells_per_type
+)
+type_mean <- c(B_cell = 12, T_cell = 20, Myeloid = 35)
+sc_counts <- matrix(
+  stats::rnbinom(length(genes) * n_cells, mu = type_mean[cell_type], size = 8),
+  nrow = length(genes),
+  dimnames = list(genes, cell_names)
+)
+storage.mode(sc_counts) <- "integer"
+cell_data <- data.frame(
+  cell_type = cell_type,
+  sample_id = donor,
+  row.names = cell_names,
+  check.names = FALSE
+)
 sc_reference <- deconv_reference(
-  counts = toy$counts,
-  cell_data = toy$cell_data,
+  counts = sc_counts,
+  cell_data = cell_data,
   cell_type = "cell_type",
   sample = "sample_id"
 )
@@ -91,24 +102,30 @@ sc_reference
 ```{r music, eval = has_sce && has_music}
 music <- deconv_music(
   mae,
-  "airway",
+  "rna",
   sc_reference = sc_reference,
   assay = "counts"
 )
 fractions <- deconv_fractions(music)
 ```
 
-```{r toy-fractions, eval = !(has_sce && has_music)}
-# Default path: documented synthetic fractions aligned to airway samples.
-# Replace with deconv_fractions(deconv_music(...)) or deconv() once a
-# real, licensed reference and backend are available.
-fractions <- deconv_fractions(toy$fractions)
+```{r aligned-fractions, eval = !(has_sce && has_music)}
+# Stand-in matrix so the default plots run without MuSiC. Columns are the
+# mae_simulate() sample names; values follow condition. Not a backend fit.
+treated <- as.integer(sample_table$condition == "treated")
+fractions <- rbind(
+  B_cell = 0.42 - 0.18 * treated,
+  T_cell = 0.36 - 0.04 * treated,
+  Myeloid = 0.22 + 0.22 * treated
+)
+colnames(fractions) <- samples
+fractions <- deconv_fractions(fractions)
 ```
 
 ```{r groups}
-sample_table <- mae_samples(mae, "airway")
-group <- stats::setNames(sample_table$dex, rownames(sample_table))
-cell_line <- stats::setNames(sample_table$cell, rownames(sample_table))
+group <- stats::setNames(sample_table$condition, samples)
+batch <- stats::setNames(sample_table$batch, samples)
+identical(colnames(fractions), samples)
 ```
 
 A real study records the atlas name, species, tissue, identifier type, and
@@ -117,27 +134,27 @@ backend version. Signature methods such as quanTIseq still go through
 
 # Required default plots
 
-```{r stacked, fig.cap = "Stacked synthetic cell-type values for each airway sample. These are toy fractions, not a deconvolution of the airway counts.", fig.alt = "Stacked bars of synthetic B-cell, T-cell, and myeloid fractions across eight airway samples."}
+```{r stacked, fig.cap = "Stacked cell-type values aligned to mae_simulate() samples. These are not a deconvolution of a biological bulk cohort.", fig.alt = "Stacked bars of B-cell, T-cell, and myeloid values across eight simulated samples."}
 plot_deconv_stacked(fractions) +
-  labs(title = "Toy cell-type fractions")
+  labs(title = "Cell-type values by sample")
 ```
 
-```{r box, fig.cap = "Toy fractions compared by dexamethasone treatment.", fig.alt = "Boxplots of each synthetic cell type split into untreated and treated airway samples."}
+```{r box, fig.cap = "Values compared by the mae_simulate() condition column.", fig.alt = "Boxplots of each cell type split into control versus treated simulated samples."}
 plot_deconv_box(fractions, group) +
-  labs(title = "Toy fractions by dexamethasone")
+  labs(title = "Values by condition")
 ```
 
-```{r heatmap, fig.height = 4.6, fig.cap = "Toy fraction heatmap split by cell line. Cell line is the real airway annotation; the fill values remain synthetic.", fig.alt = "A heatmap of synthetic cell-type fractions with columns faceted by airway cell line."}
-plot_deconv_heatmap(fractions, column_split = cell_line) +
-  labs(title = "Toy fractions by cell line")
+```{r heatmap, fig.height = 4.6, fig.cap = "Heatmap split by the mae_simulate() batch column. Fill values remain synthetic unless MuSiC ran.", fig.alt = "A heatmap of cell-type values with columns faceted by simulated batch."}
+plot_deconv_heatmap(fractions, column_split = batch) +
+  labs(title = "Values by batch")
 ```
 
 # Limits
 
-- `mae_deconv_toy()` is not a reference atlas and must not be cited as TME
-  biology.
-- airway smooth-muscle RNA-seq is the wrong tissue for a blood or tumour
-  immune signature unless a study explicitly justifies that transfer.
+- `mae_simulate()` annotations and any stand-in fractions are not TME
+  biology and must not be cited as infiltration.
+- `airway` remains the bulk source for the other P0 articles; it is
+  skipped here only because it has no single-cell reference.
 - xCell scores are enrichments, not fractions; the stacked helper labels
   the y-axis `Estimated value` when columns do not sum to one.
 - No CIBERSORTx upload is performed.

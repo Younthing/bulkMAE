@@ -165,10 +165,10 @@ simulation.
   (Chinese executable guide)
 - [airway QC and paired differential expression](https://younthing.github.io/bulkMAE/articles/airway-qc-de.html)
 - [airway GO ORA, GSEA, and plots](https://younthing.github.io/bulkMAE/articles/enrichment-analysis.html)
-- P0 routes on airway: [co-expression modules](https://younthing.github.io/bulkMAE/articles/coexpression-modules.html),
-  [molecular subtyping](https://younthing.github.io/bulkMAE/articles/molecular-subtyping.html),
-  [immune deconvolution](https://younthing.github.io/bulkMAE/articles/immune-deconvolution.html)
-  (deconvolution uses a documented in-package toy reference)
+- P0 routes: [co-expression modules](https://younthing.github.io/bulkMAE/articles/coexpression-modules.html)
+  and [molecular subtyping](https://younthing.github.io/bulkMAE/articles/molecular-subtyping.html)
+  on airway; [immune deconvolution](https://younthing.github.io/bulkMAE/articles/immune-deconvolution.html)
+  uses `mae_simulate()` because airway has no scRNA reference
 - [Method-selection guide](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/expanded-methods-zh.md)
 - [Input-completeness audit](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/input-completeness-zh.md)
 - [Adapter-to-source map](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/official-sources.md)

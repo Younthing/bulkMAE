@@ -200,6 +200,49 @@ test_that("deconv_fractions extracts cell-by-sample matrices", {
   )
 })
 
+test_that("deconvolution plots align to mae_simulate sample metadata", {
+  mae <- mae_simulate(n_features = 40L, n_samples = 8L, seed = 7L)
+  sample_table <- mae_samples(mae, "rna")
+  treated <- as.integer(sample_table$condition == "treated")
+  fractions <- rbind(
+    B_cell = 0.42 - 0.18 * treated,
+    T_cell = 0.36 - 0.04 * treated,
+    Myeloid = 0.22 + 0.22 * treated
+  )
+  colnames(fractions) <- rownames(sample_table)
+  extracted <- deconv_fractions(fractions)
+  expect_identical(colnames(extracted), rownames(sample_table))
+  expect_equal(colSums(extracted), rep(1, 8L), tolerance = 1e-8, ignore_attr = TRUE)
+
+  group <- stats::setNames(sample_table$condition, rownames(sample_table))
+  boxed <- plot_deconv_box(extracted, group)
+  expect_s3_class(boxed, "ggplot")
+
+  if (requireNamespace("SingleCellExperiment", quietly = TRUE)) {
+    genes <- rownames(mae_pull_assay(mae, "rna", "counts"))
+    cells <- paste0("cell", seq_len(6L))
+    counts <- matrix(
+      1L,
+      nrow = length(genes),
+      ncol = 6L,
+      dimnames = list(genes, cells)
+    )
+    cell_data <- data.frame(
+      cell_type = rep(c("B_cell", "T_cell"), each = 3L),
+      sample_id = rep(c("donor1", "donor2"), each = 3L),
+      row.names = cells
+    )
+    reference <- deconv_reference(
+      counts,
+      cell_data,
+      cell_type = "cell_type",
+      sample = "sample_id"
+    )
+    expect_true(methods::is(reference, "SingleCellExperiment"))
+    expect_identical(rownames(SummarizedExperiment::assay(reference)), genes)
+  }
+})
+
 test_that("NMF native fits expose named sample and feature classes", {
   skip_if_not_installed("NMF")
   mae <- mae_simulate(n_features = 30L, n_samples = 8L, seed = 95L)

@@ -42,7 +42,7 @@ Scan date: 2026-09-12. Updated in this PR after the airway implementation.
 | Function | File | Role |
 |---|---|---|
 | `deconv_reference()` | `R/deconvolution.R` | User-supplied scRNA → canonical SCE |
-| `mae_deconv_toy()` | `R/simulate.R` | **Synthetic** counts, cell metadata, and fractions |
+| `mae_simulate()` | `R/simulate.R` | Existing synthetic bulk MAE when a real atlas is absent |
 | `deconv()` | `R/deconvolution.R` | `immunedeconv::deconvolute()` |
 | `deconv_music()` | `R/deconvolution.R` | `MuSiC::music_prop()` |
 | `deconv_bayesprism()` | `R/deconvolution.R` | `BayesPrism::new.prism()` + `run.prism()` |
@@ -66,21 +66,21 @@ All return one unprinted `ggplot` with `theme_bulkmae()` and
 |---|---|---|---|---|
 | Co-expression modules | `transform_vst` → `mae_variable_features` → `coexpr_pick_power` → `coexpr_wgcna` → `coexpr_module_trait` / `coexpr_membership` / `coexpr_hubs` → optional `coexpr_preservation` | None for one airway path. Preservation still needs a second cohort. | None of the required types. Hub network intentionally omitted (MM vs GS). | Done on `airway`. n = 8 cannot support a scale-free power claim. |
 | Molecular subtyping | `mae_variable_features` → `mae_subset_features` → `cluster_consensus` → `cluster_consensus_classes` → `mae_add_sample_data` → `plot_assay_heatmap` | Optional `top_n` inside `cluster_consensus()` is still a convenience, not a blocker. GSVA path uses existing `score_gsva` + `mae_add_experiment`. | None of the required types. UMAP/t-SNE stay exploratory. | Done on `airway`. k is diagnostic, not a subtype discovery. |
-| Immune / TME deconvolution | `mae_deconv_toy` → `deconv_reference` → `deconv_fractions` → plots. Real backends (`deconv` / MuSiC / BayesPrism) remain optional. | BayesPrism `get.fraction()` adapter. No real atlas is bundled. | None of the required types. | `airway` has no scRNA reference, so the vignette pins `mae_deconv_toy()` as synthetic. No CIBERSORTx upload. |
+| Immune / TME deconvolution | `mae_simulate` → `deconv_reference` → `deconv_fractions` → plots. Real backends (`deconv` / MuSiC / BayesPrism) remain optional. | BayesPrism `get.fraction()` adapter. No real atlas is bundled. | None of the required types. | `airway` has no scRNA reference, so the vignette uses existing `mae_simulate()` and aligns `condition` / `batch`. No new simulator. No CIBERSORTx upload. |
 
 ## What this PR implemented
 
 1. Extractors: `mae_variable_features()`, `coexpr_module_trait()`,
-   `coexpr_membership()`, `coexpr_hubs()`, `deconv_fractions()`,
-   `mae_deconv_toy()`.
+   `coexpr_membership()`, `coexpr_hubs()`, `deconv_fractions()`.
 2. Default `plot_*()` helpers listed above.
-3. Three executable vignettes on Bioconductor `airway` (same
+3. Co-expression and subtyping vignettes on Bioconductor `airway` (same
    `filter_expr()` / `transform_vst(~ cell + dex)` construction as the
-   QC/DE tutorial). WGCNA and ConsensusClusterPlus chunks run when those
-   Suggests are installed; CI extra-packages now include them plus
-   `SingleCellExperiment`.
-4. Deconvolution toy data is in-package and labelled synthetic in
-   `mae_deconv_toy()$source`.
+   QC/DE tutorial). Deconvolution uses existing `mae_simulate()` because
+   `airway` has no single-cell reference. WGCNA and ConsensusClusterPlus
+   chunks run when those Suggests are installed; CI extra-packages now
+   include them plus `SingleCellExperiment`.
+4. No new deconvolution simulator. Sample grouping stays aligned to
+   `mae_samples()`.
 
 ## What should NOT be added (reuse-first)
 
@@ -95,7 +95,7 @@ All return one unprinted `ggplot` with `theme_bulkmae()` and
 - A second subtype feature heatmap; use `plot_assay_heatmap()`.
 - Hub-network / igraph plots; MM vs GS is the chosen hub view.
 - Automatic k selection, automatic power selection as a scientific claim,
-  or simulated single-cell references presented as biology.
+  or a second in-package simulator besides `mae_simulate()`.
 - Survival external-validation claims.
 - UMAP/t-SNE as a required subtype figure.
 
@@ -106,5 +106,5 @@ All return one unprinted `ggplot` with `theme_bulkmae()` and
 3. Module-preservation plot if a second real cohort is in scope.
 4. Figure-audit review of the default plots (maintainer; not merged here).
 5. A licensed, tissue-matched single-cell reference if a later article
-   must show real TME fractions. Do not treat `mae_deconv_toy()` as that
+   must show real TME fractions. Do not treat `mae_simulate()` as that
    reference.

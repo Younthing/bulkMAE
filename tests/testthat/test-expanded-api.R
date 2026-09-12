@@ -62,7 +62,7 @@ test_that("public API follows discoverable analysis families", {
     "gene_sets_prepare", "gene_sets_read_gmt", "import_tximport",
     "mae_add_assay", "mae_add_experiment", "mae_add_feature_data",
     "mae_add_sample_data", "mae_assays", "mae_create",
-    "mae_create_experiment", "mae_deconv_toy", "mae_experiments",
+    "mae_create_experiment", "mae_experiments",
     "mae_feature_data",
     "mae_from_matrix", "mae_pull_assay", "mae_pull_experiment",
     "mae_samples", "mae_simulate", "mae_subset_features",
