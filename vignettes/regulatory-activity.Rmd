@@ -1,0 +1,248 @@
+---
+title: "airway 调控活性：样本级推断与图形"
+author: "bulkMAE"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    number_sections: true
+vignette: >
+  %\VignetteIndexEntry{airway 调控活性：样本级推断与图形}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 4.8,
+  dpi = 120,
+  fig.retina = 2,
+  fig.align = "center"
+)
+set.seed(20260912)
+library(bulkMAE)
+library(ggplot2)
+invisible(suppressPackageStartupMessages(
+  suppressWarnings(loadNamespace("decoupleR"))
+))
+invisible(suppressPackageStartupMessages(
+  suppressWarnings(loadNamespace("DESeq2"))
+))
+```
+
+# 本文完成什么
+
+本文接续 [airway QC 与配对差异分析](airway-qc-de.html)：使用同一份真实 counts、同一个
+`~ cell + dex` 设计和同一个 `trt − untrt` 处理方向，演示**调控活性推断**（transcription-factor /
+regulator activity），而不是 GO/KEGG 富集。富集检验集合是否过代表；活性方法用带方向的
+regulator–target 网络，从表达矩阵估计每个样本上每个 regulator 的活性分数。
+
+安装完成后，分析与渲染不访问网络。缺少教学依赖时先运行：
+
+```{r install, eval=FALSE}
+BiocManager::install(c("airway", "DESeq2", "decoupleR"))
+```
+
+# 先按问题选方法
+
+```{r method-map, warning=FALSE}
+knitr::kable(
+  data.frame(
+    question = c(
+      "阈值选出的基因是否在某集合中过多？",
+      "集合成员是否集中在完整排序的一端？",
+      "每个样本上 regulator 的带权活性是多少？"
+    ),
+    input = c(
+      "入选基因 + 全部受检基因背景",
+      "全部受检基因的有方向统计量",
+      "有限表达矩阵 + 带方向的 regulator–target 网络"
+    ),
+    function_name = c(
+      "enrich_ora(); enrich_go(method = 'ora')",
+      "enrich_gsea()/enrich_fgsea(); enrich_go(method = 'gsea')",
+      "activity_decouple(); activity_tf(); activity_progeny()"
+    ),
+    check.names = FALSE
+  ),
+  col.names = c("问题", "必需输入", "bulkMAE 接口"),
+  row.names = FALSE,
+  caption = "富集与调控活性不是同一统计问题"
+)
+```
+
+`activity_tf()` / `activity_progeny()` 会通过 OmniPath 拉取 CollecTRI、DoRothEA 或 PROGENy，因此
+**不在本离线教程中调用**。下面用真实 airway 表达，配一份**诊断用合成网络**，走
+`activity_decouple()` 的 ULM 路径。合成网络没有生物学来源，不能当成糖皮质激素 regulon。
+
+# 重建同一份 airway 表达矩阵
+
+```{r airway-mae}
+data("airway", package = "airway")
+
+counts <- SummarizedExperiment::assay(airway, "counts")
+sample_data <- as.data.frame(
+  SummarizedExperiment::colData(airway),
+  optional = TRUE
+)
+feature_data <- as.data.frame(
+  SummarizedExperiment::rowData(airway),
+  optional = TRUE
+)[, c("gene_id", "gene_name", "symbol", "gene_biotype"), drop = FALSE]
+
+sample_data$dex <- factor(sample_data$dex, levels = c("untrt", "trt"))
+sample_data$cell <- factor(sample_data$cell)
+feature_data$display_label <- as.character(feature_data$symbol)
+missing_label <- is.na(feature_data$display_label) |
+  !nzchar(feature_data$display_label)
+feature_data$display_label[missing_label] <- feature_data$gene_id[missing_label]
+feature_data$display_label <- make.unique(feature_data$display_label)
+
+mae <- mae_from_matrix(
+  expression = counts,
+  samples = sample_data,
+  row_data = feature_data,
+  experiment = "airway",
+  assay = "counts"
+)
+keep <- filter_expr(mae, "airway", group = "dex")
+mae_filtered <- mae_subset_features(mae, "airway", names(keep)[keep])
+vst <- transform_vst(
+  mae_filtered,
+  "airway",
+  blind = FALSE,
+  design = ~ cell + dex
+)
+mae_vst <- mae_add_assay(mae_filtered, "airway", vst, name = "vst")
+```
+
+对象仍是四个 cell line 各一对 untreated / treated 样本，共
+`r ncol(vst)` 个样本；过滤后保留 `r format(sum(keep), big.mark = ",")` 个基因。活性推断使用 VST
+矩阵，因为它有限且适合线性模型；它不替代原始 counts 上的差异表达。
+
+# 诊断用合成网络与 ULM 活性
+
+ULM 把每个样本的表达对 regulon 成员做单变量线性回归，返回的 `score` 是该方法的活性估计
+（*t* 统计量），**不是** NES，也不是 ORA/GSEA 的富集分数。网络在这里是教学夹具：六个合成
+regulator，各 25 个带符号靶基因，靶基因取过滤后表达矩阵的前 150 个 feature ID。
+
+```{r synthetic-network}
+features <- rownames(mae_pull_assay(mae_vst, "airway", "vst"))
+network <- data.frame(
+  source = rep(sprintf("synth_TF%02d", 1:6), each = 25L),
+  target = features[seq_len(150L)],
+  weight = rep(c(1, 1, -1, 1, -1, -1), each = 25L),
+  stringsAsFactors = FALSE
+)
+
+activity <- suppressMessages(activity_decouple(
+  mae_vst,
+  "airway",
+  network = network,
+  assay = "vst",
+  statistics = "ulm",
+  method_args = list(NULL),
+  consensus = FALSE,
+  mor = "weight",
+  min_size = 10L
+))
+activity_scores <- activity_matrix(activity, statistic = "ulm")
+mae_activity <- mae_add_experiment(
+  mae_vst,
+  value = activity_scores,
+  name = "regulator_activity",
+  assay_name = "ulm",
+  source_experiment = "airway"
+)
+sample_info <- mae_samples(mae_vst, "airway")
+```
+
+ULM 为 `r nrow(activity_scores)` 个合成 regulator × `r ncol(activity_scores)` 个样本给出完整活性网格。
+`activity_matrix()` 只按名称把长表变成矩阵，再回填 MAE；它不改写分数含义。
+
+# 文献常用活性图
+
+下列图都从已经算好的 `activity` 长表构造，不再重新推断。`sources` 在查看本次 *p*-value 之前固定为
+全部六个合成 regulator，或事先写明的子集。airway 只有 8 个样本，图注按**诊断演示**阅读，不能外推到
+真实 TF 生物学。
+
+```{r heatmap, fig.width=7.2, fig.height=5.2, fig.cap="图 1：六个诊断用合成 regulator 在 8 个 airway 样本上的 ULM 活性分数。顶栏是 dex 与 cell line 表型，不是独立验证。发散色表示带符号的活性估计，不是富集 NES。", fig.alt="合成 regulator 对 airway 样本的 ULM 活性热图，顶栏标注处理和细胞系。"}
+plot_activity_heatmap(
+  activity,
+  sources = sprintf("synth_TF%02d", 1:6),
+  sample_data = sample_info,
+  annotation = c("dex", "cell"),
+  cluster_rows = TRUE,
+  cluster_columns = FALSE
+) +
+  labs(title = "Diagnostic ULM activity (synthetic regulons)")
+```
+
+```{r rank, fig.width=6.5, fig.height=4.2, fig.cap="图 2：六个合成 regulator 的样本平均 ULM 活性。排序只用于描述本次诊断网络，不是对真实转录因子的排名。", fig.alt="六个合成 regulator 平均 ULM 活性的棒棒糖图，正负用不同颜色。"}
+rank_sources <- sprintf("synth_TF%02d", 1:6)
+plot_activity_rank(activity, sources = rank_sources) +
+  labs(title = "Mean ULM activity across airway samples")
+```
+
+```{r sample, fig.width=6.8, fig.height=4.4, fig.cap="图 3：事先选定的两个合成 regulator 在 untreated / treated 上的样本级 ULM 活性。每组 4 个点；箱线只是描述性摘要。", fig.alt="两个合成 regulator 按地塞米松分组的样本级活性箱线图，带抖动点。"}
+plot_activity_sample(
+  activity,
+  sources = c("synth_TF01", "synth_TF03"),
+  sample_data = sample_info,
+  group = "dex",
+  geom = "boxplot"
+) +
+  labs(title = "Sample-level ULM activity by dex")
+```
+
+`activity_contrast()` 不调用新的后端。它只对已经得到的样本活性做 `trt − untrt` 的组均值差，并用
+Welch *t* 检验描述该差。在 4 对样本上，这些 *p*-value 只是诊断量，不是独立队列里的 TF 发现。
+
+```{r contrast}
+contrast <- activity_contrast(
+  activity,
+  sample_data = sample_info,
+  group = "dex",
+  reference = "untrt",
+  target = "trt",
+  statistic = "ulm"
+)
+contrast_display <- contrast[order(contrast$p_value, na.last = TRUE), , drop = FALSE]
+```
+
+```{r contrast-table}
+knitr::kable(
+  contrast_display,
+  digits = 3,
+  row.names = FALSE,
+  caption = "合成 regulator 的 trt − untrt 平均活性差（Welch，BH 校正）"
+)
+```
+
+```{r volcano, fig.width=6.5, fig.height=4.8, fig.cap="图 4：合成 regulator 的组间活性差火山图。横轴是平均 ULM 活性差，纵轴是该两组比较的原始 p-value 的 −log10；颜色用 BH FDR 与效应阈值，二者不是同一条线。n = 4 对，仅作诊断。", fig.alt="六个合成 regulator 的活性差火山图，点按 FDR 与效应阈值着色。"}
+plot_activity_volcano(
+  contrast,
+  fdr = 0.05,
+  min_abs_effect = 0,
+  label_sources = c("synth_TF01", "synth_TF03")
+) +
+  labs(title = "Diagnostic dex contrast of ULM activity")
+```
+
+# 限制与复现
+
+- 表达来自 Himes 等 airway RNA-seq（`airway` ExperimentData；n = 8，四对 cell line）。
+- 网络是诊断用合成 regulon，不是 CollecTRI、DoRothEA、PROGENy 或任何文献 curated 资源。
+- ULM `score` 是活性估计（线性模型 *t*），不要写成 NES、ORA 或通路富集。
+- 组间 *p*-value 来自样本活性的 Welch 比较，样本量很小，不能当作发现声明。
+- 本文不覆盖生存/预后、LINCS 药物假说、MEGENA/CEMiTool，也不再包一层 DoRothEA 外壳。
+
+需要真实 TF / 通路资源时，在已审查的离线缓存或可声明的 OmniPath 会话中调用
+`activity_tf()` 或 `activity_progeny()`，并记录资源版本。本教程使用 bulkMAE
+`r as.character(utils::packageVersion("bulkMAE"))`。
+
+```{r session-info}
+sessionInfo()
+```

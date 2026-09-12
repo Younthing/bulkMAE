@@ -23,6 +23,7 @@ articles:
       - getting-started
       - airway-qc-de
       - enrichment-analysis
+      - regulatory-activity
   - title: Guides
     navbar: Guides
     contents:
@@ -30,7 +31,7 @@ articles:
 
 reference:
   - title: Plotting
-    desc: Standard ggplot2 views of QC, embeddings, differential expression, enrichment, and assays.
+    desc: Standard ggplot2 views of QC, embeddings, differential expression, enrichment, regulatory activity, and assays.
     contents:
       - has_concept("plotting")
   - title: Functions

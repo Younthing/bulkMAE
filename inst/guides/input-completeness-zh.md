@@ -101,6 +101,7 @@
 | `activity_decouple()` | A + B | 用户提供长表网络/集合后可离线计算；集合富集与带方向调控活性不是同一统计问题。 |
 | `activity_progeny()`、`activity_tf()` | A + C | 快捷函数依赖 PROGENy、CollecTRI/DoRothEA 等公共资源；不能把资源覆盖度当作实验真值。 |
 | `activity_matrix()` | A | 将公开 activity 函数的长表按名称变成 source × sample 矩阵，可交给 `mae_add_experiment()`。 |
+| `activity_contrast()` | A | 对已经推断的样本活性做两组均值差和可选 Welch/Wilcoxon 检验；不是新的后端，也不是富集。 |
 
 ### 3.5 聚类、共表达和网络
 

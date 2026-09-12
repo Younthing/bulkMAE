@@ -1,5 +1,12 @@
 # bulkMAE (development version)
 
+- Adds a P1.1 regulatory-activity mainline on top of the existing decoupleR
+  adapters: `activity_contrast()` compares already-inferred per-sample scores,
+  and `plot_activity_heatmap()`, `plot_activity_rank()`,
+  `plot_activity_sample()`, and `plot_activity_volcano()` draw the literature
+  activity figure set. These views label ULM/MLM scores as activity, not
+  enrichment NES. An executable airway vignette uses a diagnostic synthetic
+  regulon so the render stays offline.
 - Rewrites the README as a landing page with official backend links and one
   square patchwork gallery of volcano, heatmap, ORA network, and GSEA ridge
   plots.

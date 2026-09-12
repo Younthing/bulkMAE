@@ -39,7 +39,7 @@ test_that("decouple adapter exposes method and consensus choices", {
 test_that("public API follows discoverable analysis families", {
   exports <- getNamespaceExports("bulkMAE")
   expected <- c(
-    "activity_decouple", "activity_matrix", "activity_methods",
+    "activity_contrast", "activity_decouple", "activity_matrix", "activity_methods",
     "activity_progeny", "activity_resource", "activity_resources",
     "activity_tf", "adjust_batch", "adjust_combat", "adjust_combatseq",
     "adjust_covariates", "adjust_ruv", "adjust_sva", "annotate_biomart",
@@ -67,7 +67,9 @@ test_that("public API follows discoverable analysis families", {
     "meta_collect", "meta_effect", "ml_glmnet",
     "network_genie3", "network_genie3_links", "network_string",
     "normalize_deseq", "normalize_tmm", "normalize_tpm", "qc_correlation", "qc_library",
-    "qc_outliers", "plot_assay_heatmap", "plot_de_ma", "plot_de_volcano",
+    "qc_outliers", "plot_activity_heatmap", "plot_activity_rank",
+    "plot_activity_sample", "plot_activity_volcano", "plot_assay_heatmap",
+    "plot_de_ma", "plot_de_volcano",
     "plot_embedding", "plot_gsea_classic",
     "plot_gsea_ridge", "plot_ora_bubble", "plot_ora_network",
     "plot_ora_radial", "plot_qc_correlation", "plot_qc_library",

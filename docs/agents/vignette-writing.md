@@ -8,6 +8,7 @@
 新增分析型 vignette 前，应结合本文阅读
 [`vignettes/airway-qc-de.Rmd`](../../vignettes/airway-qc-de.Rmd)、
 [`vignettes/enrichment-analysis.Rmd`](../../vignettes/enrichment-analysis.Rmd)、
+[`vignettes/regulatory-activity.Rmd`](../../vignettes/regulatory-activity.Rmd)、
 [`DESCRIPTION`](../../DESCRIPTION) 和相关工作流配置。
 
 ## 先区分 API 总览与真实分析教程
@@ -154,7 +155,7 @@ inline R 适合报告：
 
 5. 用 pkgdown 的实际配置构建站点，确认文章顺序、图片嵌入和链接。
 6. 打开最终 HTML，人工确认结果表、动态摘要、正文排版、alt text 和预期图数；airway QC/DE 教程
-   应有 7 幅图，富集教程应有 5 幅图。
+   应有 7 幅图，富集教程应有 5 幅图，调控活性教程应有 4 幅图。
 
 直接 Knit 主要验证作者当前环境；`R CMD build` 会在打包路径中实际执行 vignette；只有在干净依赖环境中结合 `R CMD check`，才能可靠发现漏声明依赖。pkgdown 还会验证网站配置。几条路径覆盖的失败面不同。
 

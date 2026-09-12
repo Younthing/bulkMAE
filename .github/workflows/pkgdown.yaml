@@ -49,6 +49,7 @@ jobs:
             any::clusterProfiler
             any::fgsea
             any::org.Hs.eg.db
+            any::decoupleR
             local::.
           needs: website
 
