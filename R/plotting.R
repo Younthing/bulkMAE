@@ -763,6 +763,13 @@ plot_assay_expression <- function(
     ) +
     ggplot2::scale_colour_manual(values = .plot_discrete_values(data$group)) +
     ggplot2::scale_fill_manual(values = .plot_discrete_values(data$group)) +
+    ggplot2::scale_x_discrete(
+      expand = if (n_features == 1L) {
+        ggplot2::expansion(add = 1.35)
+      } else {
+        ggplot2::waiver()
+      }
+    ) +
     ggplot2::scale_y_continuous(
       expand = ggplot2::expansion(mult = if (is.null(stats)) c(0.05, 0.08) else c(0.05, 0.18))
     ) +

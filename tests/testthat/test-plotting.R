@@ -367,6 +367,14 @@ test_that("assay expression joins groups and adds a display comparison", {
     function(layer) inherits(layer$geom, "GeomSegment"),
     logical(1)
   )))
+  expect_equal(
+    plot$scales$get_scales("x")$expand,
+    ggplot2::waiver()
+  )
+  expect_equal(
+    none$scales$get_scales("x")$expand,
+    ggplot2::expansion(add = 1.35)
+  )
   expect_error(
     plot_assay_expression(
       mae, "rna", "log_expression",
