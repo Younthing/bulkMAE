@@ -77,3 +77,29 @@ test_that("mae_variable_features ranks finite-variance rows", {
     "positive integer"
   )
 })
+
+test_that("mae_deconv_toy is synthetic and sample-aligned", {
+  samples <- paste0("sample", 1:4)
+  genes <- paste0("ENSG", 1:12)
+  toy <- mae_deconv_toy(samples, genes = genes, seed = 7L)
+
+  expect_identical(rownames(toy$counts), genes)
+  expect_identical(colnames(toy$fractions), samples)
+  expect_identical(rownames(toy$cell_data), colnames(toy$counts))
+  expect_true(all(c("cell_type", "sample_id") %in% names(toy$cell_data)))
+  expect_equal(colSums(toy$fractions), rep(1, 4L), tolerance = 1e-8, ignore_attr = TRUE)
+  expect_match(toy$source, "Synthetic")
+  expect_error(mae_deconv_toy(c("a", "a")), "unique")
+  expect_error(mae_deconv_toy(samples, n_donors = 1L), "at least 2")
+
+  if (requireNamespace("SingleCellExperiment", quietly = TRUE)) {
+    reference <- deconv_reference(
+      toy$counts,
+      toy$cell_data,
+      cell_type = "cell_type",
+      sample = "sample_id"
+    )
+    expect_true(methods::is(reference, "SingleCellExperiment"))
+    expect_identical(dim(reference), c(12L, ncol(toy$counts)))
+  }
+})
