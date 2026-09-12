@@ -1,0 +1,117 @@
+---
+title: "P0 stub: immune deconvolution"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{P0 stub: immune deconvolution}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 4.8,
+  dpi = 120,
+  fig.retina = 2
+)
+set.seed(20260912)
+library(bulkMAE)
+library(ggplot2)
+```
+
+# What this stub shows
+
+The P0 immune / TME route is:
+
+pin a reference → `deconv_reference()` → `deconv()` / `deconv_music()` /
+`deconv_bayesprism()` → `deconv_fractions()` → associate with subtype or
+clinical columns.
+
+CIBERSORTx is **not** the default. `deconv_cibersortx_input()` only builds a
+local mixture table; it does not upload.
+
+This article uses constructed fractions so the plots run without
+immunedeconv, MuSiC, or BayesPrism. Those backends are optional Suggests.
+
+# Pin the reference
+
+A real study must name the single-cell or signature source, species, tissue,
+and identifier type. `deconv_reference()` only aligns a user-supplied count
+matrix; it does not invent reference biology.
+
+```r
+# Example only. Replace with a tissue-matched, licensed reference.
+sc_reference <- deconv_reference(
+  counts = gene_by_cell_counts,
+  cell_data = cell_metadata,
+  cell_type = "cell_type",
+  sample = "donor_id"
+)
+music <- deconv_music(
+  mae, "rna",
+  sc_reference = sc_reference,
+  assay = "counts"
+)
+fractions <- deconv_fractions(music)
+```
+
+Signature-style methods such as quanTIseq go through `deconv()` and still
+need HGNC symbols and a non-log TPM-like assay. Record the immunedeconv
+method name and package version in the project lockfile.
+
+# Constructed fractions for the default plots
+
+```{r fractions}
+mae <- mae_simulate(n_features = 40L, n_samples = 8L, seed = 20260912L)
+samples <- rownames(mae_samples(mae, "rna"))
+fractions <- matrix(
+  c(
+    0.40, 0.36, 0.22, 0.25, 0.18, 0.20, 0.30, 0.28,
+    0.35, 0.38, 0.33, 0.30, 0.42, 0.40, 0.25, 0.27,
+    0.25, 0.26, 0.45, 0.45, 0.40, 0.40, 0.45, 0.45
+  ),
+  nrow = 3L,
+  byrow = TRUE,
+  dimnames = list(c("B_cell", "T_cell", "Myeloid"), samples)
+)
+fractions <- deconv_fractions(fractions)
+sample_data <- mae_samples(mae, "rna")
+group <- stats::setNames(sample_data$condition, rownames(sample_data))
+subtype <- stats::setNames(
+  factor(rep(c("A", "B"), each = 4L), levels = c("A", "B")),
+  samples
+)
+```
+
+# Required default plots
+
+```{r stacked, fig.cap = "Stacked cell-type fractions for each simulated sample.", fig.alt = "Stacked bars of B-cell, T-cell, and myeloid fractions across eight samples."}
+plot_deconv_stacked(fractions) +
+  labs(title = "Cell-type fractions")
+```
+
+```{r box, fig.cap = "Cell-type fractions compared by the simulated condition.", fig.alt = "Boxplots of each cell type split into control and treated groups."}
+plot_deconv_box(fractions, group) +
+  labs(title = "Fractions by condition")
+```
+
+```{r heatmap, fig.height = 4.6, fig.cap = "Cell-type heatmap split by a placeholder subtype label.", fig.alt = "A heatmap of cell-type fractions with columns faceted into subtypes A and B."}
+plot_deconv_heatmap(fractions, column_split = subtype) +
+  labs(title = "Fractions by subtype")
+```
+
+xCell output is an enrichment score, not a fraction. The stacked helper
+labels the y-axis as `Estimated value` when columns do not sum to one.
+
+# Limits
+
+These numbers are constructed for the plot contract. They are not a
+deconvolution of `mae_simulate()` and must not be cited as immune-infiltration
+results. A real analysis pins the reference source and keeps CIBERSORTx
+execution outside the package.
+
+```{r session-info}
+sessionInfo()
+```

@@ -293,6 +293,7 @@ plot_save("pca.pdf", custom_pca)
 | ORA、GSEA、原生结果与富集绘图 | [富集分析教程](enrichment-analysis.html) |
 | 基因集打分和调控活性 | `score_*()`、`activity_*()` |
 | 批次、共表达、去卷积和临床模型 | `adjust_*()`、`coexpr_*()`、`deconv_*()`、`surv_*()` |
+| P0 共表达 / 分型 / 去卷积桩教程 | [共表达模块](coexpression-modules.html)、[分子分型](molecular-subtyping.html)、[免疫去卷积](immune-deconvolution.html) |
 | 完整函数与输入边界 | [在线 reference](https://younthing.github.io/bulkMAE/reference/index.html) 与 [方法指南](https://github.com/Younthing/bulkMAE/tree/main/inst/guides) |
 
 统计后端仍是可选依赖，只在相应 adapter 被调用时检查。项目应记录 MAE 构建代码、ID 版本、assay

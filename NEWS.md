@@ -1,5 +1,14 @@
 # bulkMAE (development version)
 
+- Adds the smallest P0-route extractors so one co-expression, subtyping, and
+  deconvolution path can be chained: `mae_variable_features()`,
+  `coexpr_module_trait()`, `coexpr_membership()`, `coexpr_hubs()`, and
+  `deconv_fractions()`.
+- Adds publication-default ggplot helpers for those routes
+  (`plot_coexpr_*()`, `plot_cluster_*()`, `plot_deconv_*()`) and three
+  executable vignette stubs on `mae_simulate()`.
+- Records the reuse-first gap table in `docs/p0-route-gaps.md`.
+
 - Rewrites the README as a landing page with official backend links and one
   square patchwork gallery of volcano, heatmap, ORA network, and GSEA ridge
   plots.

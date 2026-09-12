@@ -23,6 +23,9 @@ articles:
       - getting-started
       - airway-qc-de
       - enrichment-analysis
+      - coexpression-modules
+      - molecular-subtyping
+      - immune-deconvolution
   - title: Guides
     navbar: Guides
     contents:

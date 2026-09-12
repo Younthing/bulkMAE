@@ -271,6 +271,80 @@ deconv_cibersortx_input <- function(
   result
 }
 
+#' Extract a cell-type by sample fraction matrix
+#'
+#' Accepts the native immunedeconv table (`cell_type` plus sample columns),
+#' a MuSiC result list containing `Est.prop.weighted`, or an already named
+#' numeric matrix. Matrix layout defaults to cell types in rows (the same
+#' orientation as a bulkMAE assay). MuSiC's sample-by-cell estimates are
+#' transposed automatically. BayesPrism users should pass the matrix from
+#' `BayesPrism::get.fraction()` with
+#' `orientation = "samples_by_cells"`.
+#'
+#' @param result A deconvolution table, MuSiC list, or numeric matrix.
+#' @param orientation Layout used when `result` is a bare matrix or data
+#'   frame without a `cell_type` column.
+#'
+#' @return A cell-type-by-sample numeric matrix. This is not a new result
+#'   class.
+#' @export
+deconv_fractions <- function(
+    result,
+    orientation = c("cells_by_samples", "samples_by_cells")
+) {
+  orientation <- match.arg(orientation)
+  if (is.list(result) && !is.data.frame(result)) {
+    if (is.null(result$Est.prop.weighted)) {
+      stop(
+        "List `result` must contain MuSiC `Est.prop.weighted` or be a ",
+        "cell-type table/matrix.",
+        call. = FALSE
+      )
+    }
+    return(.deconv_as_cell_sample_matrix(
+      result$Est.prop.weighted,
+      orientation = "samples_by_cells"
+    ))
+  }
+  if (is.data.frame(result) && "cell_type" %in% names(result)) {
+    cells <- as.character(result$cell_type)
+    samples <- setdiff(names(result), "cell_type")
+    if (!length(samples)) {
+      stop("The deconvolution table has no sample columns.", call. = FALSE)
+    }
+    matrix <- as.matrix(result[, samples, drop = FALSE])
+    if (!is.numeric(matrix)) {
+      stop("Deconvolution sample columns must be numeric.", call. = FALSE)
+    }
+    rownames(matrix) <- cells
+    return(.deconv_as_cell_sample_matrix(matrix, orientation = "cells_by_samples"))
+  }
+  if (is.matrix(result) || is.data.frame(result)) {
+    return(.deconv_as_cell_sample_matrix(result, orientation = orientation))
+  }
+  stop(
+    "`result` must be an immunedeconv table, a MuSiC list, or a named matrix.",
+    call. = FALSE
+  )
+}
+
+.deconv_as_cell_sample_matrix <- function(value, orientation) {
+  value <- as.matrix(value)
+  if (!is.numeric(value) || !nrow(value) || !ncol(value)) {
+    stop("Deconvolution fractions must be a non-empty numeric matrix.", call. = FALSE)
+  }
+  if (identical(orientation, "samples_by_cells")) {
+    value <- t(value)
+  }
+  .assert_identifier_vector(rownames(value), "Deconvolution cell-type names")
+  .assert_identifier_vector(colnames(value), "Deconvolution sample names")
+  if (any(!is.finite(value)) || any(value < 0)) {
+    stop("Deconvolution fractions must be finite and non-negative.", call. = FALSE)
+  }
+  storage.mode(value) <- "double"
+  value
+}
+
 #' Deconvolve bulk counts with BayesPrism
 #'
 #' Both bulk and single-cell reference inputs must be raw integer counts. The

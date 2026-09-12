@@ -204,6 +204,29 @@ mae_subset_features <- function(x, experiment, features) {
   x
 }
 
+#' Name the most variable features in one assay
+#'
+#' Returns feature identifiers ranked by row variance so a caller can pass
+#' them to [mae_subset_features()] or another explicit-ID helper. Constant
+#' and non-finite-variance rows are dropped before the ranking. This does
+#' not modify `x`.
+#'
+#' @inheritParams mae_pull_assay
+#' @param top_n Positive number of features to retain after ranking.
+#'
+#' @return A character vector of feature names, most variable first.
+#' @export
+mae_variable_features <- function(x, experiment, assay, top_n) {
+  matrix <- as.matrix(.pull_matrix(x, experiment, assay))
+  variance <- apply(matrix, 1L, stats::var)
+  keep <- is.finite(variance) & variance > 0
+  matrix <- matrix[keep, , drop = FALSE]
+  if (!nrow(matrix)) {
+    stop("No variable features remain in the selected assay.", call. = FALSE)
+  }
+  rownames(.top_variable_features(matrix, top_n))
+}
+
 .assert_mae <- function(x) {
   if (!methods::is(x, "MultiAssayExperiment")) {
     stop("`x` must be a MultiAssayExperiment.", call. = FALSE)

@@ -1,0 +1,142 @@
+---
+title: "P0 stub: molecular subtyping"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{P0 stub: molecular subtyping}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 4.8,
+  dpi = 120,
+  fig.retina = 2
+)
+set.seed(20260912)
+library(bulkMAE)
+library(ggplot2)
+has_ccp <- requireNamespace("ConsensusClusterPlus", quietly = TRUE)
+```
+
+# What this stub shows
+
+The P0 subtyping route is:
+
+HVG or GSVA/eigengene features → `cluster_consensus()` (primary) or
+`cluster_nmf()` → characterization with existing `de_*` / immune / clinical
+helpers.
+
+`mae_variable_features()` is the public HVG name helper. Pass those IDs to
+`mae_subset_features()`. GSVA scores can become a new experiment with
+`mae_add_experiment()`. UMAP/t-SNE stay exploratory via `plot_embedding()`.
+
+# Feature selection is always offline
+
+```{r hvg}
+mae <- mae_simulate(n_features = 60L, n_samples = 12L, seed = 20260912L)
+hvg <- mae_variable_features(mae, "rna", "log_expression", top_n = 20L)
+cluster_mae <- mae_subset_features(mae, "rna", hvg)
+length(hvg)
+```
+
+# Intended clustering call
+
+```{r consensus, eval = has_ccp}
+output_directory <- tempfile("bulkmae-subtype-")
+dir.create(output_directory)
+fit <- cluster_consensus(
+  cluster_mae,
+  "rna",
+  assay = "log_expression",
+  max_k = 4L,
+  repetitions = 20L,
+  item_fraction = 0.8,
+  seed = 20260912L,
+  title = output_directory,
+  plot = NULL
+)
+classes <- cluster_consensus_classes(fit, k = 2L)
+```
+
+```{r constructed-consensus, eval = !has_ccp}
+samples <- rownames(mae_samples(mae, "rna"))
+make_consensus <- function(seed) {
+  set.seed(seed)
+  value <- matrix(stats::runif(length(samples)^2, 0.25, 0.95), nrow = length(samples))
+  value <- (value + t(value)) / 2
+  diag(value) <- 1
+  dimnames(value) <- list(samples, samples)
+  value
+}
+fit <- vector("list", 3L)
+fit[[2]] <- list(
+  consensusMatrix = make_consensus(21L),
+  consensusClass = stats::setNames(rep(1:2, length.out = length(samples)), samples)
+)
+fit[[3]] <- list(
+  consensusMatrix = make_consensus(22L),
+  consensusClass = stats::setNames(rep(1:3, length.out = length(samples)), samples)
+)
+classes <- cluster_consensus_classes(fit, k = 2L)
+```
+
+Attach labels with the existing sample-metadata helper, then characterize
+with `de_*` on the original counts if a real study needs that step.
+
+```{r attach-labels}
+labeled <- mae_add_sample_data(
+  cluster_mae,
+  "rna",
+  classes,
+  name = "subtype"
+)
+table(mae_samples(labeled, "rna")$subtype)
+```
+
+# Required default plots
+
+```{r consensus-heatmap, fig.height = 5.2, fig.cap = "Pairwise consensus matrix for k = 2.", fig.alt = "A square heatmap of sample-to-sample consensus values ordered by the clustering solution."}
+plot_cluster_consensus(fit, k = 2L) +
+  labs(title = "Consensus matrix, k = 2")
+```
+
+```{r consensus-cdf, fig.cap = "Consensus CDF for each candidate k.", fig.alt = "Step functions showing the empirical distribution of pairwise consensus values at k = 2 and k = 3."}
+plot_cluster_cdf(fit) +
+  labs(title = "Consensus CDF")
+```
+
+```{r subtype-sizes, fig.cap = "Subtype sample counts split by the simulated condition.", fig.alt = "Stacked bars of subtype membership split by control versus treated."}
+sample_data <- mae_samples(mae, "rna")
+plot_cluster_sizes(
+  classes,
+  group = stats::setNames(sample_data$condition, rownames(sample_data))
+) +
+  labs(title = "Subtype sample distribution")
+```
+
+The subtype feature heatmap reuses `plot_assay_heatmap()`:
+
+```{r subtype-heatmap, fig.height = 5.5, fig.cap = "Row-scaled HVG heatmap split by subtype. This is a descriptive view of the same samples used to define the classes.", fig.alt = "A heatmap of the selected highly variable features, with columns faceted by subtype."}
+plot_assay_heatmap(
+  labeled,
+  "rna",
+  assay = "log_expression",
+  features = hvg,
+  column_split = "subtype"
+) +
+  labs(title = "HVG heatmap by subtype")
+```
+
+# Limits
+
+k is a scientific choice, not something this stub selects. Classes from the
+same matrix are not an independent validation cohort. Do not treat UMAP or
+t-SNE as a required subtype figure.
+
+```{r session-info}
+sessionInfo()
+```

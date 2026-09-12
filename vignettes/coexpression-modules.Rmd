@@ -1,0 +1,171 @@
+---
+title: "P0 stub: co-expression modules"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{P0 stub: co-expression modules}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 4.8,
+  dpi = 120,
+  fig.retina = 2
+)
+set.seed(20260912)
+library(bulkMAE)
+library(ggplot2)
+has_wgcna <- requireNamespace("WGCNA", quietly = TRUE)
+```
+
+# What this stub shows
+
+The P0 co-expression route is:
+
+`transform_*` → `coexpr_pick_power()` → `coexpr_wgcna()` →
+`coexpr_module_trait()` / `coexpr_membership()` → optional
+`coexpr_preservation()`.
+
+This article uses `mae_simulate()`. The annotations have no biological
+meaning. WGCNA calls run only when that Suggests package is installed;
+the required default plots always run on constructed extractors.
+
+# Intended chain
+
+```{r intended-chain, eval = has_wgcna}
+mae <- mae_simulate(n_features = 80L, n_samples = 16L, seed = 20260912L)
+power <- coexpr_pick_power(
+  mae, "rna", assay = "log_expression",
+  powers = 1:6, top_n = 40L, verbose = 0
+)
+fit <- coexpr_wgcna(
+  mae, "rna", assay = "log_expression",
+  power = 4, top_n = 40L, min_module_size = 8L,
+  numeric_labels = FALSE, verbose = 0
+)
+modules <- coexpr_modules(fit)
+traits <- mae_samples(mae, "rna")[, "condition", drop = FALSE]
+trait <- coexpr_module_trait(fit, traits)
+membership <- coexpr_membership(fit, mae, "rna", "log_expression")
+hubs <- coexpr_hubs(membership, modules, n = 5L)
+```
+
+When WGCNA is not installed, the same extractors still accept a native-shaped
+list. The plots below use that constructed path so the vignette stays offline.
+
+```{r constructed-extractors, eval = !has_wgcna}
+features <- sprintf("gene%02d", 1:18)
+modules <- stats::setNames(
+  rep(c("turquoise", "blue", "grey"), each = 6L),
+  features
+)
+power <- list(
+  fitIndices = data.frame(
+    Power = 1:6,
+    SFT.R.sq = c(0.22, 0.49, 0.74, 0.86, 0.88, 0.90),
+    mean.k. = c(20, 12, 7.5, 4.8, 3.2, 2.4)
+  ),
+  powerEstimate = 4
+)
+trait <- list(
+  correlation = matrix(
+    c(0.61, -0.44, 0.09, 0.18, 0.52, -0.29),
+    nrow = 3L,
+    dimnames = list(
+      c("MEturquoise", "MEblue", "MEgrey"),
+      c("condition", "batch")
+    )
+  ),
+  p_value = matrix(
+    c(0.01, 0.04, 0.40, 0.22, 0.03, 0.12),
+    nrow = 3L,
+    dimnames = list(
+      c("MEturquoise", "MEblue", "MEgrey"),
+      c("condition", "batch")
+    )
+  )
+)
+membership <- matrix(
+  seq(-0.7, 0.7, length.out = 54L),
+  nrow = 18L,
+  dimnames = list(features, c("MEturquoise", "MEblue", "MEgrey"))
+)
+gene_significance <- stats::setNames(
+  as.numeric(scale(seq_len(18L))),
+  features
+)
+hubs <- coexpr_hubs(membership, modules, n = 2L)
+```
+
+```{r gene-significance, eval = has_wgcna}
+expression <- mae_pull_assay(mae, "rna", "log_expression")
+sample_data <- mae_samples(mae, "rna")
+trait_code <- stats::setNames(as.integer(sample_data$condition), rownames(sample_data))
+samples <- intersect(colnames(expression), names(trait_code))
+gene_significance <- stats::cor(
+  t(expression[rownames(membership), samples, drop = FALSE]),
+  trait_code[samples]
+)[, 1L]
+```
+
+```{r pick-module}
+module_for_plot <- {
+  labels <- unique(as.character(modules))
+  preferred <- setdiff(labels, c("grey", "0", "ME0"))
+  if (length(preferred)) preferred[[1L]] else labels[[1L]]
+}
+```
+
+# Required default plots
+
+```{r power-plot, fig.cap = "Soft-threshold diagnostics from pickSoftThreshold fit indices.", fig.alt = "Two panels of scale-free R-squared and mean connectivity versus candidate WGCNA powers."}
+plot_coexpr_power(power) +
+  labs(title = "Soft-threshold diagnostics")
+```
+
+```{r module-plot, fig.cap = "Feature counts in each constructed or fitted WGCNA module.", fig.alt = "A bar chart of module sizes coloured by conventional WGCNA module colours."}
+plot_coexpr_modules(modules) +
+  labs(title = "Module sizes")
+```
+
+```{r trait-plot, fig.cap = "Module eigengene correlations with sample traits.", fig.alt = "A heatmap of Pearson correlations between module eigengenes and traits, with numeric values in each cell."}
+plot_coexpr_trait(trait) +
+  labs(title = "Module–trait correlations")
+```
+
+```{r membership-plot, fig.cap = "Module membership versus gene significance for the blue module.", fig.alt = "A scatter plot of kME against a trait correlation, with a linear fit."}
+plot_coexpr_membership(membership, gene_significance, module = module_for_plot) +
+  labs(title = paste(module_for_plot, "MM vs GS"))
+```
+
+`coexpr_hubs()` returns the top intramodular features. It is an extractor,
+not a network layout.
+
+```{r hubs}
+knitr::kable(hubs)
+```
+
+Optional preservation stays a two-MAE call:
+
+```r
+coexpr_preservation(
+  reference, "rna", test, "rna",
+  module_colors = modules,
+  reference_assay = "log_expression",
+  test_assay = "log_expression"
+)
+```
+
+# Limits
+
+Synthetic data cannot justify a scientific power or module-merge choice.
+Preservation needs an independent cohort. This stub does not claim
+external validation.
+
+```{r session-info}
+sessionInfo()
+```

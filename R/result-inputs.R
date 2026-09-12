@@ -401,6 +401,238 @@ coexpr_modules <- function(fit) {
   colors
 }
 
+#' Correlate WGCNA module eigengenes with sample traits
+#'
+#' Uses the `MEs` matrix stored on a [coexpr_wgcna()] result. Trait columns
+#' are aligned by sample name. Factor and character columns are converted to
+#' integer codes; logical columns become 0/1. This is an extractor, not a new
+#' result class.
+#'
+#' @param fit A native result returned by [coexpr_wgcna()] containing `MEs`.
+#' @param traits A sample-named atomic vector, or a sample-by-trait data frame
+#'   or matrix whose row names cover every eigengene sample.
+#'
+#' @return A list with `correlation` and `p_value` matrices (modules by
+#'   traits).
+#' @export
+coexpr_module_trait <- function(fit, traits) {
+  mes <- .coexpr_module_eigengenes(fit)
+  traits <- .coexpr_trait_frame(traits, rownames(mes))
+  modules <- colnames(mes)
+  trait_names <- names(traits)
+  correlation <- matrix(
+    NA_real_,
+    nrow = length(modules),
+    ncol = length(trait_names),
+    dimnames = list(modules, trait_names)
+  )
+  p_value <- correlation
+  for (module in modules) {
+    for (trait in trait_names) {
+      left <- mes[, module]
+      right <- traits[[trait]]
+      if (stats::sd(left) == 0 || stats::sd(right) == 0) {
+        next
+      }
+      test <- stats::cor.test(left, right, method = "pearson")
+      correlation[module, trait] <- unname(as.numeric(test$estimate))
+      p_value[module, trait] <- test$p.value
+    }
+  }
+  list(correlation = correlation, p_value = p_value)
+}
+
+#' Compute feature-to-module membership from a WGCNA fit
+#'
+#' Pearson-correlates each retained feature with each module eigengene. The
+#' expression assay is aligned to `fit$MEs` by sample name and to
+#' [coexpr_modules()] by feature name.
+#'
+#' @param fit A native result returned by [coexpr_wgcna()] containing `MEs`
+#'   and `colors`.
+#' @inheritParams mae_pull_assay
+#'
+#' @return A feature-by-module numeric matrix of membership values.
+#' @export
+coexpr_membership <- function(fit, x, experiment, assay) {
+  mes <- .coexpr_module_eigengenes(fit)
+  modules <- coexpr_modules(fit)
+  matrix <- as.matrix(.pull_matrix(x, experiment, assay))
+  features <- intersect(names(modules), rownames(matrix))
+  samples <- intersect(rownames(mes), colnames(matrix))
+  if (length(features) < 2L) {
+    stop(
+      "The WGCNA fit and assay must share at least two named features.",
+      call. = FALSE
+    )
+  }
+  if (length(samples) < 3L) {
+    stop(
+      "The WGCNA eigengenes and assay must share at least three samples.",
+      call. = FALSE
+    )
+  }
+  expression <- t(matrix[features, samples, drop = FALSE])
+  mes <- mes[samples, , drop = FALSE]
+  if (any(!is.finite(expression)) || any(!is.finite(mes))) {
+    stop("Module membership requires finite expression and eigengenes.", call. = FALSE)
+  }
+  stats::cor(expression, mes)
+}
+
+#' Rank intramodular hub features from a membership matrix
+#'
+#' @param membership A feature-by-module matrix from [coexpr_membership()].
+#' @param modules A feature-named module vector from [coexpr_modules()].
+#' @param n Positive number of hubs to retain per module.
+#'
+#' @return A data frame with `feature`, `module`, and `membership` columns,
+#'   ordered by module and decreasing absolute membership.
+#' @export
+coexpr_hubs <- function(membership, modules, n = 5) {
+  membership <- .coexpr_membership_matrix(membership)
+  if (
+    (!is.atomic(modules) && !is.factor(modules)) || is.null(names(modules)) ||
+      anyNA(names(modules)) || any(!nzchar(names(modules))) ||
+      anyDuplicated(names(modules)) || anyNA(modules) ||
+      any(!nzchar(as.character(modules)))
+  ) {
+    stop("`modules` must be named by unique, non-missing features.", call. = FALSE)
+  }
+  if (
+    !is.numeric(n) || length(n) != 1L || is.na(n) || !is.finite(n) ||
+      n != trunc(n) || n < 1L
+  ) {
+    stop("`n` must be a positive integer.", call. = FALSE)
+  }
+  features <- intersect(rownames(membership), names(modules))
+  if (!length(features)) {
+    stop("`membership` and `modules` must share feature names.", call. = FALSE)
+  }
+  rows <- lapply(unique(as.character(modules[features])), function(module) {
+    members <- features[as.character(modules[features]) == module]
+    column <- .coexpr_match_module_column(module, colnames(membership))
+    values <- membership[members, column]
+    keep <- order(abs(values), decreasing = TRUE)
+    keep <- keep[seq_len(min(as.integer(n), length(keep)))]
+    data.frame(
+      feature = members[keep],
+      module = module,
+      membership = unname(values[keep]),
+      row.names = NULL,
+      check.names = FALSE
+    )
+  })
+  do.call(rbind, rows)
+}
+
+.coexpr_module_eigengenes <- function(fit) {
+  if (!is.list(fit) || is.null(fit$MEs)) {
+    stop("`fit` must be a WGCNA result containing `MEs`.", call. = FALSE)
+  }
+  mes <- as.data.frame(fit$MEs, optional = TRUE)
+  if (!nrow(mes) || !ncol(mes)) {
+    stop("WGCNA `MEs` must contain samples and modules.", call. = FALSE)
+  }
+  .assert_ids(rownames(mes), "Module eigengene sample names")
+  .assert_ids(names(mes), "Module eigengene names")
+  numeric_columns <- vapply(mes, is.numeric, logical(1))
+  if (!all(numeric_columns) || any(!is.finite(as.matrix(mes)))) {
+    stop("WGCNA `MEs` must contain finite numeric values.", call. = FALSE)
+  }
+  as.matrix(mes)
+}
+
+.coexpr_trait_frame <- function(traits, samples) {
+  .assert_ids(samples, "Module eigengene sample names")
+  if (is.atomic(traits) && is.null(dim(traits))) {
+    .assert_ids(names(traits), "`traits` names")
+    traits <- data.frame(
+      trait = traits,
+      row.names = names(traits),
+      check.names = FALSE
+    )
+  } else if (is.data.frame(traits) || is.matrix(traits)) {
+    traits <- as.data.frame(traits, optional = TRUE)
+    if (!ncol(traits)) {
+      stop("`traits` must contain at least one column.", call. = FALSE)
+    }
+    .assert_ids(rownames(traits), "`traits` row names")
+    .assert_ids(names(traits), "`traits` column names")
+  } else {
+    stop(
+      "`traits` must be a named vector or a data frame/matrix with row names.",
+      call. = FALSE
+    )
+  }
+  missing <- setdiff(samples, rownames(traits))
+  if (length(missing)) {
+    stop(
+      "`traits` is missing eigengene samples: ",
+      paste(utils::head(missing, 10L), collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+  traits <- traits[samples, , drop = FALSE]
+  converted <- lapply(names(traits), function(name) {
+    column <- traits[[name]]
+    if (is.logical(column)) {
+      column <- as.integer(column)
+    } else if (is.factor(column) || is.character(column)) {
+      column <- as.integer(factor(column))
+    }
+    if (!is.numeric(column) || anyNA(column) || any(!is.finite(column))) {
+      stop(
+        "Trait `", name, "` must be finite after conversion to numeric.",
+        call. = FALSE
+      )
+    }
+    column
+  })
+  names(converted) <- names(traits)
+  as.data.frame(converted, row.names = samples, optional = TRUE)
+}
+
+.coexpr_membership_matrix <- function(membership) {
+  membership <- as.matrix(membership)
+  if (!is.numeric(membership) || !nrow(membership) || !ncol(membership)) {
+    stop("`membership` must be a non-empty numeric matrix.", call. = FALSE)
+  }
+  .assert_ids(rownames(membership), "Membership feature names")
+  .assert_ids(colnames(membership), "Membership module names")
+  if (any(!is.finite(membership))) {
+    stop("`membership` must contain finite values.", call. = FALSE)
+  }
+  membership
+}
+
+.coexpr_match_module_column <- function(module, columns) {
+  module <- as.character(module)
+  if (!length(module) || is.na(module) || !nzchar(module)) {
+    stop("`module` must be one non-empty module label.", call. = FALSE)
+  }
+  stripped <- sub("^ME", "", columns)
+  candidates <- unique(c(module, paste0("ME", module), sub("^ME", "", module)))
+  hits <- columns[columns %in% candidates | stripped %in% candidates]
+  hits <- unique(hits)
+  if (length(hits) == 1L) {
+    return(hits)
+  }
+  if (length(hits) > 1L) {
+    stop(
+      "Module `", module, "` matches multiple membership columns: ",
+      paste(hits, collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+  stop(
+    "No membership column matches module `", module, "`.",
+    call. = FALSE
+  )
+}
+
 #' Extract sample or feature classes from an NMF fit
 #'
 #' @param fit A native result returned by [cluster_nmf()].

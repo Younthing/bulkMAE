@@ -51,3 +51,29 @@ test_that("explicit sampleMap aligns primary metadata", {
     c("treated", "control")
   )
 })
+
+test_that("mae_variable_features ranks finite-variance rows", {
+  mae <- make_toy_mae(n_features = 6L, n_samples = 4L)
+  ranked <- matrix(
+    c(
+      1, 1, 1, 1,
+      1, 2, 3, 4,
+      10, 20, 30, 40,
+      0, 0, 1, 1,
+      5, 5, 5, 6,
+      100, 0, 0, 0
+    ),
+    nrow = 6L,
+    byrow = TRUE,
+    dimnames = list(paste0("gene", 1:6), paste0("sample", 1:4))
+  )
+  mae <- mae_add_assay(mae, "rna", ranked, name = "ranked")
+  features <- mae_variable_features(mae, "rna", "ranked", top_n = 3L)
+  variance <- apply(ranked, 1L, stats::var)
+  expect_identical(features, names(sort(variance[variance > 0], decreasing = TRUE))[1:3])
+  expect_false("gene1" %in% features)
+  expect_error(
+    mae_variable_features(mae, "rna", "ranked", top_n = 0L),
+    "positive integer"
+  )
+})
