@@ -49,6 +49,9 @@ jobs:
             any::clusterProfiler
             any::fgsea
             any::org.Hs.eg.db
+            any::WGCNA
+            any::ConsensusClusterPlus
+            any::SingleCellExperiment
             local::.
           needs: website
 
