@@ -145,6 +145,7 @@ test_that("P0 co-expression dendrogram and TOM helpers join by feature name", {
   expect_identical(tom_plot$scales$get_scales("colour")$name, "Module")
   expect_true(inherits(tom_plot$theme$axis.text.x, "element_blank"))
   expect_true(inherits(tom_plot$theme$axis.text.y, "element_blank"))
+  expect_true(inherits(tom_plot$theme$strip.text.y, "element_blank"))
   unlabeled <- tree
   unlabeled$labels <- NULL
   wgcna_like <- list(

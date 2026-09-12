@@ -478,7 +478,8 @@ plot_coexpr_tom <- function(tom, modules = NULL, show_names = FALSE) {
     theme_bulkmae() +
     ggplot2::theme(
       panel.grid = ggplot2::element_blank(),
-      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)
+      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1),
+      strip.text.y = ggplot2::element_blank()
     )
   if (!show_names) {
     plot <- plot + ggplot2::theme(
