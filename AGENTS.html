@@ -55,9 +55,20 @@
 <p>This is a single-context repository. See <code>docs/agents/domain.md</code>.</p>
 </div>
 <div class="section level3">
+<h3 id="sequence-an-analysis-mainline">Sequence an analysis mainline<a class="anchor" aria-label="anchor" href="#sequence-an-analysis-mainline"></a></h3>
+<p>Do not start from a lone plot or a lone wrapper. Work one independent mainline in this order.</p>
+<ol style="list-style-type: decimal"><li>Name the mainline. One research question. One vignette. A sequel reuses the upstream design, filter, and contrast.</li>
+<li>The mainline names the analyses. Draft the vignette next. For each chosen analysis, list the figures that analysis commonly carries in the literature. That list is the required figure set, not a subset the prose can skip. The first draft may fail to render. Treat it as the list of missing wrappers and plots. Writing rules live in <code>docs/agents/vignette-writing.md</code>.</li>
+<li>If a chosen analysis has no public function, add a thin wrapper only. Do not re-implement the backend. Do not change the backend return type.</li>
+<li>Draw the full literature figure set for each chosen analysis. Each constructor returns one unprinted ggplot from already-computed results. Bring every figure in that set to publication quality. Plot contracts live in <code>docs/agents/plotting-functions.md</code>.</li>
+<li>Finish the vignette so every number and figure comes from executed code.</li>
+</ol><p>Do not pick a plot from another analysis family. Do not drop a standard figure because the vignette prose can live without it.</p>
+</div>
+<div class="section level3">
 <h3 id="engineering-guides">Engineering guides<a class="anchor" aria-label="anchor" href="#engineering-guides"></a></h3>
-<ul><li>For plotting-interface or publication-output changes, read <code>docs/agents/plotting-functions.md</code> first.</li>
-<li>For executable vignette, rendering, or article-CI changes, read <code>docs/agents/vignette-writing.md</code> first.</li>
+<ul><li>For the analysis-mainline order above, stay in this file.</li>
+<li>For plotting-interface or publication-output changes, read <code>docs/agents/plotting-functions.md</code>.</li>
+<li>For executable vignette, rendering, or article-CI changes, read <code>docs/agents/vignette-writing.md</code>.</li>
 </ul></div>
 </div>
 <div class="section level2">
