@@ -142,6 +142,14 @@ test_that("P0 co-expression dendrogram and TOM helpers join by feature name", {
   }
   expect_identical(dendro_plot$labels$y, "Height")
   expect_identical(tom_plot$scales$get_scales("fill")$name, "TOM")
+  unlabeled <- tree
+  unlabeled$labels <- NULL
+  wgcna_like <- list(
+    dendrograms = list(unlabeled),
+    colors = modules,
+    blockGenes = list(seq_along(modules))
+  )
+  expect_route_plot(plot_coexpr_dendrogram(wgcna_like, modules))
   expect_error(
     plot_coexpr_dendrogram(tree, modules[-1L]),
     "match dendrogram leaves exactly"
