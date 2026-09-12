@@ -415,12 +415,12 @@ plot_de_volcano <- function(
   floor <- if (length(positive)) min(positive) / 10 else .Machine$double.xmin
   table$minus_log10_p <- -log10(pmax(table$p_value, floor, na.rm = FALSE))
   table$label <- .plot_feature_labels(table$feature_id, label_features, feature_labels, result)
-  plot <- ggplot2::ggplot(table, ggplot2::aes(
-    x = .data[["effect"]], y = .data[["minus_log10_p"]],
-    colour = .data[["direction"]]
-  )) +
-    ggplot2::geom_point(alpha = 0.72, size = 1.6, na.rm = TRUE) +
-    ggplot2::geom_vline(xintercept = c(-min_abs_effect, min_abs_effect), linetype = 2, colour = "#777777") +
+  plot <- ggplot2::ggplot(table) +
+    .plot_de_points(table, "effect", "minus_log10_p") +
+    ggplot2::geom_vline(
+      xintercept = c(-min_abs_effect, min_abs_effect),
+      linetype = 2, colour = "#777777", linewidth = 0.3
+    ) +
     .plot_de_scale() +
     ggplot2::labs(
       x = "Effect estimate", y = expression(-log[10](italic(p))),
@@ -433,8 +433,9 @@ plot_de_volcano <- function(
     if (x_limit == 0) x_limit <- 1
     plot <- plot + ggplot2::coord_cartesian(xlim = c(-x_limit, x_limit))
   }
+  plot <- .plot_de_counts(plot, table, "effect", "minus_log10_p")
   plot <- .plot_add_feature_text(plot, table, "minus_log10_p")
-  .plot_with_dimensions(plot, width = 8.5, height = 7)
+  .plot_with_dimensions(plot, width = 8, height = 7)
 }
 
 #' Plot a differential-expression MA plot
@@ -484,13 +485,12 @@ plot_de_ma <- function(
       table$abundance[zero_abundance] <- NA_real_
     }
   }
-  plot <- ggplot2::ggplot(table, ggplot2::aes(
-    x = .data[["abundance"]], y = .data[["effect"]],
-    colour = .data[["direction"]]
-  )) +
-    ggplot2::geom_point(alpha = 0.72, size = 1.6, na.rm = TRUE) +
-    ggplot2::geom_hline(yintercept = c(-min_abs_effect, 0, min_abs_effect),
-                        linetype = c(2, 1, 2), colour = "#777777") +
+  plot <- ggplot2::ggplot(table) +
+    .plot_de_points(table, "abundance", "effect") +
+    ggplot2::geom_hline(
+      yintercept = c(-min_abs_effect, 0, min_abs_effect),
+      linetype = c(2, 1, 2), colour = "#777777", linewidth = 0.3
+    ) +
     .plot_de_scale() +
     ggplot2::labs(
       x = "Mean abundance", y = "Effect estimate", colour = "Direction",
@@ -499,7 +499,7 @@ plot_de_ma <- function(
     .plot_de_theme()
   if (transform == "log10") plot <- plot + ggplot2::scale_x_log10()
   plot <- .plot_add_feature_text(plot, table, "effect")
-  .plot_with_dimensions(plot, width = 8.5, height = 7)
+  .plot_with_dimensions(plot, width = 8, height = 7)
 }
 
 #' Plot selected assay features as a heatmap
@@ -591,7 +591,9 @@ plot_assay_heatmap <- function(
   plot <- ggplot2::ggplot(data, ggplot2::aes(
     x = .data[["sample"]], y = .data[["feature"]], fill = .data[["value"]]
   )) +
-    ggplot2::geom_tile() +
+    ggplot2::geom_tile(colour = NA) +
+    ggplot2::scale_x_discrete(expand = c(0, 0)) +
+    ggplot2::scale_y_discrete(expand = c(0, 0)) +
     ggplot2::labs(
       x = "Sample", y = "Feature",
       alt = "A heatmap of explicitly selected assay features across samples."
@@ -599,6 +601,9 @@ plot_assay_heatmap <- function(
     theme_bulkmae() +
     ggplot2::theme(
       panel.grid = ggplot2::element_blank(),
+      panel.border = ggplot2::element_rect(colour = "#222222", fill = NA, linewidth = 0.25),
+      panel.background = ggplot2::element_rect(fill = "white", colour = NA),
+      plot.background = ggplot2::element_rect(fill = "white", colour = NA),
       axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)
     )
   plot <- if (scale == "row") {
@@ -620,6 +625,313 @@ plot_assay_heatmap <- function(
     height = .plot_clamped_dimension(nrow(matrix), base = 4, per_item = 0.28,
                                      minimum = 8, maximum = 20)
   )
+}
+
+#' Plot grouped assay values with a comparison statistic
+#'
+#' Draws every selected feature on one x axis. Groups are dodged beside each
+#' feature. A control-like level is placed first when `ref` is set or when a
+#' common control name is present. The comparison is a two-sample test on the
+#' plotted values. It is not the differential-expression model p-value.
+#' Features are never selected from a result table inside this function.
+#'
+#' @inheritParams plot_assay_heatmap
+#' @param colour Discrete sample-metadata column used as the comparison group.
+#' @param ref Optional control level placed first on the dodge. When omitted,
+#'   a common control name is moved first if one is present.
+#' @param geom `"boxplot"` or `"violin"`. Both add a jittered point layer.
+#' @param test Display comparison on the plotted values. `"wilcoxon"` is a
+#'   two-sample Wilcoxon rank-sum test. `"t"` is Welch's t-test. `"none"`
+#'   draws groups without a bracket. More than two groups use pairwise tests.
+#' @param p_adjust Multiple-testing method for pairwise p-values when more than
+#'   two groups are present. Ignored for a single two-group comparison.
+#' @param stat_label `"p"` prints a compact p-value. `"significance"` prints
+#'   `ns`, `*`, `**`, or `***`.
+#'
+#' @return An unprinted standard ggplot object carrying recommended physical
+#'   dimensions for [plot_save()].
+#' @family plotting
+#' @export
+plot_assay_expression <- function(
+    x,
+    experiment,
+    assay,
+    features,
+    colour,
+    feature_label = NULL,
+    ref = NULL,
+    geom = c("boxplot", "violin"),
+    test = c("wilcoxon", "t", "none"),
+    p_adjust = c("BH", "holm", "none"),
+    stat_label = c("p", "significance")
+) {
+  geom <- match.arg(geom)
+  test <- match.arg(test)
+  p_adjust <- match.arg(p_adjust)
+  stat_label <- match.arg(stat_label)
+  if (missing(colour) || is.null(colour)) {
+    stop("`colour` must name a discrete sample-metadata column.", call. = FALSE)
+  }
+  .assert_scalar_character(colour, "colour")
+  if (is.null(features) || !length(features)) {
+    stop("`features` must explicitly contain at least one feature.", call. = FALSE)
+  }
+  matrix <- .select_features(.pull_matrix(x, experiment, assay), features)
+  if (any(!is.finite(matrix))) {
+    stop("The expression assay must contain finite values.", call. = FALSE)
+  }
+  labels <- .plot_mae_annotation(
+    feature_label, mae_feature_data(x, experiment), rownames(matrix),
+    "feature_label", "feature"
+  )
+  if (is.null(labels)) labels <- stats::setNames(rownames(matrix), rownames(matrix))
+  samples <- mae_samples(x, experiment)
+  .plot_require_columns(samples, colour, "sample metadata")
+  group <- samples[[colour]]
+  if (!(is.factor(group) || is.character(group) || is.logical(group))) {
+    stop(
+      "`mae_samples()$", colour, "` mapped to colour must be discrete; ",
+      "convert it to a factor.",
+      call. = FALSE
+    )
+  }
+  display <- stats::setNames(
+    make.unique(as.character(labels[rownames(matrix)])),
+    rownames(matrix)
+  )
+  data <- expand.grid(
+    feature_id = rownames(matrix),
+    sample = colnames(matrix),
+    stringsAsFactors = FALSE
+  )
+  data$value <- matrix[cbind(
+    match(data$feature_id, rownames(matrix)),
+    match(data$sample, colnames(matrix))
+  )]
+  data$feature <- factor(
+    unname(display[data$feature_id]),
+    levels = unname(display[rownames(matrix)])
+  )
+  data$group <- .plot_control_first(
+    group[match(data$sample, rownames(samples))],
+    ref = ref
+  )
+  if (anyNA(data$group)) stop("Group values cannot be missing.", call. = FALSE)
+  n_groups <- nlevels(data$group)
+  if (n_groups < 2L) {
+    stop("`colour` must contain at least two groups.", call. = FALSE)
+  }
+  group_n <- table(data$group, useNA = "no")
+  if (any(group_n < 2L)) {
+    stop("Each group needs at least two samples for a comparison plot.", call. = FALSE)
+  }
+  dodge_width <- 0.75
+  stats <- if (identical(test, "none")) {
+    NULL
+  } else {
+    .plot_expression_stats(
+      data, test = test, p_adjust = p_adjust, stat_label = stat_label,
+      dodge_width = dodge_width
+    )
+  }
+  n_features <- nrow(matrix)
+  x_angle <- if (n_features > 4L) 45 else 0
+  x_hjust <- if (n_features > 4L) 1 else 0.5
+  dodge <- ggplot2::position_dodge(width = dodge_width)
+  plot <- ggplot2::ggplot(data, ggplot2::aes(
+    x = .data[["feature"]],
+    y = .data[["value"]],
+    colour = .data[["group"]],
+    fill = .data[["group"]]
+  ))
+  plot <- if (identical(geom, "violin")) {
+    plot + ggplot2::geom_violin(
+      alpha = 0.22, colour = NA, width = 0.7, position = dodge
+    )
+  } else {
+    plot + ggplot2::geom_boxplot(
+      alpha = 0.22, width = 0.62, outlier.shape = NA, linewidth = 0.25,
+      position = dodge
+    )
+  }
+  plot <- plot +
+    ggplot2::geom_point(
+      position = ggplot2::position_jitterdodge(
+        jitter.width = 0.08, dodge.width = dodge_width
+      ),
+      size = 1.15, alpha = 0.9, stroke = 0
+    ) +
+    ggplot2::scale_colour_manual(values = .plot_discrete_values(data$group)) +
+    ggplot2::scale_fill_manual(values = .plot_discrete_values(data$group)) +
+    ggplot2::scale_x_discrete(
+      expand = if (n_features == 1L) {
+        ggplot2::expansion(add = 1.35)
+      } else {
+        ggplot2::waiver()
+      }
+    ) +
+    ggplot2::scale_y_continuous(
+      expand = ggplot2::expansion(mult = if (is.null(stats)) c(0.05, 0.08) else c(0.05, 0.18))
+    ) +
+    ggplot2::labs(
+      x = "Feature", y = "Assay value", colour = colour, fill = colour,
+      alt = "One comparison plot of explicitly selected features. Groups are dodged beside each feature, with a display test on the plotted values."
+    ) +
+    theme_bulkmae() +
+    ggplot2::theme(
+      panel.border = ggplot2::element_rect(colour = "#222222", fill = NA, linewidth = 0.25),
+      panel.background = ggplot2::element_rect(fill = "white", colour = NA),
+      plot.background = ggplot2::element_rect(fill = "white", colour = NA),
+      legend.position = "top",
+      legend.direction = "horizontal",
+      axis.text.x = ggplot2::element_text(angle = x_angle, hjust = x_hjust)
+    )
+  if (!is.null(stats)) {
+    plot <- plot +
+      ggplot2::geom_segment(
+        data = stats,
+        mapping = ggplot2::aes(
+          x = .data[["x"]], xend = .data[["xend"]],
+          y = .data[["y"]], yend = .data[["yend"]]
+        ),
+        inherit.aes = FALSE,
+        linewidth = 0.25,
+        colour = "#333333"
+      ) +
+      ggplot2::geom_text(
+        data = unique(stats[c("label_x", "label_y", "label", "p_value", "feature")]),
+        mapping = ggplot2::aes(
+          x = .data[["label_x"]], y = .data[["label_y"]], label = .data[["label"]]
+        ),
+        inherit.aes = FALSE,
+        size = .bulkmae_text_size_pt,
+        size.unit = "pt",
+        colour = "#333333",
+        vjust = 0
+      )
+  }
+  .plot_with_dimensions(
+    plot,
+    width = .plot_clamped_dimension(
+      n_features, base = 6, per_item = 1.4, minimum = 8, maximum = 18
+    ),
+    height = 7
+  )
+}
+
+.plot_control_first <- function(group, ref = NULL) {
+  if (is.logical(group)) group <- as.character(group)
+  group <- droplevels(factor(group))
+  levels <- levels(group)
+  if (is.null(ref)) {
+    controls <- c(
+      "control", "ctrl", "untrt", "untreated", "wt", "vehicle", "dmso", "normal"
+    )
+    hit <- levels[tolower(as.character(levels)) %in% controls]
+    if (length(hit)) ref <- hit[[1L]]
+  } else {
+    .assert_scalar_character(ref, "ref")
+    if (!ref %in% levels) {
+      stop("`ref` must be a level of `colour`.", call. = FALSE)
+    }
+  }
+  if (is.null(ref) || identical(levels[[1L]], ref)) return(group)
+  factor(as.character(group), levels = c(ref, setdiff(levels, ref)))
+}
+
+.plot_dodge_x <- function(category, group_index, n_groups, dodge_width) {
+  category - dodge_width / 2 + dodge_width * (group_index - 0.5) / n_groups
+}
+
+.plot_expression_stats <- function(data, test, p_adjust, stat_label, dodge_width) {
+  genes <- levels(data$feature)
+  groups <- levels(data$group)
+  n_groups <- length(groups)
+  pairs <- utils::combn(groups, 2L, simplify = FALSE)
+  if (n_groups > 2L) {
+    adjacent <- lapply(seq_len(n_groups - 1L), function(index) {
+      c(groups[[index]], groups[[index + 1L]])
+    })
+    distant <- Filter(function(pair) {
+      abs(match(pair[[1L]], groups) - match(pair[[2L]], groups)) > 1L
+    }, pairs)
+    pairs <- c(adjacent, distant)
+  }
+  y_span <- diff(range(data$value))
+  if (!is.finite(y_span) || y_span == 0) y_span <- max(abs(range(data$value)), 1)
+  pad <- y_span * 0.08
+  tick <- pad * 0.28
+  pieces <- lapply(seq_along(genes), function(gene_index) {
+    panel <- data[as.character(data$feature) == genes[[gene_index]], , drop = FALSE]
+    p_values <- vapply(pairs, function(pair) {
+      .plot_two_group_p(
+        panel$value[as.character(panel$group) == pair[[1L]]],
+        panel$value[as.character(panel$group) == pair[[2L]]],
+        test
+      )
+    }, numeric(1))
+    if (length(p_values) > 1L && !identical(p_adjust, "none")) {
+      p_values <- stats::p.adjust(p_values, method = p_adjust)
+    }
+    y_max <- max(panel$value)
+    do.call(rbind, lapply(seq_along(pairs), function(index) {
+      pair <- pairs[[index]]
+      x1 <- .plot_dodge_x(
+        gene_index, match(pair[[1L]], groups), n_groups, dodge_width
+      )
+      x2 <- .plot_dodge_x(
+        gene_index, match(pair[[2L]], groups), n_groups, dodge_width
+      )
+      y <- y_max + pad * index
+      label <- if (identical(stat_label, "significance")) {
+        .plot_significance_label(p_values[[index]])
+      } else {
+        .plot_format_pvalue(p_values[[index]])
+      }
+      data.frame(
+        feature = genes[[gene_index]],
+        x = c(x1, x1, x2),
+        xend = c(x1, x2, x2),
+        y = c(y - tick, y, y),
+        yend = c(y, y, y - tick),
+        label_x = (x1 + x2) / 2,
+        label_y = y + pad * 0.08,
+        label = label,
+        p_value = p_values[[index]],
+        stringsAsFactors = FALSE
+      )
+    }))
+  })
+  out <- do.call(rbind, pieces)
+  rownames(out) <- NULL
+  out
+}
+
+.plot_two_group_p <- function(left, right, test) {
+  left <- left[is.finite(left)]
+  right <- right[is.finite(right)]
+  if (length(left) < 2L || length(right) < 2L) {
+    stop("Each compared group needs at least two finite values.", call. = FALSE)
+  }
+  result <- if (identical(test, "t")) {
+    stats::t.test(left, right)
+  } else {
+    stats::wilcox.test(left, right, exact = FALSE)
+  }
+  as.numeric(result$p.value)
+}
+
+.plot_format_pvalue <- function(p) {
+  if (!is.finite(p)) return("p = NA")
+  if (p < 0.001) return("p < 0.001")
+  paste0("p = ", formatC(p, digits = 2L, format = "fg"))
+}
+
+.plot_significance_label <- function(p) {
+  if (!is.finite(p) || p >= 0.05) return("ns")
+  if (p < 0.001) return("***")
+  if (p < 0.01) return("**")
+  "*"
 }
 
 .bulkmae_colours <- c(
@@ -804,8 +1116,66 @@ plot_assay_heatmap <- function(
   theme_bulkmae() +
     ggplot2::theme(
       legend.position = "top",
-      legend.direction = "horizontal"
+      legend.direction = "horizontal",
+      panel.border = ggplot2::element_rect(colour = "#222222", fill = NA, linewidth = 0.25),
+      panel.background = ggplot2::element_rect(fill = "white", colour = NA),
+      plot.background = ggplot2::element_rect(fill = "white", colour = NA),
+      panel.grid.major.y = ggplot2::element_line(colour = "#E6E6E6", linewidth = 0.2)
     )
+}
+
+.plot_de_points <- function(table, x, y) {
+  ns <- table[as.character(table$direction) == "Not significant", , drop = FALSE]
+  sig <- table[as.character(table$direction) != "Not significant", , drop = FALSE]
+  list(
+    ggplot2::geom_point(
+      data = ns,
+      mapping = ggplot2::aes(
+        x = .data[[x]], y = .data[[y]], colour = .data[["direction"]]
+      ),
+      alpha = 0.40, size = 1.05, stroke = 0, na.rm = TRUE
+    ),
+    ggplot2::geom_point(
+      data = sig,
+      mapping = ggplot2::aes(
+        x = .data[[x]], y = .data[[y]], colour = .data[["direction"]]
+      ),
+      alpha = 0.88, size = 1.55, stroke = 0, na.rm = TRUE
+    )
+  )
+}
+
+.plot_de_counts <- function(plot, table, x, y) {
+  n_up <- sum(as.character(table$direction) == "Up")
+  n_down <- sum(as.character(table$direction) == "Down")
+  x_values <- table[[x]][is.finite(table[[x]])]
+  y_values <- table[[y]][is.finite(table[[y]])]
+  if (!length(x_values) || !length(y_values)) return(plot)
+  x_range <- range(x_values)
+  y_range <- range(y_values)
+  pad_x <- diff(x_range) * 0.02
+  pad_y <- diff(y_range) * 0.05
+  if (!is.finite(pad_x) || pad_x == 0) pad_x <- 0.1
+  if (!is.finite(pad_y) || pad_y == 0) pad_y <- 0.1
+  counts <- data.frame(
+    x = c(x_range[[1L]] + pad_x, x_range[[2L]] - pad_x),
+    y = c(y_range[[2L]] - pad_y, y_range[[2L]] - pad_y),
+    label = c(paste0("Down ", n_down), paste0("Up ", n_up)),
+    hjust = c(0, 1),
+    stringsAsFactors = FALSE
+  )
+  plot + ggplot2::geom_text(
+    data = counts,
+    mapping = ggplot2::aes(
+      x = .data[["x"]], y = .data[["y"]], label = .data[["label"]],
+      hjust = .data[["hjust"]]
+    ),
+    inherit.aes = FALSE,
+    vjust = 1,
+    size = .bulkmae_text_size_pt,
+    size.unit = "pt",
+    colour = "#333333"
+  )
 }
 
 .plot_feature_labels <- function(ids, selected, labels, result) {
@@ -837,19 +1207,20 @@ plot_assay_heatmap <- function(
   labelled <- !is.na(data$label) &
     is.finite(data[[x_column]]) & is.finite(data[[y_column]])
   if (!any(labelled)) return(plot)
-  y_values <- data[[y_column]][is.finite(data[[y_column]])]
-  y_range <- diff(range(y_values))
-  nudge_y <- if (is.finite(y_range) && y_range > 0) y_range * 0.025 else 0
-  plot + ggplot2::geom_text(
+  plot + ggrepel::geom_text_repel(
     data = data[labelled, , drop = FALSE],
     mapping = ggplot2::aes(
       x = .data[[x_column]],
       y = .data[[y_column]], label = .data[["label"]]
     ),
-    nudge_y = nudge_y,
-    size = .bulkmae_text_size_pt,
-    size.unit = "pt",
-    check_overlap = TRUE, show.legend = FALSE, na.rm = TRUE
+    size = .plot_pt_to_mm(.bulkmae_text_size_pt),
+    segment.size = 0.2,
+    min.segment.length = 0,
+    box.padding = 0.22,
+    max.overlaps = Inf,
+    seed = 1L,
+    show.legend = FALSE,
+    na.rm = TRUE
   )
 }
 

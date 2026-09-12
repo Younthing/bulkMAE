@@ -178,12 +178,23 @@ test_that("DE plots share threshold classification and explicit labels", {
   expect_equal(volcano$coordinates$limits$x, c(-3, 3))
   expect_identical(volcano$theme$legend.position, "top")
   expect_identical(volcano$theme$legend.direction, "horizontal")
-  text_layer <- Filter(
+  count_layer <- Filter(
     function(layer) inherits(layer$geom, "GeomText"),
     volcano$layers
   )[[1L]]
-  expect_identical(text_layer$aes_params$size, 6)
-  expect_identical(text_layer$geom_params$size.unit, "pt")
+  expect_identical(count_layer$aes_params$size, 6)
+  expect_identical(count_layer$geom_params$size.unit, "pt")
+  expect_setequal(count_layer$data$label, c("Down 1", "Up 2"))
+  expect_true(any(vapply(
+    volcano$layers,
+    function(layer) inherits(layer$geom, "GeomTextRepel"),
+    logical(1)
+  )))
+  expect_true(any(vapply(
+    ma$layers,
+    function(layer) inherits(layer$geom, "GeomTextRepel"),
+    logical(1)
+  )))
   expect_no_error(ggplot2::ggplot_build(volcano))
   expect_no_error(ggplot2::ggplot_build(ma))
   asymmetric <- plot_de_volcano(
@@ -311,6 +322,93 @@ test_that("assay heatmap aligns annotations and removes constant scaled rows", {
   )
   expect_setequal(levels(duplicate_plot$data$feature), c("Repeated", "Repeated.1"))
   expect_no_error(ggplot2::ggplot_build(duplicate_plot))
+})
+
+test_that("assay expression joins groups and adds a display comparison", {
+  mae <- make_toy_mae(n_features = 5L, n_samples = 4L)
+  features <- c("gene1", "gene3")
+  plot <- plot_assay_expression(
+    mae, "rna", "log_expression",
+    features = features,
+    colour = "condition",
+    feature_label = stats::setNames(c("Gene 1", "Gene 3"), features)
+  )
+  expect_s3_class(plot, "ggplot")
+  expect_no_error(ggplot2::ggplot_build(plot))
+  expect_s3_class(plot$facet, "FacetNull")
+  expect_identical(levels(plot$data$feature), c("Gene 1", "Gene 3"))
+  expect_identical(
+    as.character(plot$data$group),
+    as.character(mae_samples(mae, "rna")[as.character(plot$data$sample), "condition"])
+  )
+  expect_true(any(vapply(
+    plot$layers,
+    function(layer) inherits(layer$geom, "GeomSegment"),
+    logical(1)
+  )))
+  text_layer <- Filter(
+    function(layer) inherits(layer$geom, "GeomText"),
+    plot$layers
+  )[[1L]]
+  expect_true(all(grepl("^p ", text_layer$data$label)))
+  values <- mae_pull_assay(mae, "rna", "log_expression")["gene1", ]
+  groups <- mae_samples(mae, "rna")$condition
+  expected <- stats::wilcox.test(
+    values[groups == "a"], values[groups == "b"], exact = FALSE
+  )$p.value
+  gene1_p <- text_layer$data$p_value[as.character(text_layer$data$feature) == "Gene 1"][[1L]]
+  expect_equal(gene1_p, expected)
+  none <- plot_assay_expression(
+    mae, "rna", "log_expression",
+    features = "gene2", colour = "condition", test = "none"
+  )
+  expect_false(any(vapply(
+    none$layers,
+    function(layer) inherits(layer$geom, "GeomSegment"),
+    logical(1)
+  )))
+  expect_equal(
+    plot$scales$get_scales("x")$expand,
+    ggplot2::waiver()
+  )
+  expect_equal(
+    none$scales$get_scales("x")$expand,
+    ggplot2::expansion(add = 1.35)
+  )
+  expect_error(
+    plot_assay_expression(
+      mae, "rna", "log_expression",
+      features = character(), colour = "condition"
+    ),
+    "explicitly contain"
+  )
+  expect_error(
+    plot_assay_expression(
+      mae, "rna", "log_expression",
+      features = "missing", colour = "condition"
+    ),
+    "Unknown features"
+  )
+  expect_error(
+    plot_assay_expression(mae, "rna", "log_expression", features = "gene2"),
+    "discrete sample-metadata column"
+  )
+  expect_no_error(ggplot2::ggplot_build(
+    plot_assay_expression(
+      mae, "rna", "log_expression",
+      features = "gene2", colour = "condition", geom = "violin"
+    )
+  ))
+  simulated <- mae_simulate(n_features = 20L, n_samples = 8L, seed = 1L)
+  grouped <- plot_assay_expression(
+    simulated, "rna", "log_expression",
+    features = c("gene0001", "gene0002"),
+    colour = "condition",
+    ref = "control"
+  )
+  expect_identical(levels(grouped$data$group), c("control", "treated"))
+  expect_s3_class(grouped$facet, "FacetNull")
+  expect_no_error(ggplot2::ggplot_build(grouped))
 })
 
 test_that("backend MA abundance conventions do not change de_table", {

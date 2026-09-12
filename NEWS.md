@@ -1,5 +1,11 @@
 # bulkMAE (development version)
 
+- Adds `plot_assay_expression()` as one comparison plot. Features sit on the
+  x axis. Groups dodge beside each feature. The control level is first. A
+  Wilcoxon or t-test bracket is computed on the plotted values. Volcano,
+  MA, and assay heatmap defaults move closer to the literature DE figure set.
+  Non-significant points sit under significant points. Labels use `ggrepel`.
+  The volcano prints Down/Up counts. Heatmap tiles fill the panel.
 - Rewrites the README as a landing page with official backend links and one
   square patchwork gallery of volcano, heatmap, ORA network, and GSEA ridge
   plots.
