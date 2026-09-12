@@ -169,7 +169,7 @@ test_that("WGCNA module-trait and hub extractors align by identifier", {
   expect_identical(nrow(hubs), 2L)
   expect_setequal(hubs$module, c("blue", "brown"))
   expect_error(coexpr_module_trait(list(colors = fit$colors), traits), "MEs")
-  expect_error(coexpr_hubs(membership, c(blue = "gene1"), n = 1L), "named")
+  expect_error(coexpr_hubs(membership, c("blue", "brown"), n = 1L), "named")
 })
 
 test_that("deconv_fractions extracts cell-by-sample matrices", {

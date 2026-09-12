@@ -60,6 +60,7 @@
       0.25, 0.25, 0.5, 0.5
     ),
     nrow = 3L,
+    byrow = TRUE,
     dimnames = list(
       c("B_cell", "T_cell", "Myeloid"),
       paste0("sample", 1:4)
