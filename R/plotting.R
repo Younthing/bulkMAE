@@ -631,12 +631,14 @@ plot_assay_heatmap <- function(
       ggplot2::scale_colour_manual(values = styled$legend_fills, name = "Annotation")
   }
   if (!is.null(split) && !is.null(tracks)) {
-    plot <- plot + ggplot2::facet_grid(
-      rows = ggplot2::vars(.data[["component"]]),
-      cols = ggplot2::vars(.data[["split"]]),
-      scales = "free",
-      space = "free"
-    )
+    plot <- plot +
+      ggplot2::facet_grid(
+        rows = ggplot2::vars(.data[["component"]]),
+        cols = ggplot2::vars(.data[["split"]]),
+        scales = "free",
+        space = "free"
+      ) +
+      ggplot2::theme(strip.text.y = ggplot2::element_blank())
   } else if (!is.null(split)) {
     plot <- plot + ggplot2::facet_grid(
       cols = ggplot2::vars(.data[["split"]]),

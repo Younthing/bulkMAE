@@ -445,16 +445,24 @@ plot_coexpr_tom <- function(tom, modules = NULL, show_names = FALSE) {
     )
     fills <- .plot_module_colours(unique(bar$module))
     plot <- plot +
-      ggplot2::geom_tile(
-        data = bar,
-        mapping = ggplot2::aes(
-          x = .data[["column"]], y = .data[["row"]], colour = .data[["module"]]
-        ),
-        fill = unname(fills[bar$module]),
-        linewidth = 0,
-        inherit.aes = FALSE
-      ) +
-      ggplot2::scale_colour_manual(values = fills, name = "Module")
+      lapply(names(fills), function(level) {
+        ggplot2::geom_tile(
+          data = bar[bar$module == level, , drop = FALSE],
+          mapping = ggplot2::aes(
+            x = .data[["column"]], y = .data[["row"]], colour = .data[["module"]]
+          ),
+          fill = unname(fills[[level]]),
+          linewidth = 0,
+          inherit.aes = FALSE
+        )
+      }) +
+      ggplot2::scale_colour_manual(
+        values = fills,
+        name = "Module",
+        guide = ggplot2::guide_legend(
+          override.aes = list(fill = unname(fills), colour = NA)
+        )
+      )
   }
   plot <- plot +
     ggplot2::facet_grid(
@@ -474,7 +482,8 @@ plot_coexpr_tom <- function(tom, modules = NULL, show_names = FALSE) {
     )
   if (!show_names) {
     plot <- plot + ggplot2::theme(
-      axis.text = ggplot2::element_blank(),
+      axis.text.x = ggplot2::element_blank(),
+      axis.text.y = ggplot2::element_blank(),
       axis.ticks = ggplot2::element_blank()
     )
   }
