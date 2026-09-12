@@ -532,17 +532,7 @@ plot_cluster_consensus <- function(
     styled <- .plot_annotation_style(tracks, order)
     styled$data$component <- factor("Annotation", levels = component_levels)
     plot <- plot +
-      ggplot2::geom_tile(
-        data = styled$data,
-        mapping = ggplot2::aes(
-          x = .data[["sample"]],
-          y = .data[["track"]],
-          colour = .data[["legend"]]
-        ),
-        fill = styled$data$fill_colour,
-        linewidth = 0.15,
-        inherit.aes = FALSE
-      ) +
+      .plot_annotation_tile_layers(styled) +
       ggplot2::scale_colour_manual(values = styled$legend_fills, name = "Annotation") +
       ggplot2::facet_grid(
         rows = ggplot2::vars(.data[["component"]]),
@@ -1119,13 +1109,29 @@ plot_deconv_heatmap <- function(fractions, column_split = NULL) {
   tracks$sample <- factor(tracks$sample, levels = ids)
   tracks$track <- factor(tracks$track, levels = rev(unique(as.character(tracks$track))))
   tracks$legend <- ifelse(
-    length(unique(tracks$track)) == 1L,
+    length(unique(as.character(tracks$track))) == 1L,
     as.character(tracks$label),
     paste0(tracks$track, ": ", tracks$label)
   )
   fills <- .plot_annotation_colours(tracks$legend)
   tracks$fill_colour <- unname(fills[tracks$legend])
   list(data = tracks, legend_fills = fills)
+}
+
+.plot_annotation_tile_layers <- function(styled) {
+  lapply(names(styled$legend_fills), function(level) {
+    ggplot2::geom_tile(
+      data = styled$data[styled$data$legend == level, , drop = FALSE],
+      mapping = ggplot2::aes(
+        x = .data[["sample"]],
+        y = .data[["track"]],
+        colour = .data[["legend"]]
+      ),
+      fill = unname(styled$legend_fills[[level]]),
+      linewidth = 0.15,
+      inherit.aes = FALSE
+    )
+  })
 }
 
 .plot_as_hclust <- function(tree) {

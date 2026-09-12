@@ -627,17 +627,7 @@ plot_assay_heatmap <- function(
       styled$data$split <- split[as.character(styled$data$sample)]
     }
     plot <- plot +
-      ggplot2::geom_tile(
-        data = styled$data,
-        mapping = ggplot2::aes(
-          x = .data[["sample"]],
-          y = .data[["track"]],
-          colour = .data[["legend"]]
-        ),
-        fill = styled$data$fill_colour,
-        linewidth = 0.15,
-        inherit.aes = FALSE
-      ) +
+      .plot_annotation_tile_layers(styled) +
       ggplot2::scale_colour_manual(values = styled$legend_fills, name = "Annotation")
   }
   if (!is.null(split) && !is.null(tracks)) {

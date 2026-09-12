@@ -145,7 +145,11 @@ alternate factorization path on a non-negative assay.
 # Required default plots
 
 ```{r consensus-heatmap, fig.height = 5.2, fig.cap = "Pairwise consensus matrix for k = 2 on 150 airway HVGs, with a subtype annotation bar.", fig.alt = "A heatmap of sample-to-sample consensus values for the k = 2 solution with a class annotation bar."}
-plot_cluster_consensus(fit, k = 2L, annotation = classes) +
+plot_cluster_consensus(
+  fit,
+  k = 2L,
+  annotation = sample_table[, c("subtype", "dex"), drop = FALSE]
+) +
   labs(title = "Consensus matrix, k = 2")
 ```
 
