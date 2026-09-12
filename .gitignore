@@ -6,5 +6,6 @@ omnipathr-log/
 docs/*
 !docs/agents/
 !docs/agents/**
+!docs/p0-route-gaps.md
 .Rhistory
 .RData
