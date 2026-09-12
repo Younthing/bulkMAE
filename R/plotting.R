@@ -702,6 +702,12 @@ plot_assay_expression <- function(
   } else {
     group[match(data$sample, rownames(samples))]
   }
+  if (identical(geom, "violin")) {
+    group_n <- table(data$group, useNA = "no")
+    if (any(group_n < 2L)) {
+      stop("`geom = \"violin\"` needs at least two samples in every group.", call. = FALSE)
+    }
+  }
   plot <- ggplot2::ggplot(data, ggplot2::aes(
     x = .data[["group"]],
     y = .data[["value"]],

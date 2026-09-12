@@ -348,9 +348,16 @@ test_that("assay expression joins groups by sample identifier", {
     plot_assay_expression(mae, "rna", "log_expression", features = "missing"),
     "Unknown features"
   )
-  expect_no_error(ggplot2::ggplot_build(
+  expect_error(
     plot_assay_expression(
       mae, "rna", "log_expression", features = "gene2", geom = "violin"
+    ),
+    "at least two samples"
+  )
+  expect_no_error(ggplot2::ggplot_build(
+    plot_assay_expression(
+      mae, "rna", "log_expression",
+      features = "gene2", colour = "condition", geom = "violin"
     )
   ))
 })
