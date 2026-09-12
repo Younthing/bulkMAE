@@ -319,6 +319,15 @@ test_that("assay heatmap aligns annotations and removes constant scaled rows", {
   )
   expect_no_error(ggplot2::ggplot_build(annotated))
   expect_gte(length(annotated$layers), 2L)
+  split_annotated <- plot_assay_heatmap(
+    mae, "rna", "heat", features = rownames(values)[2:3],
+    scale = "none", cluster_rows = FALSE, cluster_columns = FALSE,
+    column_split = "condition",
+    column_annotation = "condition",
+    feature_label = duplicate_labels
+  )
+  expect_no_error(ggplot2::ggplot_build(split_annotated))
+  expect_true(inherits(split_annotated$theme$strip.text.y, "element_blank"))
 })
 
 test_that("backend MA abundance conventions do not change de_table", {

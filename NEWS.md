@@ -15,7 +15,9 @@
   `plot_coexpr_tom()`, `plot_cluster_delta()`, `plot_cluster_pac()`,
   `cluster_consensus_delta_area()`, and `cluster_consensus_pac()`.
   Tiny-n airway power selection remains a labelled diagnostic, not a
-  scale-free claim.
+  scale-free claim. TOM hides feature IDs by default and keeps the module
+  colour legend filled; split expression heatmaps drop the clipped
+  Annotation strip label.
 - Runs the three P0 routes on Bioconductor `airway` where that dataset
   is enough (same filter/VST design as the QC/DE tutorial). Deconvolution
   uses existing `mae_simulate()` because `airway` has no single-cell
