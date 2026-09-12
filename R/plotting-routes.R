@@ -397,7 +397,7 @@ plot_coexpr_tom <- function(tom, modules = NULL, show_names = FALSE) {
     if (!setequal(names(modules), rownames(tom))) {
       stop("`modules` names must match TOM features exactly.", call. = FALSE)
     }
-    order <- names(sort(as.character(modules[order]), method = "radix"))
+    order <- names(modules)[order(as.character(unname(modules)), method = "radix")]
     tom <- tom[order, order, drop = FALSE]
   } else if (nrow(tom) > 2L) {
     order <- rownames(tom)[stats::hclust(stats::dist(tom))$order]
