@@ -11,6 +11,7 @@ plot_assay_expression(
   features,
   colour,
   feature_label = NULL,
+  ref = NULL,
   geom = c("boxplot", "violin"),
   test = c("wilcoxon", "t", "none"),
   p_adjust = c("BH", "holm", "none"),
@@ -31,6 +32,9 @@ plot_assay_expression(
 \item{feature_label}{Optional feature metadata column or complete
 feature-named labels. Duplicate display labels are made unique.}
 
+\item{ref}{Optional control level placed first on the dodge. When omitted,
+a common control name is moved first if one is present.}
+
 \item{geom}{\code{"boxplot"} or \code{"violin"}. Both add a jittered point layer.}
 
 \item{test}{Display comparison on the plotted values. \code{"wilcoxon"} is a
@@ -48,10 +52,11 @@ An unprinted standard ggplot object carrying recommended physical
 dimensions for \code{\link[=plot_save]{plot_save()}}.
 }
 \description{
-Draws one panel per explicit feature from an already-computed assay. The
-comparison is a two-sample test on the plotted values. It is not the
-differential-expression model p-value. Features are never selected from a
-result table inside this function.
+Draws every selected feature on one x axis. Groups are dodged beside each
+feature. A control-like level is placed first when \code{ref} is set or when a
+common control name is present. The comparison is a two-sample test on the
+plotted values. It is not the differential-expression model p-value.
+Features are never selected from a result table inside this function.
 }
 \seealso{
 Other plotting:

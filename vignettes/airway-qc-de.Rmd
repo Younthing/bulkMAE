@@ -223,7 +223,7 @@ plot_de_volcano(
   labs(title = "Dexamethasone differential expression")
 ```
 
-```{r expression-plot, fig.cap="图 7：预先指定的 CRISPLD2 在 VST 尺度上按处理分组，括号为图上数值的 Wilcoxon 比较，不是 DE 模型 p-value。", fig.alt="CRISPLD2 的 VST 表达箱线图，按 dexamethasone 处理分组，叠加各样本点，并用括号标出组间 Wilcoxon p 值。"}
+```{r expression-plot, fig.cap="图 7：预先指定基因在同一张图上按处理分组比较。对照组在前。括号为图上数值的 Wilcoxon 比较，不是 DE 模型 p-value。", fig.alt="一张分组比较图，横轴为预先指定基因，每个基因旁并排 dexamethasone 对照组与处理组，并标出组间 Wilcoxon p 值。"}
 plot_assay_expression(
   mae_vst,
   "airway",

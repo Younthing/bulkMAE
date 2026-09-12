@@ -629,13 +629,16 @@ plot_assay_heatmap <- function(
 
 #' Plot grouped assay values with a comparison statistic
 #'
-#' Draws one panel per explicit feature from an already-computed assay. The
-#' comparison is a two-sample test on the plotted values. It is not the
-#' differential-expression model p-value. Features are never selected from a
-#' result table inside this function.
+#' Draws every selected feature on one x axis. Groups are dodged beside each
+#' feature. A control-like level is placed first when `ref` is set or when a
+#' common control name is present. The comparison is a two-sample test on the
+#' plotted values. It is not the differential-expression model p-value.
+#' Features are never selected from a result table inside this function.
 #'
 #' @inheritParams plot_assay_heatmap
 #' @param colour Discrete sample-metadata column used as the comparison group.
+#' @param ref Optional control level placed first on the dodge. When omitted,
+#'   a common control name is moved first if one is present.
 #' @param geom `"boxplot"` or `"violin"`. Both add a jittered point layer.
 #' @param test Display comparison on the plotted values. `"wilcoxon"` is a
 #'   two-sample Wilcoxon rank-sum test. `"t"` is Welch's t-test. `"none"`
@@ -656,6 +659,7 @@ plot_assay_expression <- function(
     features,
     colour,
     feature_label = NULL,
+    ref = NULL,
     geom = c("boxplot", "violin"),
     test = c("wilcoxon", "t", "none"),
     p_adjust = c("BH", "holm", "none"),
@@ -708,7 +712,10 @@ plot_assay_expression <- function(
     unname(display[data$feature_id]),
     levels = unname(display[rownames(matrix)])
   )
-  data$group <- droplevels(factor(group[match(data$sample, rownames(samples))]))
+  data$group <- .plot_control_first(
+    group[match(data$sample, rownames(samples))],
+    ref = ref
+  )
   if (anyNA(data$group)) stop("Group values cannot be missing.", call. = FALSE)
   n_groups <- nlevels(data$group)
   if (n_groups < 2L) {
@@ -718,45 +725,58 @@ plot_assay_expression <- function(
   if (any(group_n < 2L)) {
     stop("Each group needs at least two samples for a comparison plot.", call. = FALSE)
   }
+  dodge_width <- 0.75
   stats <- if (identical(test, "none")) {
     NULL
   } else {
-    .plot_expression_stats(data, test = test, p_adjust = p_adjust, stat_label = stat_label)
+    .plot_expression_stats(
+      data, test = test, p_adjust = p_adjust, stat_label = stat_label,
+      dodge_width = dodge_width
+    )
   }
-  x_angle <- if (n_groups > 3L) 45 else 0
-  x_hjust <- if (n_groups > 3L) 1 else 0.5
+  n_features <- nrow(matrix)
+  x_angle <- if (n_features > 4L) 45 else 0
+  x_hjust <- if (n_features > 4L) 1 else 0.5
+  dodge <- ggplot2::position_dodge(width = dodge_width)
   plot <- ggplot2::ggplot(data, ggplot2::aes(
-    x = .data[["group"]],
+    x = .data[["feature"]],
     y = .data[["value"]],
     colour = .data[["group"]],
     fill = .data[["group"]]
   ))
   plot <- if (identical(geom, "violin")) {
-    plot + ggplot2::geom_violin(alpha = 0.22, colour = NA, width = 0.86)
+    plot + ggplot2::geom_violin(
+      alpha = 0.22, colour = NA, width = 0.7, position = dodge
+    )
   } else {
     plot + ggplot2::geom_boxplot(
-      alpha = 0.22, width = 0.62, outlier.shape = NA, linewidth = 0.25
+      alpha = 0.22, width = 0.62, outlier.shape = NA, linewidth = 0.25,
+      position = dodge
     )
   }
   plot <- plot +
-    ggplot2::geom_jitter(
-      width = 0.12, height = 0, size = 1.15, alpha = 0.9, stroke = 0
+    ggplot2::geom_point(
+      position = ggplot2::position_jitterdodge(
+        jitter.width = 0.08, dodge.width = dodge_width
+      ),
+      size = 1.15, alpha = 0.9, stroke = 0
     ) +
-    ggplot2::facet_wrap(ggplot2::vars(.data[["feature"]]), scales = "free_y") +
-    ggplot2::scale_colour_manual(values = .plot_discrete_values(data$group), guide = "none") +
-    ggplot2::scale_fill_manual(values = .plot_discrete_values(data$group), guide = "none") +
+    ggplot2::scale_colour_manual(values = .plot_discrete_values(data$group)) +
+    ggplot2::scale_fill_manual(values = .plot_discrete_values(data$group)) +
     ggplot2::scale_y_continuous(
-      expand = ggplot2::expansion(mult = if (is.null(stats)) c(0.05, 0.08) else c(0.05, 0.22))
+      expand = ggplot2::expansion(mult = if (is.null(stats)) c(0.05, 0.08) else c(0.05, 0.18))
     ) +
     ggplot2::labs(
-      x = colour, y = "Assay value",
-      alt = "Grouped assay values for explicitly selected features, with a display comparison on the plotted points."
+      x = "Feature", y = "Assay value", colour = colour, fill = colour,
+      alt = "One comparison plot of explicitly selected features. Groups are dodged beside each feature, with a display test on the plotted values."
     ) +
     theme_bulkmae() +
     ggplot2::theme(
       panel.border = ggplot2::element_rect(colour = "#222222", fill = NA, linewidth = 0.25),
       panel.background = ggplot2::element_rect(fill = "white", colour = NA),
       plot.background = ggplot2::element_rect(fill = "white", colour = NA),
+      legend.position = "top",
+      legend.direction = "horizontal",
       axis.text.x = ggplot2::element_text(angle = x_angle, hjust = x_hjust)
     )
   if (!is.null(stats)) {
@@ -772,7 +792,7 @@ plot_assay_expression <- function(
         colour = "#333333"
       ) +
       ggplot2::geom_text(
-        data = unique(stats[c("feature", "label_x", "label_y", "label", "p_value")]),
+        data = unique(stats[c("label_x", "label_y", "label", "p_value", "feature")]),
         mapping = ggplot2::aes(
           x = .data[["label_x"]], y = .data[["label_y"]], label = .data[["label"]]
         ),
@@ -783,31 +803,59 @@ plot_assay_expression <- function(
         vjust = 0
       )
   }
-  n_features <- nrow(matrix)
   .plot_with_dimensions(
     plot,
     width = .plot_clamped_dimension(
-      n_features, base = 5.5, per_item = 2.2, minimum = 8, maximum = 16
+      n_features, base = 6, per_item = 1.4, minimum = 8, maximum = 18
     ),
-    height = .plot_clamped_dimension(
-      ceiling(n_features / 3), base = 5.5, per_item = 3.4, minimum = 6.5, maximum = 16
-    )
+    height = 7
   )
 }
 
-.plot_expression_stats <- function(data, test, p_adjust, stat_label) {
-  pieces <- lapply(split(data, data$feature, drop = TRUE), function(panel) {
-    groups <- levels(droplevels(panel$group))
-    pairs <- utils::combn(groups, 2L, simplify = FALSE)
-    if (length(groups) > 2L) {
-      adjacent <- lapply(seq_len(length(groups) - 1L), function(index) {
-        c(groups[[index]], groups[[index + 1L]])
-      })
-      distant <- Filter(function(pair) {
-        abs(match(pair[[1L]], groups) - match(pair[[2L]], groups)) > 1L
-      }, pairs)
-      pairs <- c(adjacent, distant)
+.plot_control_first <- function(group, ref = NULL) {
+  if (is.logical(group)) group <- as.character(group)
+  group <- droplevels(factor(group))
+  levels <- levels(group)
+  if (is.null(ref)) {
+    controls <- c(
+      "control", "ctrl", "untrt", "untreated", "wt", "vehicle", "dmso", "normal"
+    )
+    hit <- levels[tolower(as.character(levels)) %in% controls]
+    if (length(hit)) ref <- hit[[1L]]
+  } else {
+    .assert_scalar_character(ref, "ref")
+    if (!ref %in% levels) {
+      stop("`ref` must be a level of `colour`.", call. = FALSE)
     }
+  }
+  if (is.null(ref) || identical(levels[[1L]], ref)) return(group)
+  factor(as.character(group), levels = c(ref, setdiff(levels, ref)))
+}
+
+.plot_dodge_x <- function(category, group_index, n_groups, dodge_width) {
+  category - dodge_width / 2 + dodge_width * (group_index - 0.5) / n_groups
+}
+
+.plot_expression_stats <- function(data, test, p_adjust, stat_label, dodge_width) {
+  genes <- levels(data$feature)
+  groups <- levels(data$group)
+  n_groups <- length(groups)
+  pairs <- utils::combn(groups, 2L, simplify = FALSE)
+  if (n_groups > 2L) {
+    adjacent <- lapply(seq_len(n_groups - 1L), function(index) {
+      c(groups[[index]], groups[[index + 1L]])
+    })
+    distant <- Filter(function(pair) {
+      abs(match(pair[[1L]], groups) - match(pair[[2L]], groups)) > 1L
+    }, pairs)
+    pairs <- c(adjacent, distant)
+  }
+  y_span <- diff(range(data$value))
+  if (!is.finite(y_span) || y_span == 0) y_span <- max(abs(range(data$value)), 1)
+  pad <- y_span * 0.08
+  tick <- pad * 0.28
+  pieces <- lapply(seq_along(genes), function(gene_index) {
+    panel <- data[as.character(data$feature) == genes[[gene_index]], , drop = FALSE]
     p_values <- vapply(pairs, function(pair) {
       .plot_two_group_p(
         panel$value[as.character(panel$group) == pair[[1L]]],
@@ -818,24 +866,23 @@ plot_assay_expression <- function(
     if (length(p_values) > 1L && !identical(p_adjust, "none")) {
       p_values <- stats::p.adjust(p_values, method = p_adjust)
     }
-    y_range <- range(panel$value)
-    span <- diff(y_range)
-    if (!is.finite(span) || span == 0) span <- max(abs(y_range), 1)
-    pad <- span * 0.14
-    tick <- pad * 0.22
-    x_levels <- levels(panel$group)
+    y_max <- max(panel$value)
     do.call(rbind, lapply(seq_along(pairs), function(index) {
       pair <- pairs[[index]]
-      x1 <- match(pair[[1L]], x_levels)
-      x2 <- match(pair[[2L]], x_levels)
-      y <- y_range[[2L]] + pad * index
+      x1 <- .plot_dodge_x(
+        gene_index, match(pair[[1L]], groups), n_groups, dodge_width
+      )
+      x2 <- .plot_dodge_x(
+        gene_index, match(pair[[2L]], groups), n_groups, dodge_width
+      )
+      y <- y_max + pad * index
       label <- if (identical(stat_label, "significance")) {
         .plot_significance_label(p_values[[index]])
       } else {
         .plot_format_pvalue(p_values[[index]])
       }
       data.frame(
-        feature = panel$feature[1L],
+        feature = genes[[gene_index]],
         x = c(x1, x1, x2),
         xend = c(x1, x2, x2),
         y = c(y - tick, y, y),

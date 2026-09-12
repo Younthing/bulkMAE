@@ -335,6 +335,8 @@ test_that("assay expression joins groups and adds a display comparison", {
   )
   expect_s3_class(plot, "ggplot")
   expect_no_error(ggplot2::ggplot_build(plot))
+  expect_s3_class(plot$facet, "FacetNull")
+  expect_identical(rlang::as_name(plot$mapping$x), "feature")
   expect_identical(levels(plot$data$feature), c("Gene 1", "Gene 3"))
   expect_identical(
     as.character(plot$data$group),
@@ -390,6 +392,16 @@ test_that("assay expression joins groups and adds a display comparison", {
       features = "gene2", colour = "condition", geom = "violin"
     )
   ))
+  simulated <- mae_simulate(n_features = 20L, n_samples = 8L, seed = 1L)
+  grouped <- plot_assay_expression(
+    simulated, "rna", "log_expression",
+    features = c("gene0001", "gene0002"),
+    colour = "condition",
+    ref = "control"
+  )
+  expect_identical(levels(grouped$data$group), c("control", "treated"))
+  expect_s3_class(grouped$facet, "FacetNull")
+  expect_no_error(ggplot2::ggplot_build(grouped))
 })
 
 test_that("backend MA abundance conventions do not change de_table", {
