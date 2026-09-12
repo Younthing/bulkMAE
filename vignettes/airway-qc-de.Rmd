@@ -79,7 +79,7 @@ knitr::kable(
 
 # 原始计数的文库质控
 
-`qc_library()`只计算透明的样本级汇总；绘图函数返回普通 `ggplot`，所以标题和局部样式仍用 `+` 添加。
+`qc_library()` 只计算透明的样本级汇总。绘图函数返回普通 `ggplot`，标题和局部样式用 `+` 添加。
 
 ```{r library-qc, fig.cap="图 1：原始计数的文库规模、检出基因数和零计数比例。", fig.alt="八个 airway 样本的文库规模、检出基因数与零计数比例分面柱状图。"}
 library_metrics <- qc_library(mae, "airway", "counts")
@@ -188,12 +188,20 @@ top_table <- top_table[, c(
 knitr::kable(top_table, digits = 4, caption = "按 adjusted p-value 排序的前 10 个基因")
 ```
 
-# MA、火山图、指定基因与描述性热图
+# MA、火山图、指定基因比较与描述性热图
 
-CRISPLD2（Ensembl `ENSG00000103196`）由原研究预先指定为关注基因，而不是看完当前结果后再挑出的标签。
+原研究问的是地塞米松响应，以及 CRISPLD2 对细胞因子功能的调节。下面这组基因按这个事先问题列出，不是看完本表后再挑的标签。火山图和 MA 图只标 CRISPLD2。表达图把整组基因放在同一横轴上，对照组在左。
 
 ```{r plotting-inputs}
-crispld2 <- "ENSG00000103196"
+nominated <- c(
+  CRISPLD2 = "ENSG00000103196",
+  FKBP5 = "ENSG00000096060",
+  TSC22D3 = "ENSG00000157514",
+  DUSP1 = "ENSG00000120129",
+  PER1 = "ENSG00000179094",
+  IL6 = "ENSG00000136244"
+)
+crispld2 <- nominated[["CRISPLD2"]]
 feature_labels <- stats::setNames(
   feature_lookup$display_label,
   rownames(feature_lookup)
@@ -201,7 +209,7 @@ feature_labels <- stats::setNames(
 feature_labels[crispld2] <- "CRISPLD2"
 ```
 
-```{r ma-plot, fig.cap="图 5：DESeq2 平均丰度与处理效应的 MA 图；预先标注 CRISPLD2。", fig.alt="airway 差异表达 MA 图，横轴为对数尺度平均丰度，纵轴为处理效应，并标注 CRISPLD2。"}
+```{r ma-plot, fig.cap="图 5：DESeq2 平均丰度与处理效应的 MA 图。只预先标注 CRISPLD2。", fig.alt="airway 差异表达 MA 图，横轴为对数尺度平均丰度，纵轴为处理效应，并标注 CRISPLD2。"}
 plot_de_ma(
   de_result,
   fdr = fdr_threshold,
@@ -212,7 +220,7 @@ plot_de_ma(
   labs(title = "Dexamethasone effect by mean abundance")
 ```
 
-```{r volcano-plot, fig.cap="图 6：处理效应与原始 p-value 的火山图；颜色由 FDR 与效应阈值共同决定。", fig.alt="airway 差异表达火山图，蓝色为下调、灰色为不显著、橙红色为上调，并标注 CRISPLD2。"}
+```{r volcano-plot, fig.cap="图 6：处理效应与原始 p-value 的火山图。颜色由 FDR 与效应阈值共同决定，不是 y 轴上的原始 p 阈值。", fig.alt="airway 差异表达火山图，蓝色为下调、灰色为不显著、橙红色为上调，并标注 CRISPLD2。"}
 plot_de_volcano(
   de_result,
   fdr = fdr_threshold,
@@ -223,19 +231,21 @@ plot_de_volcano(
   labs(title = "Dexamethasone differential expression")
 ```
 
-```{r expression-plot, fig.cap="图 7：预先指定基因在同一张图上按处理分组比较。对照组在前。括号为图上数值的 Wilcoxon 比较，不是 DE 模型 p-value。", fig.alt="一张分组比较图，横轴为预先指定基因，每个基因旁并排 dexamethasone 对照组与处理组，并标出组间 Wilcoxon p 值。"}
+```{r expression-plot, fig.cap="图 7：预先指定的六个基因画在同一张图上。每个基因旁并排 untreated 与 treated。括号是图上 VST 值的 Wilcoxon 比较，不是 DE 模型 p-value。", fig.alt="一张分组比较图，横轴为 CRISPLD2、FKBP5、TSC22D3、DUSP1、PER1 和 IL6，每个基因旁并排 dexamethasone 对照组与处理组，并标出组间 Wilcoxon p 值。"}
 plot_assay_expression(
   mae_vst,
   "airway",
   "vst",
-  features = crispld2,
+  features = unname(nominated),
   colour = "dex",
   feature_label = "display_label"
 ) +
-  labs(title = "CRISPLD2 expression")
+  labs(title = "Nominated glucocorticoid-response genes")
 ```
 
-最后选择 adjusted p-value 最小的 30 个基因，并在 VST 尺度上按行标准化。这里必须显式传入 feature ID；绘图函数不会暗中选择“最显著”基因。
+括号只比较图上的 VST 值，没有吸收 `cell` 配对。四个对子的 Wilcoxon 往往只能给出有限的离散 p 值；要报告处理效应仍看上面的 DESeq2 表。
+
+热图另选 adjusted p-value 最小的 30 个基因，在 VST 上按行标准化。feature ID 必须显式传入；绘图函数不会自己挑“最显著”基因。
 
 ```{r heatmap, fig.height=7, fig.cap="图 8：adjusted p-value 最小的 30 个基因的 VST 行标准化热图。", fig.alt="三十个差异最显著基因在八个 airway 样本中的 VST 行 z-score 热图，按处理分面。"}
 heatmap_features <- de_results$feature_id[top_order[seq_len(min(30L, length(top_order)))]]
@@ -253,7 +263,7 @@ plot_assay_heatmap(
   labs(title = "Top 30 genes (descriptive view)")
 ```
 
-这张热图在用于拟合和排序的同一批数据上展示，因此只是描述性总结，不是独立验证。确认处理效应仍需要独立队列或有针对性的实验验证。
+这张热图用的是拟合和排序的同一批数据，只是描述性总结，不是独立验证。确认处理效应仍要独立队列或针对性实验。
 
 # 限制、来源与会话信息
 
