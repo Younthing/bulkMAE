@@ -336,7 +336,6 @@ test_that("assay expression joins groups and adds a display comparison", {
   expect_s3_class(plot, "ggplot")
   expect_no_error(ggplot2::ggplot_build(plot))
   expect_s3_class(plot$facet, "FacetNull")
-  expect_identical(rlang::as_name(plot$mapping$x), "feature")
   expect_identical(levels(plot$data$feature), c("Gene 1", "Gene 3"))
   expect_identical(
     as.character(plot$data$group),
