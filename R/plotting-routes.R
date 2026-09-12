@@ -284,19 +284,35 @@ plot_coexpr_membership <- function(membership, gene_significance, module) {
 #' @family plotting
 #' @export
 plot_coexpr_dendrogram <- function(dendrogram, modules = NULL) {
+  block_labels <- NULL
   if (is.list(dendrogram) && !is.null(dendrogram$dendrograms)) {
     if (is.null(modules) && !is.null(dendrogram$colors)) {
       modules <- coexpr_modules(dendrogram)
+    }
+    if (!is.null(dendrogram$colors)) {
+      feature_names <- names(coexpr_modules(dendrogram))
+      block <- dendrogram$blockGenes
+      if (is.list(block) && length(block) && is.numeric(block[[1L]])) {
+        block_labels <- feature_names[as.integer(block[[1L]])]
+      } else {
+        block_labels <- feature_names
+      }
     }
     trees <- dendrogram$dendrograms
     if (!length(trees)) {
       stop("The WGCNA fit has no `dendrograms`.", call. = FALSE)
     }
+    if (length(trees) > 1L) {
+      warning("Using the first WGCNA block dendrogram.", call. = FALSE)
+    }
     dendrogram <- trees[[1L]]
   }
   tree <- .plot_as_hclust(dendrogram)
+  if (is.null(tree$labels) || anyNA(tree$labels) || any(!nzchar(as.character(tree$labels)))) {
+    tree$labels <- block_labels
+  }
   labels <- tree$labels
-  if (is.null(labels) || anyNA(labels) || any(!nzchar(labels))) {
+  if (is.null(labels) || anyNA(labels) || any(!nzchar(as.character(labels)))) {
     stop("The dendrogram must have unique, non-missing leaf labels.", call. = FALSE)
   }
   .plot_assert_ids(labels, "Dendrogram leaf labels")
