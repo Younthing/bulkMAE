@@ -197,7 +197,7 @@ plot_activity_rank <- function(
         Positive = .bulkmae_colours[["orange"]]
       ),
       breaks = c("Negative", "Zero", "Positive"),
-      drop = FALSE,
+      drop = TRUE,
       name = "Sign"
     ) +
     ggplot2::labs(
