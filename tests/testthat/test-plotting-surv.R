@@ -83,7 +83,13 @@ test_that("forest and risk plots reject misaligned or invalid inputs", {
   skip_if_not_installed("survival")
   score <- c(a = -0.4, b = 0.1, c = 1.2, d = 0.7)
   group <- c(b = "event", a = "censor", d = "event", c = "censor")
-  expect_no_error(ggplot2::ggplot_build(plot_surv_risk(score, group[rev(names(group))])))
+  shuffled <- group[rev(names(group))]
+  aligned_plot <- plot_surv_risk(score, shuffled, type = "box")
+  expect_no_error(ggplot2::ggplot_build(aligned_plot))
+  expect_identical(
+    as.character(aligned_plot$data$group),
+    as.character(group[aligned_plot$data$sample])
+  )
   expect_error(plot_surv_risk(score, type = "box"), "group")
   expect_error(plot_surv_risk(score, group = group[-1L]), "match `score` names")
   expect_error(plot_surv_risk(unname(score)), "named numeric")

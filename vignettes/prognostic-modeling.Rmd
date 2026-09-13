@@ -134,7 +134,10 @@ score <- stats::setNames(samples$risk_score, rownames(samples))
 set.seed(20260913)
 scaled <- as.numeric(scale(score))
 samples$survival_time <- round(
-  pmax(12, stats::rexp(length(score), rate = 1 / 220) * exp(-1.15 * scaled)),
+  pmin(
+    720,
+    pmax(20, stats::rexp(length(score), rate = 1 / 180) * exp(-1.15 * scaled))
+  ),
   1L
 )
 samples$event <- as.integer(stats::rbinom(

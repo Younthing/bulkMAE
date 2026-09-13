@@ -90,7 +90,8 @@ plot_surv_km <- function(
     table_ys <- table_top - row_gap * (seq_len(n_strata) - 1L)
     names(table_ys) <- levels(curves$strata)
     risk$y <- unname(table_ys[as.character(risk$strata)])
-    label_x <- min(c(0, curves$time, risk$time), na.rm = TRUE)
+    time_max <- max(c(curves$time, risk$time), na.rm = TRUE)
+    label_x <- -0.08 * max(time_max, 1)
     y_limits <- c(min(table_ys) - 0.08, 1.05)
     plot <- plot +
       ggplot2::annotate(
@@ -134,7 +135,7 @@ plot_surv_km <- function(
       ggplot2::scale_fill_manual(values = palette, drop = FALSE)
   }
   plot <- plot +
-    ggplot2::scale_x_continuous(expand = ggplot2::expansion(mult = c(0.02, 0.04))) +
+    ggplot2::scale_x_continuous(expand = ggplot2::expansion(mult = c(0.14, 0.05))) +
     ggplot2::scale_y_continuous(
       breaks = y_breaks,
       labels = function(breaks) {
@@ -157,7 +158,7 @@ plot_surv_km <- function(
     ggplot2::theme(
       legend.position = if (n_strata > 1L) "right" else "none",
       plot.margin = if (risk_table) {
-        ggplot2::margin(4, 8, 8, 28, unit = "pt")
+        ggplot2::margin(4, 8, 8, 36, unit = "pt")
       } else {
         ggplot2::margin(4, 6, 4, 6, unit = "pt")
       }
@@ -297,7 +298,7 @@ plot_surv_risk <- function(score, group = NULL, type = c("density", "box")) {
   )
   if (!is.null(group)) {
     group <- .plot_surv_align_group(group, names(score))
-    data$group <- group[data$sample]
+    data$group <- unname(group)
   }
   if (identical(type, "box")) {
     if (is.null(group)) {
@@ -549,7 +550,8 @@ plot_surv_risk <- function(score, group = NULL, type = c("density", "box")) {
   if (!setequal(names(group), sample_ids)) {
     stop("`group` names must match `score` names exactly.", call. = FALSE)
   }
-  group <- group[sample_ids]
+  group <- group[match(sample_ids, names(group))]
+  names(group) <- sample_ids
   if (anyNA(group) || any(!nzchar(as.character(group)))) {
     stop("`group` cannot contain missing or empty values.", call. = FALSE)
   }
@@ -567,6 +569,12 @@ plot_surv_risk <- function(score, group = NULL, type = c("density", "box")) {
   levels <- as.character(levels)
   if (!length(levels)) {
     stop("At least one group is required.", call. = FALSE)
+  }
+  if (identical(levels, c("Low", "High"))) {
+    return(c(
+      Low = unname(.bulkmae_qualitative[["blue"]]),
+      High = unname(.bulkmae_qualitative[["vermillion"]])
+    ))
   }
   if (length(levels) > length(.bulkmae_qualitative)) {
     return(unname(.bulkmae_qualitative))
