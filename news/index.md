@@ -2,6 +2,20 @@
 
 ## bulkMAE (development version)
 
+- Adds the LINCS reverse-signature mainline:
+  [`drug_lincs_table()`](https://younthing.github.io/bulkMAE/reference/drug_lincs_table.md)
+  extracts ranked compounds from a native `gessResult` or a gess-style
+  table,
+  [`drug_lincs_example()`](https://younthing.github.io/bulkMAE/reference/drug_lincs_example.md)
+  supplies a labelled diagnostic toy table, and
+  [`plot_lincs_rank()`](https://younthing.github.io/bulkMAE/reference/plot_lincs_rank.md),
+  [`plot_lincs_heatmap()`](https://younthing.github.io/bulkMAE/reference/plot_lincs_heatmap.md),
+  [`plot_lincs_waterfall()`](https://younthing.github.io/bulkMAE/reference/plot_lincs_waterfall.md),
+  and
+  [`plot_lincs_overlap()`](https://younthing.github.io/bulkMAE/reference/plot_lincs_overlap.md)
+  draw already-computed NCS/Tau/WTCS views. The vignette stays offline
+  and does not download ExperimentHub LINCS libraries.
+
 - Rewrites the README as a landing page with official backend links and
   one square patchwork gallery of volcano, heatmap, ORA network, and
   GSEA ridge plots.

@@ -23,6 +23,7 @@
     <li><a class="dropdown-item" href="../articles/getting-started.html">快速入门：从表达矩阵到 bulkMAE 工作流</a></li>
     <li><a class="dropdown-item" href="../articles/airway-qc-de.html">从样本质控到配对差异表达</a></li>
     <li><a class="dropdown-item" href="../articles/enrichment-analysis.html">airway 富集分析：ORA、GSEA 与图形</a></li>
+    <li><a class="dropdown-item" href="../articles/lincs-drug-hypothesis.html">LINCS 反向签名药物假设：连接性分数与图形</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Guides</h6></li>
     <li><a class="dropdown-item" href="../articles/naming-migration.html">0.4 API 命名迁移</a></li>
@@ -45,7 +46,8 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="development version" id="bulkmae-development-version">bulkMAE (development version)<a class="anchor" aria-label="anchor" href="#bulkmae-development-version"></a></h2>
-<ul><li>Rewrites the README as a landing page with official backend links and one square patchwork gallery of volcano, heatmap, ORA network, and GSEA ridge plots.</li>
+<ul><li><p>Adds the LINCS reverse-signature mainline: <code><a href="../reference/drug_lincs_table.html">drug_lincs_table()</a></code> extracts ranked compounds from a native <code>gessResult</code> or a gess-style table, <code><a href="../reference/drug_lincs_example.html">drug_lincs_example()</a></code> supplies a labelled diagnostic toy table, and <code><a href="../reference/plot_lincs_rank.html">plot_lincs_rank()</a></code>, <code><a href="../reference/plot_lincs_heatmap.html">plot_lincs_heatmap()</a></code>, <code><a href="../reference/plot_lincs_waterfall.html">plot_lincs_waterfall()</a></code>, and <code><a href="../reference/plot_lincs_overlap.html">plot_lincs_overlap()</a></code> draw already-computed NCS/Tau/WTCS views. The vignette stays offline and does not download ExperimentHub LINCS libraries.</p></li>
+<li><p>Rewrites the README as a landing page with official backend links and one square patchwork gallery of volcano, heatmap, ORA network, and GSEA ridge plots.</p></li>
 </ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.4.1" id="bulkmae-041">bulkMAE 0.4.1<a class="anchor" aria-label="anchor" href="#bulkmae-041"></a></h2>

@@ -3,7 +3,7 @@
 ## Plotting
 
 Standard ggplot2 views of QC, embeddings, differential expression,
-enrichment, and assays.
+enrichment, LINCS connectivity, and assays.
 
 - [`plot_assay_heatmap()`](https://younthing.github.io/bulkMAE/reference/plot_assay_heatmap.md)
   : Plot selected assay features as a heatmap
@@ -17,6 +17,14 @@ enrichment, and assays.
   : Plot one classic GSEA running-score profile
 - [`plot_gsea_ridge()`](https://younthing.github.io/bulkMAE/reference/plot_gsea_ridge.md)
   : Plot GSEA rank-metric distributions as ridges
+- [`plot_lincs_heatmap()`](https://younthing.github.io/bulkMAE/reference/plot_lincs_heatmap.md)
+  : Plot LINCS connectivity scores as a compound-by-cell heatmap
+- [`plot_lincs_overlap()`](https://younthing.github.io/bulkMAE/reference/plot_lincs_overlap.md)
+  : Plot query up/down overlap counts for LINCS hits
+- [`plot_lincs_rank()`](https://younthing.github.io/bulkMAE/reference/plot_lincs_rank.md)
+  : Plot ranked LINCS connectivity scores
+- [`plot_lincs_waterfall()`](https://younthing.github.io/bulkMAE/reference/plot_lincs_waterfall.md)
+  : Plot a waterfall of LINCS connectivity scores
 - [`plot_ora_bubble()`](https://younthing.github.io/bulkMAE/reference/plot_ora_bubble.md)
   : Plot explicitly selected ORA terms as bubbles
 - [`plot_ora_network()`](https://younthing.github.io/bulkMAE/reference/plot_ora_network.md)
@@ -138,6 +146,10 @@ enrichment, and assays.
   : Search a LINCS reference database for connected signatures
 - [`drug_lincs_databases()`](https://younthing.github.io/bulkMAE/reference/drug_lincs_databases.md)
   : List supported signatureSearch reference databases
+- [`drug_lincs_example()`](https://younthing.github.io/bulkMAE/reference/drug_lincs_example.md)
+  : Diagnostic toy LINCS connectivity table
+- [`drug_lincs_table()`](https://younthing.github.io/bulkMAE/reference/drug_lincs_table.md)
+  : Extract a ranked LINCS connectivity table
 - [`drug_query()`](https://younthing.github.io/bulkMAE/reference/drug_query.md)
   : Prepare an up/down query for LINCS or CMap
 - [`dtu_diffsplice()`](https://younthing.github.io/bulkMAE/reference/dtu_diffsplice.md)

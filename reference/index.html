@@ -23,6 +23,7 @@
     <li><a class="dropdown-item" href="../articles/getting-started.html">快速入门：从表达矩阵到 bulkMAE 工作流</a></li>
     <li><a class="dropdown-item" href="../articles/airway-qc-de.html">从样本质控到配对差异表达</a></li>
     <li><a class="dropdown-item" href="../articles/enrichment-analysis.html">airway 富集分析：ORA、GSEA 与图形</a></li>
+    <li><a class="dropdown-item" href="../articles/lincs-drug-hypothesis.html">LINCS 反向签名药物假设：连接性分数与图形</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Guides</h6></li>
     <li><a class="dropdown-item" href="../articles/naming-migration.html">0.4 API 命名迁移</a></li>
@@ -45,7 +46,7 @@
     <div class="section level2">
       <h2 id="plotting">Plotting<a class="anchor" aria-label="anchor" href="#plotting"></a></h2>
 
-      <div class="section-desc"><p>Standard ggplot2 views of QC, embeddings, differential expression, enrichment, and assays.</p></div>
+      <div class="section-desc"><p>Standard ggplot2 views of QC, embeddings, differential expression, enrichment, LINCS connectivity, and assays.</p></div>
 
       <dl></dl></div><div class="section level2">
 
@@ -93,6 +94,34 @@
 
         </dt>
         <dd>Plot GSEA rank-metric distributions as ridges</dd>
+
+        <dt>
+
+          <code><a href="plot_lincs_heatmap.html">plot_lincs_heatmap()</a></code>
+
+        </dt>
+        <dd>Plot LINCS connectivity scores as a compound-by-cell heatmap</dd>
+
+        <dt>
+
+          <code><a href="plot_lincs_overlap.html">plot_lincs_overlap()</a></code>
+
+        </dt>
+        <dd>Plot query up/down overlap counts for LINCS hits</dd>
+
+        <dt>
+
+          <code><a href="plot_lincs_rank.html">plot_lincs_rank()</a></code>
+
+        </dt>
+        <dd>Plot ranked LINCS connectivity scores</dd>
+
+        <dt>
+
+          <code><a href="plot_lincs_waterfall.html">plot_lincs_waterfall()</a></code>
+
+        </dt>
+        <dd>Plot a waterfall of LINCS connectivity scores</dd>
 
         <dt>
 
@@ -515,6 +544,20 @@
 
         </dt>
         <dd>List supported signatureSearch reference databases</dd>
+
+        <dt>
+
+          <code><a href="drug_lincs_example.html">drug_lincs_example()</a></code>
+
+        </dt>
+        <dd>Diagnostic toy LINCS connectivity table</dd>
+
+        <dt>
+
+          <code><a href="drug_lincs_table.html">drug_lincs_table()</a></code>
+
+        </dt>
+        <dd>Extract a ranked LINCS connectivity table</dd>
 
         <dt>
 

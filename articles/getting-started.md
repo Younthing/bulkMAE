@@ -389,6 +389,7 @@ plot_save("pca.pdf", custom_pca)
 | Salmon/kallisto/RSEM 导入 | [`import_tximport()`](https://younthing.github.io/bulkMAE/reference/import_tximport.md) |
 | DE 原生后端结果与六列统一视图 | `de_*()`、[`de_table()`](https://younthing.github.io/bulkMAE/reference/de_table.md)、[`de_ranks()`](https://younthing.github.io/bulkMAE/reference/de_ranks.md)、[`de_selected()`](https://younthing.github.io/bulkMAE/reference/de_selected.md) |
 | ORA、GSEA、原生结果与富集绘图 | [富集分析教程](https://younthing.github.io/bulkMAE/articles/enrichment-analysis.md) |
+| LINCS 反向签名药物假设 | [LINCS 连接性教程](https://younthing.github.io/bulkMAE/articles/lincs-drug-hypothesis.md) |
 | 基因集打分和调控活性 | `score_*()`、`activity_*()` |
 | 批次、共表达、去卷积和临床模型 | `adjust_*()`、`coexpr_*()`、`deconv_*()`、`surv_*()` |
 | 完整函数与输入边界 | [在线 reference](https://younthing.github.io/bulkMAE/reference/index.html) 与 [方法指南](https://github.com/Younthing/bulkMAE/tree/main/inst/guides) |

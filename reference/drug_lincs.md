@@ -1,6 +1,15 @@
 # Search a LINCS reference database for connected signatures
 
-Search a LINCS reference database for connected signatures
+Thin wrapper around `signatureSearch::qSig()` and
+`signatureSearch::gess_lincs()`. The return type stays the native
+`gessResult`. Use
+[`drug_lincs_table()`](https://younthing.github.io/bulkMAE/reference/drug_lincs_table.md)
+to extract the ranked compound table for
+[`plot_lincs_rank()`](https://younthing.github.io/bulkMAE/reference/plot_lincs_rank.md),
+[`plot_lincs_heatmap()`](https://younthing.github.io/bulkMAE/reference/plot_lincs_heatmap.md),
+[`plot_lincs_waterfall()`](https://younthing.github.io/bulkMAE/reference/plot_lincs_waterfall.md),
+and
+[`plot_lincs_overlap()`](https://younthing.github.io/bulkMAE/reference/plot_lincs_overlap.md).
 
 ## Usage
 
@@ -50,3 +59,9 @@ drug_lincs(
 ## Value
 
 A native `gessResult` object.
+
+## Details
+
+Named identifiers such as `"lincs"` trigger an ExperimentHub download
+into the signatureSearch cache. Pass a local HDF5 path to stay offline.
+Tau is only meaningful on a complete LINCS reference.

@@ -5,6 +5,7 @@
 <url><loc>https://younthing.github.io/bulkMAE/articles/enrichment-analysis.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/articles/getting-started.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/articles/index.html</loc></url>
+<url><loc>https://younthing.github.io/bulkMAE/articles/lincs-drug-hypothesis.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/articles/naming-migration.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/authors.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/index.html</loc></url>
@@ -61,6 +62,8 @@
 <url><loc>https://younthing.github.io/bulkMAE/reference/deconv_reference.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/reference/drug_lincs.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/reference/drug_lincs_databases.html</loc></url>
+<url><loc>https://younthing.github.io/bulkMAE/reference/drug_lincs_example.html</loc></url>
+<url><loc>https://younthing.github.io/bulkMAE/reference/drug_lincs_table.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/reference/drug_query.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/reference/dtu_diffsplice.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/reference/enrich_camera.html</loc></url>
@@ -110,6 +113,10 @@
 <url><loc>https://younthing.github.io/bulkMAE/reference/plot_embedding.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/reference/plot_gsea_classic.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/reference/plot_gsea_ridge.html</loc></url>
+<url><loc>https://younthing.github.io/bulkMAE/reference/plot_lincs_heatmap.html</loc></url>
+<url><loc>https://younthing.github.io/bulkMAE/reference/plot_lincs_overlap.html</loc></url>
+<url><loc>https://younthing.github.io/bulkMAE/reference/plot_lincs_rank.html</loc></url>
+<url><loc>https://younthing.github.io/bulkMAE/reference/plot_lincs_waterfall.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/reference/plot_ora_bubble.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/reference/plot_ora_network.html</loc></url>
 <url><loc>https://younthing.github.io/bulkMAE/reference/plot_ora_radial.html</loc></url>

@@ -7,6 +7,8 @@
 - [从样本质控到配对差异表达](https://younthing.github.io/bulkMAE/articles/airway-qc-de.md):
 - [airway 富集分析：ORA、GSEA
   与图形](https://younthing.github.io/bulkMAE/articles/enrichment-analysis.md):
+- [LINCS
+  反向签名药物假设：连接性分数与图形](https://younthing.github.io/bulkMAE/articles/lincs-drug-hypothesis.md):
 
 ### Guides
 
