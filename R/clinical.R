@@ -555,6 +555,16 @@ drug_query <- function(statistics, n = 150) {
 
 #' Search a LINCS reference database for connected signatures
 #'
+#' Thin wrapper around [signatureSearch::qSig()] and
+#' [signatureSearch::gess_lincs()]. The return type stays the native
+#' `gessResult`. Use [drug_lincs_table()] to extract the ranked compound table
+#' for [plot_lincs_rank()], [plot_lincs_heatmap()], [plot_lincs_waterfall()],
+#' and [plot_lincs_overlap()].
+#'
+#' Named identifiers such as `"lincs"` trigger an ExperimentHub download into
+#' the signatureSearch cache. Pass a local HDF5 path to stay offline. Tau is
+#' only meaningful on a complete LINCS reference.
+#'
 #' @param query A list with `upset` and `downset`, usually from
 #'   [drug_query()].
 #' @param reference_database Path or identifier accepted by
@@ -611,6 +621,224 @@ drug_lincs <- function(
     workers = workers,
     addAnnotations = annotations,
     ...
+  )
+}
+
+#' Extract a ranked LINCS connectivity table
+#'
+#' Converts a native signatureSearch `gessResult` from [drug_lincs()], or a
+#' data frame with the same columns, into a ranked table. The helper does not
+#' recompute weighted connectivity scores. The score column used for ranking
+#' is the one [drug_lincs()] actually stored (`NCS` by default; `Tau` only
+#' when it was requested and is finite).
+#'
+#' @param result A `gessResult` or a data frame with LINCS/CMap-style columns.
+#' @param score Optional score column to rank by. When `NULL`, prefer a finite
+#'   `NCS` column, then `Tau`, `WTCS`, or `NCSct`.
+#'
+#' @return A data frame ranked by the resolved score, with `score_column`,
+#'   `score_label`, and `direction` attached. `direction` is the sign of the
+#'   score (`Reverse`, `Mimic`, or `Unrelated`), not a wet-lab result.
+#' @export
+drug_lincs_table <- function(result, score = NULL) {
+  table <- .lincs_as_table(result)
+  resolved <- .lincs_resolve_score(table, score)
+  values <- as.numeric(table[[resolved$column]])
+  if (any(!is.finite(values))) {
+    stop(
+      "Score column `", resolved$column, "` must contain finite values.",
+      call. = FALSE
+    )
+  }
+  table <- table[order(values, decreasing = TRUE, na.last = TRUE), , drop = FALSE]
+  rownames(table) <- NULL
+  table$direction <- .lincs_direction(as.numeric(table[[resolved$column]]))
+  attr(table, "score_column") <- resolved$column
+  attr(table, "score_label") <- resolved$label
+  if (is.null(attr(table, "bulkmae_lincs_source", exact = TRUE))) {
+    attr(table, "bulkmae_lincs_source") <- "gess_result"
+  }
+  table
+}
+
+#' Diagnostic toy LINCS connectivity table
+#'
+#' Returns a small table with the same columns as
+#' [signatureSearch::gess_lincs()] (`pert`, `cell`, `type`, `trend`, `WTCS`,
+#' `NCS`, `Tau`, `N_upset`, `N_downset`). Scores are synthetic. They are not a
+#' download of CMap, LINCS L1000, or any commercial reference, and they are
+#' not a wet-lab result.
+#'
+#' Use this helper when no local HDF5 reference is available. The production
+#' path remains [drug_lincs()] against an explicit local or cached database.
+#'
+#' @return A data frame labelled `diagnostic_toy`.
+#' @export
+drug_lincs_example <- function() {
+  perts <- paste0("toy_cp_", sprintf("%02d", 1:8))
+  cells <- c("MCF7", "A549", "PC3")
+  ncs_grid <- matrix(
+    c(
+      -1.92, -1.41, -1.18,
+      -1.35, -0.62, -0.88,
+      -0.74, 0.21, -0.33,
+      -0.08, 0.04, -0.11,
+      0.39, 0.71, -0.22,
+      0.88, 1.12, 0.64,
+      1.45, 1.68, 1.21,
+      -1.55, 0.92, 0.18
+    ),
+    nrow = 8L,
+    byrow = TRUE,
+    dimnames = list(perts, cells)
+  )
+  rows <- lapply(perts, function(pert) {
+    lapply(cells, function(cell) {
+      ncs <- ncs_grid[pert, cell]
+      wtcs <- ncs / 2.4
+      tau <- max(-99, min(99, round(ncs / 2 * 100)))
+      data.frame(
+        pert = pert,
+        cell = cell,
+        type = "trt_cp",
+        trend = if (ncs < 0) "down" else "up",
+        WTCS = wtcs,
+        WTCS_Pval = NA_real_,
+        WTCS_FDR = NA_real_,
+        NCS = ncs,
+        NCSct = mean(ncs_grid[pert, ]),
+        Tau = tau,
+        N_upset = as.integer(round(8 + abs(min(ncs, 0)) * 6)),
+        N_downset = as.integer(round(7 + abs(max(ncs, 0)) * 5)),
+        stringsAsFactors = FALSE
+      )
+    })
+  })
+  table <- do.call(rbind, unlist(rows, recursive = FALSE))
+  rownames(table) <- NULL
+  attr(table, "bulkmae_lincs_source") <- "diagnostic_toy"
+  table
+}
+
+.lincs_as_table <- function(result) {
+  if (is.data.frame(result)) {
+    table <- result
+  } else if (
+    methods::is(result, "gessResult") || inherits(result, "gessResult")
+  ) {
+    slots <- tryCatch(methods::slotNames(result), error = function(e) character())
+    if (!("result" %in% slots)) {
+      stop("`result` is a gessResult without a `result` slot.", call. = FALSE)
+    }
+    table <- as.data.frame(methods::slot(result, "result"), optional = TRUE)
+  } else {
+    stop(
+      "`result` must be a gessResult or a LINCS result data frame.",
+      call. = FALSE
+    )
+  }
+  if (!is.data.frame(table) || !nrow(table)) {
+    stop("`result` does not contain any ranked signatures.", call. = FALSE)
+  }
+  table
+}
+
+.lincs_find_column <- function(table, candidates, label, required = TRUE) {
+  present <- intersect(candidates, names(table))
+  if (!length(present)) {
+    if (required) {
+      stop(
+        "`", label, "` column not found. Expected one of: ",
+        paste(candidates, collapse = ", "),
+        ".",
+        call. = FALSE
+      )
+    }
+    return(NULL)
+  }
+  present[[1L]]
+}
+
+.lincs_score_labels <- function() {
+  c(
+    NCS = "Normalized connectivity score (NCS)",
+    WTCS = "Weighted connectivity score (WTCS)",
+    Tau = "Tau",
+    NCSct = "Cell-type summarized NCS (NCSct)"
+  )
+}
+
+.lincs_resolve_score <- function(table, score) {
+  labels <- .lincs_score_labels()
+  if (!is.null(score)) {
+    if (
+      !is.character(score) || length(score) != 1L || is.na(score) ||
+        !nzchar(score)
+    ) {
+      stop("`score` must be one non-empty column name.", call. = FALSE)
+    }
+    if (!score %in% names(table)) {
+      stop("`score` column `", score, "` is not in `result`.", call. = FALSE)
+    }
+    if (!is.numeric(table[[score]])) {
+      stop("`score` column `", score, "` must be numeric.", call. = FALSE)
+    }
+    label <- unname(labels[score])
+    if (is.na(label)) {
+      label <- paste0("Connectivity score (", score, ")")
+    }
+    return(list(column = score, label = label))
+  }
+  for (column in names(labels)) {
+    if (!column %in% names(table) || !is.numeric(table[[column]])) {
+      next
+    }
+    values <- as.numeric(table[[column]])
+    if (any(is.finite(values))) {
+      return(list(column = column, label = unname(labels[[column]])))
+    }
+  }
+  stop(
+    "`result` must contain a finite NCS, Tau, WTCS, or NCSct column.",
+    call. = FALSE
+  )
+}
+
+.lincs_direction <- function(scores) {
+  direction <- rep("Unrelated", length(scores))
+  direction[is.finite(scores) & scores < 0] <- "Reverse"
+  direction[is.finite(scores) & scores > 0] <- "Mimic"
+  factor(direction, levels = c("Reverse", "Unrelated", "Mimic"))
+}
+
+.lincs_compound_column <- function(table) {
+  .lincs_find_column(
+    table,
+    c("pert", "pert_iname", "compound", "drug"),
+    "compound"
+  )
+}
+
+.lincs_cell_column <- function(table, required = FALSE) {
+  .lincs_find_column(
+    table,
+    c("cell", "cell_id", "cell_iname"),
+    "cell",
+    required = required
+  )
+}
+
+.lincs_row_label <- function(table) {
+  compound <- as.character(table[[.lincs_compound_column(table)]])
+  cell_column <- .lincs_cell_column(table, required = FALSE)
+  if (is.null(cell_column)) {
+    return(compound)
+  }
+  cell <- as.character(table[[cell_column]])
+  ifelse(
+    !is.na(cell) & nzchar(cell),
+    paste0(compound, " (", cell, ")"),
+    compound
   )
 }
 

@@ -1,5 +1,12 @@
 # bulkMAE (development version)
 
+- Adds the LINCS reverse-signature mainline: `drug_lincs_table()` extracts
+  ranked compounds from a native `gessResult` or a gess-style table,
+  `drug_lincs_example()` supplies a labelled diagnostic toy table, and
+  `plot_lincs_rank()`, `plot_lincs_heatmap()`, `plot_lincs_waterfall()`, and
+  `plot_lincs_overlap()` draw already-computed NCS/Tau/WTCS views. The
+  vignette stays offline and does not download ExperimentHub LINCS libraries.
+
 - Rewrites the README as a landing page with official backend links and one
   square patchwork gallery of volcano, heatmap, ORA network, and GSEA ridge
   plots.

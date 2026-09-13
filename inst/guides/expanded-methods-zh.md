@@ -23,6 +23,7 @@
 | 稳健样本 signature | `score_singscore()` | singscore | 每个样本的基因秩 |
 | 多方法活性推断 | `activity_decouple()` | decoupleR | 表达矩阵和长表网络/集合 |
 | 生存曲线/判别 | `surv_km()`、`surv_roc()` | survival、timeROC | 对齐的随访、结局和 marker |
+| LINCS 反向签名 | `drug_query()`、`drug_lincs()`、`drug_lincs_table()` | signatureSearch | 互斥 up/down query；本地 HDF5 或已缓存参考库。离线教程用 `drug_lincs_example()` |
 
 ## 2. 富集和活性方法如何选择
 

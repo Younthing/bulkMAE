@@ -127,6 +127,55 @@ test_that("drug_lincs validates local query options without opening a database",
   )
 })
 
+test_that("drug_lincs_table ranks native-style columns without rescoring", {
+  raw <- drug_lincs_example()
+  expect_identical(attr(raw, "bulkmae_lincs_source", exact = TRUE), "diagnostic_toy")
+  expect_identical(
+    names(raw),
+    c(
+      "pert", "cell", "type", "trend", "WTCS", "WTCS_Pval", "WTCS_FDR",
+      "NCS", "NCSct", "Tau", "N_upset", "N_downset"
+    )
+  )
+
+  table <- drug_lincs_table(raw)
+  expect_identical(attr(table, "score_column", exact = TRUE), "NCS")
+  expect_identical(
+    attr(table, "score_label", exact = TRUE),
+    "Normalized connectivity score (NCS)"
+  )
+  expect_identical(attr(table, "bulkmae_lincs_source", exact = TRUE), "diagnostic_toy")
+  expect_identical(table$NCS, sort(raw$NCS, decreasing = TRUE))
+  expect_identical(
+    as.character(table$direction[table$NCS < 0]),
+    rep("Reverse", sum(table$NCS < 0))
+  )
+  expect_identical(
+    as.character(table$direction[table$NCS > 0]),
+    rep("Mimic", sum(table$NCS > 0))
+  )
+
+  tau <- drug_lincs_table(raw, score = "Tau")
+  expect_identical(attr(tau, "score_column", exact = TRUE), "Tau")
+  expect_identical(tau$Tau, sort(raw$Tau, decreasing = TRUE))
+  expect_error(drug_lincs_table(raw, score = "missing"), "not in `result`")
+  expect_error(drug_lincs_table(raw[, setdiff(names(raw), c("NCS", "Tau", "WTCS", "NCSct")), drop = FALSE]),
+               "finite NCS, Tau, WTCS, or NCSct")
+})
+
+test_that("drug_lincs_table reads a gessResult slot when the class exists", {
+  raw <- drug_lincs_example()
+  expect_error(drug_lincs_table(list()), "gessResult or a LINCS result")
+  skip_if_not_installed("signatureSearch")
+  if (!methods::isClass("gessResult")) {
+    skip("Installed signatureSearch does not define gessResult.")
+  }
+  fake <- methods::new("gessResult")
+  methods::slot(fake, "result") <- raw
+  table <- drug_lincs_table(fake)
+  expect_identical(table$NCS, sort(raw$NCS, decreasing = TRUE))
+})
+
 test_that("drug_lincs execution requires an explicit local reference database", {
   suppressWarnings(skip_if_not_installed("signatureSearch"))
   reference_database <- Sys.getenv("BULKMAE_LINCS_DB")

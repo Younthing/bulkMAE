@@ -29,11 +29,20 @@ drug_lincs(
 
 \item{annotations}{Add compound annotations when available.}
 
-\item{...}{Additional arguments passed to \code{\link[signatureSearch:gess]{signatureSearch::gess_lincs()}}.}
+\item{...}{Additional arguments passed to \code{\link[signatureSearch:gess_lincs]{signatureSearch::gess_lincs()}}.}
 }
 \value{
 A native \code{gessResult} object.
 }
 \description{
-Search a LINCS reference database for connected signatures
+Thin wrapper around \code{\link[signatureSearch:qSig]{signatureSearch::qSig()}} and
+\code{\link[signatureSearch:gess_lincs]{signatureSearch::gess_lincs()}}. The return type stays the native
+\code{gessResult}. Use \code{\link[=drug_lincs_table]{drug_lincs_table()}} to extract the ranked compound table
+for \code{\link[=plot_lincs_rank]{plot_lincs_rank()}}, \code{\link[=plot_lincs_heatmap]{plot_lincs_heatmap()}}, \code{\link[=plot_lincs_waterfall]{plot_lincs_waterfall()}},
+and \code{\link[=plot_lincs_overlap]{plot_lincs_overlap()}}.
+}
+\details{
+Named identifiers such as \code{"lincs"} trigger an ExperimentHub download into
+the signatureSearch cache. Pass a local HDF5 path to stay offline. Tau is
+only meaningful on a complete LINCS reference.
 }

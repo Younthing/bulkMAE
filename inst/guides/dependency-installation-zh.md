@@ -150,7 +150,8 @@ pak::pkg_status()
 - MuSiC 和 BayesPrism 需要与 bulk 数据匹配的单细胞参考；
 - `drug_lincs()` 可用 `cmap`、`lincs`、`lincs2` 等标识让 signatureSearch
   通过 ExperimentHub 下载并缓存参考库，也可使用显式本地数据库；预构建库
-  要求 human Entrez ID，可用 `drug_lincs_databases()` 查询；
+  要求 human Entrez ID，可用 `drug_lincs_databases()` 查询。普通 vignette
+  和默认 CI 使用 `drug_lincs_example()` 诊断表，不下载这些库；
 - CIBERSORT 系列方法需要其许可范围内的外部文件。
 
 默认离线测试不应以这些服务当时可用为前提。在线或授权资源测试应独立运行，

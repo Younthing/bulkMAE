@@ -237,6 +237,19 @@ clusterProfiler 的 ratio 字符串为 `numerator/denominator`；background term
 总拼图脚本只用于吸收单图比例、边框、留白和推荐物理尺寸经验。bulkMAE 不提供 GSEA/ORA
 overview 或报告拼图函数；调用者可在包外使用 patchwork/cowplot 组合返回的独立 ggplot。
 
+### LINCS 连接性图
+
+LINCS / CMap 图只展示已经算好的连接性表，不重跑 `gess_lincs()`，也不把分数说成药效。
+
+- 轴名必须是表里真实存在的分数列：默认 `NCS`（Normalized connectivity score），
+  显式请求时可以是 `Tau`、`WTCS` 或 `NCSct`。不能在只有 NCS 的结果上写 Tau。
+- `Reverse` / `Mimic` 只表示分数符号，颜色固定为蓝色负分、橙色正分、灰色零。
+- `plot_lincs_heatmap()` 的化合物与细胞系按名称对齐；重复的化合物-细胞对报错。
+- `plot_lincs_overlap()` 使用 `N_upset` / `N_downset`，这是 query 与参考签名
+  极端秩次的重叠计数，不是新的富集检验。
+- 诊断玩具表必须保留 `bulkmae_lincs_source = "diagnostic_toy"`；图注不得写成
+  湿实验或完整 LINCS L1000 下载。
+
 ## 实现时优先复用内部语义
 
 公共接口应保持小而清楚，把适配和校验复杂度封装在私有 helper 中，例如：
