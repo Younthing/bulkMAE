@@ -291,6 +291,7 @@ plot_save("pca.pdf", custom_pca)
 | Salmon/kallisto/RSEM 导入 | `import_tximport()` |
 | DE 原生后端结果与六列统一视图 | `de_*()`、`de_table()`、`de_ranks()`、`de_selected()` |
 | ORA、GSEA、原生结果与富集绘图 | [富集分析教程](enrichment-analysis.html) |
+| 预后建模（KM / Cox / 风险分数） | [预后建模教程](prognostic-modeling.html) |
 | 基因集打分和调控活性 | `score_*()`、`activity_*()` |
 | 批次、共表达、去卷积和临床模型 | `adjust_*()`、`coexpr_*()`、`deconv_*()`、`surv_*()` |
 | 完整函数与输入边界 | [在线 reference](https://younthing.github.io/bulkMAE/reference/index.html) 与 [方法指南](https://github.com/Younthing/bulkMAE/tree/main/inst/guides) |

@@ -1,0 +1,271 @@
+---
+title: "预后建模：合成随访上的 KM、Cox 与风险分数"
+author: "bulkMAE"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    number_sections: true
+vignette: >
+  %\VignetteIndexEntry{预后建模：合成随访上的 KM、Cox 与风险分数}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 5.2,
+  fig.height = 3.6,
+  dpi = 120,
+  fig.retina = 2,
+  fig.align = "center"
+)
+set.seed(20260913)
+library(bulkMAE)
+library(ggplot2)
+invisible(suppressPackageStartupMessages(
+  suppressWarnings(loadNamespace("survival"))
+))
+```
+
+# 本文完成什么
+
+本文只做预后建模这一条主线：预先指定 signature、按分数分层、拟合 Kaplan–Meier 和 Cox，并画出该分析在文献中的三张标准图。`airway`
+没有随访。下面先如实说明这一点，再使用**合成、仅供诊断**的 time/event；图注不会把结果写成真实临床队列，更不会写成独立外部验证。
+
+安装完成后，分析与渲染不访问网络。缺少教学依赖时先运行：
+
+```{r install, eval=FALSE}
+BiocManager::install(c("airway", "survival"))
+```
+
+# 先按问题选方法
+
+```{r method-map, warning=FALSE}
+knitr::kable(
+  data.frame(
+    question = c(
+      "风险组或临床分层的生存曲线？",
+      "选定变量的风险比与置信区间？",
+      "样本风险分数如何分布、是否随结局分开？"
+    ),
+    input = c(
+      "对齐的 time/event + 分层变量",
+      "已拟合 coxph 或单变量 Cox 表",
+      "已计算的具名风险分数 + 对齐分组"
+    ),
+    function_name = c(
+      "surv_km(); plot_surv_km()",
+      "surv_cox()/surv_cox_univariable(); plot_surv_forest()",
+      "score_signature(); surv_risk_groups(); plot_surv_risk()"
+    ),
+    check.names = FALSE
+  ),
+  col.names = c("问题", "必需输入", "bulkMAE 接口"),
+  row.names = FALSE,
+  caption = "预后图的最小选择表。时间依赖 ROC 已有 surv_roc()，本文不另加依赖、也不画 ROC。"
+)
+```
+
+# airway 没有随访
+
+```{r airway-has-no-survival}
+data("airway", package = "airway")
+airway_columns <- names(SummarizedExperiment::colData(airway))
+airway_follow_up <- intersect(
+  airway_columns,
+  c("time", "event", "survival_time", "os", "OS", "dss", "pfs", "status")
+)
+```
+
+`airway` 有 `r ncol(airway)` 个样本和
+`r format(nrow(SummarizedExperiment::assay(airway, "counts")), big.mark = ",")`
+个基因，`colData` 列是
+`r paste(airway_columns, collapse = ", ")`。其中与随访相关的列有
+`r if (length(airway_follow_up)) paste(airway_follow_up, collapse = ", ") else "0 个"`。
+四个 cell line 的 untreated/treated 配对是地塞米松扰动实验，不是预后队列。
+
+下面仍按样本名挂上合成随访，只为演示 `mae_add_sample_data()` 的对齐契约。这些 time/event
+由当前 signature 生成，**不是** Himes 等人研究记录的临床结局。
+
+```{r airway-synthetic-follow-up}
+counts <- SummarizedExperiment::assay(airway, "counts")
+sample_data <- as.data.frame(
+  SummarizedExperiment::colData(airway),
+  optional = TRUE
+)
+mae_airway <- mae_from_matrix(
+  expression = counts,
+  samples = sample_data,
+  experiment = "airway",
+  assay = "counts"
+)
+set.seed(20260913)
+airway_ids <- rownames(sample_data)
+airway_time <- round(stats::rexp(length(airway_ids), rate = 1 / 30), 1L)
+airway_event <- as.integer(rep(c(1L, 0L), length.out = length(airway_ids)))
+mae_airway <- mae_add_sample_data(
+  mae_airway,
+  "airway",
+  data.frame(
+    survival_time = airway_time,
+    event = airway_event,
+    row.names = airway_ids
+  )
+)
+airway_samples <- mae_samples(mae_airway, "airway")
+```
+
+合成列已经按样本名对齐：`r nrow(airway_samples)` 行，
+`survival_time` 范围
+`r paste(range(airway_samples$survival_time), collapse = "–")`，
+事件数 `r sum(airway_samples$event)`。
+n = 8 只够检查接口，不够做预后推断，所以正式图改用样本量更大的合成 MAE。
+
+# 用合成队列画标准预后图
+
+`mae_simulate()` 自带合成 `survival_time`、`event` 和 `risk_score`。表达、注释和结局都没有生物学含义，只用来检查打分、分层和绘图是否对齐。
+
+```{r simulate-cohort}
+mae_source <- mae_simulate(n_features = 80L, n_samples = 48L, seed = 20260913L)
+samples <- mae_samples(mae_source, "rna")
+score <- stats::setNames(samples$risk_score, rownames(samples))
+set.seed(20260913)
+scaled <- as.numeric(scale(score))
+samples$survival_time <- round(
+  pmax(12, stats::rexp(length(score), rate = 1 / 220) * exp(-1.15 * scaled)),
+  1L
+)
+samples$event <- as.integer(stats::rbinom(
+  length(score),
+  size = 1L,
+  prob = stats::plogis(0.15 + 1.25 * scaled)
+))
+mae <- mae_from_matrix(
+  expression = mae_pull_assay(mae_source, "rna", "log_expression"),
+  samples = samples,
+  experiment = "rna",
+  assay = "log_expression"
+)
+```
+
+队列有 `r nrow(samples)` 个样本。`risk_score` 来自模拟器；time/event 再由该分数生成一次，使图能看清接口，而不是先看 p 值再挑基因。真实项目应换成独立随访，以及训练集锁定的 `score_signature()` 权重。
+
+```{r signature-and-groups}
+risk_group <- surv_risk_groups(score)
+mae <- mae_add_sample_data(
+  mae,
+  "rna",
+  data.frame(
+    risk_group = risk_group,
+    row.names = names(score)
+  )
+)
+samples <- mae_samples(mae, "rna")
+```
+
+`r sum(risk_group == "High")` 个样本分到 High，`r sum(risk_group == "Low")`
+个分到 Low。切割用的是当前队列的中位数，因此不能当成已锁定的外部验证阈值。
+
+# Kaplan–Meier
+
+```{r km-fit}
+km <- surv_km(
+  mae,
+  "rna",
+  surv_formula("survival_time", "event", predictors = "risk_group")
+)
+km_diff <- survival::survdiff(
+  survival::Surv(survival_time, event) ~ risk_group,
+  data = samples
+)
+km_p <- stats::pchisq(km_diff$chisq, df = length(km_diff$n) - 1L, lower.tail = FALSE)
+```
+
+同一合成队列上的 log-rank p 值为 `r format.pval(km_p, digits = 3)`。这只描述当前模拟，不是独立验证。
+
+```{r km-plot, fig.width=4.2, fig.height=3.2, fig.cap="图 1：合成随访上按中位风险分数分层的 Kaplan–Meier 曲线和 number-at-risk。结局由 mae_simulate() 生成，不是真实临床队列。", fig.alt="两条合成风险组的 Kaplan-Meier 曲线、点状删失标记、置信带和曲线下方的 number-at-risk 表。"}
+plot_surv_km(km) +
+  labs(title = "Synthetic risk groups (diagnostic)")
+```
+
+# Cox 森林图
+
+单变量 Cox 使用模拟器写入的 `risk_score`、年龄和处理分组。模型在同一合成队列上拟合。
+
+```{r cox-univariable}
+cox_table <- surv_cox_univariable(
+  mae,
+  "rna",
+  time = "survival_time",
+  event = "event",
+  predictors = c("risk_score", "age", "condition")
+)
+cox_score <- surv_cox(
+  mae,
+  "rna",
+  surv_formula("survival_time", "event", predictors = "risk_score")
+)
+concordance <- unname(survival::concordance(cox_score)$concordance)
+```
+
+```{r cox-table, warning=FALSE}
+knitr::kable(
+  cox_table[, c("term", "hazard_ratio", "conf_low", "conf_high", "p_value", "n", "events")],
+  digits = 3,
+  row.names = FALSE,
+  caption = "合成队列上预先指定变量的单变量 Cox 表"
+)
+```
+
+合成 `risk_score` 的单变量 C-index 为
+`r format(concordance, digits = 3)`。这是 apparent discrimination，用的是拟合同一批样本，不是外部验证。
+
+```{r forest-plot, fig.width=4.4, fig.height=2.6, fig.cap="图 2：合成队列上预先指定变量的单变量 Cox 森林图。横轴是风险比；条带是置信区间。不是独立队列验证。", fig.alt="合成 risk_score、年龄和处理分组的对数轴风险比点和置信区间，右侧写着 HR 与区间。"}
+plot_surv_forest(
+  cox_table,
+  term_labels = c(
+    risk_score = "Risk score",
+    age = "Age",
+    conditiontreated = "Condition: treated"
+  )
+) +
+  labs(title = "Univariable Cox (synthetic outcomes)")
+```
+
+# 风险分数与结局
+
+```{r risk-plot, fig.width=3.4, fig.height=2.8, fig.cap="图 3：合成风险分数按合成事件状态分组的箱线图。分组和分数来自同一模拟队列，只用于检查对齐。", fig.alt="按合成事件 0/1 分组的风险分数箱线图。"}
+event_group <- factor(
+  samples[names(score), "event"],
+  levels = c(0, 1),
+  labels = c("Censored", "Event")
+)
+names(event_group) <- names(score)
+plot_surv_risk(score, group = event_group, type = "box") +
+  labs(title = "Synthetic score by event status")
+```
+
+# 限制与来源
+
+- `airway` 没有真实随访。挂到 airway 上的 time/event，以及 `mae_simulate()` 的生存列，都是合成诊断数据。
+- 8 个 airway 样本不能支持预后结论。图 1–3 来自 n = `r nrow(samples)` 的模拟队列。
+- 中位分层、单变量 Cox 和 C-index 都在同一队列上计算，不是锁定模型后的外部验证。
+- 未引入 LINCS、对接或新的富集封装。时间依赖 ROC 可在有 `timeROC` 时用已有 `surv_roc()`，本文跳过。
+
+数据：Bioconductor airway ExperimentData 包（Himes 等，PLoS ONE 2014；PMID 24926665；GEO GSE52778）只用于证明它没有随访。图中结局来自 `mae_simulate()`。
+
+# 实际项目需要记录
+
+- 随访时间单位、事件编码和删失定义；
+- signature 权重是否来自独立训练集，以及 center/scale 是否冻结；
+- 风险组切割是预先指定还是在当前队列估计；
+- Cox 公式、协变量和比例风险检查；
+- 若声称外部验证，必须另有独立队列。
+
+本文使用 bulkMAE `r as.character(utils::packageVersion("bulkMAE"))`。完整会话如下：
+
+```{r session-info}
+sessionInfo()
+```

@@ -221,6 +221,218 @@ surv_cox <- function(x, experiment, formula, assay = NULL, features = NULL, ...)
   survival::coxph(formula = formula, data = data, ...)
 }
 
+#' Extract a hazard-ratio table from a Cox model
+#'
+#' Converts an already-fitted [survival::coxph()] object into a data frame of
+#' coefficients, hazard ratios, and confidence intervals. The function does
+#' not refit the model or change the native `coxph` return type.
+#'
+#' @param fit A `coxph` object, usually from [surv_cox()].
+#' @param conf_level Confidence level for the hazard-ratio interval.
+#'
+#' @return A data frame with `term`, `coefficient`, `hazard_ratio`,
+#'   `conf_low`, `conf_high`, `statistic`, `p_value`, `n`, and `events`.
+#' @export
+surv_cox_table <- function(fit, conf_level = 0.95) {
+  .require_backend("survival", "to summarise a Cox model")
+  if (!inherits(fit, "coxph")) {
+    stop("`fit` must be a coxph object.", call. = FALSE)
+  }
+  .assert_confidence_level(conf_level)
+  summarised <- summary(fit, conf.int = conf_level)
+  coefficients <- summarised$coefficients
+  intervals <- summarised$conf.int
+  if (is.null(coefficients) || !nrow(coefficients) || is.null(intervals)) {
+    stop("The Cox model has no coefficient table to extract.", call. = FALSE)
+  }
+  lower_column <- grep("^lower", colnames(intervals), value = TRUE)
+  upper_column <- grep("^upper", colnames(intervals), value = TRUE)
+  if (length(lower_column) != 1L || length(upper_column) != 1L) {
+    stop("The Cox summary does not contain a unique confidence interval.", call. = FALSE)
+  }
+  table <- data.frame(
+    term = rownames(coefficients),
+    coefficient = as.numeric(coefficients[, "coef"]),
+    hazard_ratio = as.numeric(intervals[, "exp(coef)"]),
+    conf_low = as.numeric(intervals[, lower_column]),
+    conf_high = as.numeric(intervals[, upper_column]),
+    statistic = as.numeric(coefficients[, "z"]),
+    p_value = as.numeric(coefficients[, "Pr(>|z|)"]),
+    n = as.integer(fit$n),
+    events = as.integer(fit$nevent),
+    stringsAsFactors = FALSE,
+    check.names = FALSE
+  )
+  rownames(table) <- NULL
+  if (any(!is.finite(c(table$hazard_ratio, table$conf_low, table$conf_high)))) {
+    stop("Cox hazard ratios and confidence limits must be finite.", call. = FALSE)
+  }
+  table
+}
+
+#' Fit univariable Cox models for selected predictors
+#'
+#' Fits one [surv_cox()] model per predictor and stacks the coefficient tables.
+#' Clinical predictors are read from aligned sample metadata. Expression
+#' features are appended only when they are named in `features` and `assay` is
+#' supplied. This is a convenience loop around the existing Cox wrapper, not a
+#' new estimator.
+#'
+#' @inheritParams surv_cox
+#' @param time,event Metadata columns containing follow-up time and event.
+#' @param predictors Unique metadata column names and/or expression feature
+#'   identifiers. Feature names must also appear in `features`.
+#' @inheritParams surv_cox_table
+#'
+#' @return A data frame in the [surv_cox_table()] schema, with one or more
+#'   rows per predictor.
+#' @export
+surv_cox_univariable <- function(
+    x,
+    experiment,
+    time,
+    event,
+    predictors,
+    assay = NULL,
+    features = NULL,
+    conf_level = 0.95,
+    ...
+) {
+  .require_backend("survival", "to fit univariable Cox models")
+  if (
+    !is.character(predictors) || !length(predictors) || anyNA(predictors) ||
+      any(!nzchar(predictors)) || anyDuplicated(predictors)
+  ) {
+    stop("`predictors` must contain unique, non-empty names.", call. = FALSE)
+  }
+  if (any(predictors %in% c(time, event))) {
+    stop("Predictors must differ from `time` and `event`.", call. = FALSE)
+  }
+  if (!is.null(features)) {
+    if (
+      !is.character(features) || !length(features) || anyNA(features) ||
+        any(!nzchar(features)) || anyDuplicated(features)
+    ) {
+      stop("`features` must contain unique, non-empty names.", call. = FALSE)
+    }
+  }
+  sample_data <- mae_samples(x, experiment)
+  sample_predictors <- intersect(predictors, names(sample_data))
+  feature_predictors <- if (is.null(features)) {
+    character()
+  } else {
+    intersect(predictors, features)
+  }
+  unknown <- setdiff(predictors, c(sample_predictors, feature_predictors))
+  if (length(unknown)) {
+    stop(
+      "Unknown univariable predictors: ",
+      paste(unknown, collapse = ", "),
+      ". Clinical names must exist in sample metadata; expression names must ",
+      "also be supplied in `features`.",
+      call. = FALSE
+    )
+  }
+  collision <- intersect(sample_predictors, feature_predictors)
+  if (length(collision)) {
+    stop(
+      "Predictors collide with both sample metadata and `features`: ",
+      paste(collision, collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+  if (length(feature_predictors) && is.null(assay)) {
+    stop("`assay` is required when expression `features` are supplied.", call. = FALSE)
+  }
+
+  rows <- lapply(predictors, function(predictor) {
+    is_feature <- predictor %in% feature_predictors
+    fit <- surv_cox(
+      x,
+      experiment,
+      formula = surv_formula(time, event, predictors = predictor),
+      assay = if (is_feature) assay else NULL,
+      features = if (is_feature) predictor else NULL,
+      ...
+    )
+    table <- surv_cox_table(fit, conf_level = conf_level)
+    table$predictor <- predictor
+    table
+  })
+  result <- do.call(rbind, rows)
+  rownames(result) <- NULL
+  result
+}
+
+#' Stratify a named risk score into groups
+#'
+#' Cuts an already-computed, sample-named score into discrete risk groups.
+#' Quantile probabilities in `(0, 1)` are the default; supply score-scale
+#' cutpoints to use explicit thresholds. The helper does not fit a survival
+#' model.
+#'
+#' @param score A uniquely named finite numeric vector, one value per sample.
+#' @param cuts Quantile probabilities in `(0, 1)`, or explicit finite cutpoints
+#'   on the score scale. The default `0.5` is a median split.
+#' @param labels Optional group labels. When omitted, two groups are labelled
+#'   `Low` and `High`; more groups are labelled `G1`, `G2`, ...
+#'
+#' @return A named factor aligned to `names(score)`.
+#' @export
+surv_risk_groups <- function(score, cuts = 0.5, labels = NULL) {
+  .assert_named_numeric(score, "score")
+  if (!is.numeric(cuts) || !length(cuts) || any(!is.finite(cuts))) {
+    stop("`cuts` must contain finite numeric values.", call. = FALSE)
+  }
+  if (anyDuplicated(cuts)) {
+    stop("`cuts` must be unique.", call. = FALSE)
+  }
+  quantile_cuts <- all(cuts > 0 & cuts < 1)
+  if (quantile_cuts) {
+    probs <- sort(unique(c(0, cuts, 1)))
+    breaks <- unname(stats::quantile(score, probs = probs, names = FALSE, type = 7L))
+  } else {
+    if (any(cuts > 0 & cuts < 1)) {
+      stop(
+        "`cuts` must be either quantile probabilities in (0, 1) or explicit ",
+        "score-scale cutpoints, not a mixture.",
+        call. = FALSE
+      )
+    }
+    breaks <- c(-Inf, sort(cuts), Inf)
+  }
+  breaks <- .surv_unique_breaks(breaks, quantile_cuts)
+  n_groups <- length(breaks) - 1L
+  if (is.null(labels)) {
+    labels <- if (identical(n_groups, 2L)) {
+      c("Low", "High")
+    } else {
+      paste0("G", seq_len(n_groups))
+    }
+  }
+  if (
+    !is.character(labels) || length(labels) != n_groups || anyNA(labels) ||
+      any(!nzchar(labels)) || anyDuplicated(labels)
+  ) {
+    stop(
+      "`labels` must contain one unique, non-empty name per risk group.",
+      call. = FALSE
+    )
+  }
+  groups <- cut(
+    score,
+    breaks = breaks,
+    labels = labels,
+    include.lowest = TRUE,
+    right = TRUE
+  )
+  if (anyNA(groups)) {
+    stop("Risk-group cuts left samples unclassified.", call. = FALSE)
+  }
+  stats::setNames(groups, names(score))
+}
+
 #' Fit a cross-validated penalized Cox model
 #'
 #' @inheritParams mae_pull_assay
@@ -718,6 +930,41 @@ drug_lincs <- function(
     stop(label, " must contain finite numeric values.", call. = FALSE)
   }
   invisible(value)
+}
+
+.assert_confidence_level <- function(conf_level) {
+  if (
+    !is.numeric(conf_level) || length(conf_level) != 1L || !is.finite(conf_level) ||
+      conf_level <= 0 || conf_level >= 1
+  ) {
+    stop("`conf_level` must be one finite number between zero and one.", call. = FALSE)
+  }
+  invisible(conf_level)
+}
+
+.surv_unique_breaks <- function(breaks, from_quantiles) {
+  collapsed <- unique(breaks)
+  if (length(collapsed) < 3L) {
+    stop(
+      if (from_quantiles) {
+        "Quantile `cuts` must produce at least two distinct risk groups."
+      } else {
+        "Score-scale `cuts` must produce at least two distinct risk groups."
+      },
+      call. = FALSE
+    )
+  }
+  if (from_quantiles && length(collapsed) != length(breaks)) {
+    stop(
+      "Quantile `cuts` produced tied break-points; choose different probabilities ",
+      "or supply explicit score-scale cutpoints.",
+      call. = FALSE
+    )
+  }
+  if (is.unsorted(collapsed, strictly = TRUE)) {
+    stop("Risk-group break-points must be strictly increasing.", call. = FALSE)
+  }
+  collapsed
 }
 
 .assert_alpha <- function(alpha) {

@@ -53,7 +53,7 @@ ggplot object. \code{plot_save()} reads that recommendation and delegates to
 values override either recommendation.
 }
 \details{
-PDF output uses \code{\link[grDevices:cairo]{grDevices::cairo_pdf()}} automatically when Cairo graphics
+PDF output uses \code{\link[grDevices:cairo_pdf]{grDevices::cairo_pdf()}} automatically when Cairo graphics
 are available. Dimensions remain attached after ordinary ggplot2 \code{+}
 operations, so themes, labels, and scales can be changed before saving.
 
@@ -65,18 +65,21 @@ particular preview size.
 }
 \seealso{
 Other plotting:
-\code{\link{plot_assay_heatmap}()},
-\code{\link{plot_de_ma}()},
-\code{\link{plot_de_volcano}()},
-\code{\link{plot_embedding}()},
-\code{\link{plot_gsea_classic}()},
-\code{\link{plot_gsea_ridge}()},
-\code{\link{plot_ora_bubble}()},
-\code{\link{plot_ora_network}()},
-\code{\link{plot_ora_radial}()},
-\code{\link{plot_qc_correlation}()},
-\code{\link{plot_qc_library}()},
-\code{\link{plot_qc_outliers}()},
-\code{\link{theme_bulkmae}()}
+\code{\link[=plot_assay_heatmap]{plot_assay_heatmap()}},
+\code{\link[=plot_de_ma]{plot_de_ma()}},
+\code{\link[=plot_de_volcano]{plot_de_volcano()}},
+\code{\link[=plot_embedding]{plot_embedding()}},
+\code{\link[=plot_gsea_classic]{plot_gsea_classic()}},
+\code{\link[=plot_gsea_ridge]{plot_gsea_ridge()}},
+\code{\link[=plot_ora_bubble]{plot_ora_bubble()}},
+\code{\link[=plot_ora_network]{plot_ora_network()}},
+\code{\link[=plot_ora_radial]{plot_ora_radial()}},
+\code{\link[=plot_qc_correlation]{plot_qc_correlation()}},
+\code{\link[=plot_qc_library]{plot_qc_library()}},
+\code{\link[=plot_qc_outliers]{plot_qc_outliers()}},
+\code{\link[=plot_surv_forest]{plot_surv_forest()}},
+\code{\link[=plot_surv_km]{plot_surv_km()}},
+\code{\link[=plot_surv_risk]{plot_surv_risk()}},
+\code{\link[=theme_bulkmae]{theme_bulkmae()}}
 }
 \concept{plotting}

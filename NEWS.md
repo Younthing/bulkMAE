@@ -1,5 +1,10 @@
 # bulkMAE (development version)
 
+- Adds prognostic-plot constructors `plot_surv_km()`, `plot_surv_forest()`,
+  and `plot_surv_risk()`, plus thin `surv_cox_table()`,
+  `surv_cox_univariable()`, and `surv_risk_groups()` helpers around the
+  existing survival stack. The airway tutorial labels follow-up as synthetic
+  when the official demo has none.
 - Rewrites the README as a landing page with official backend links and one
   square patchwork gallery of volcano, heatmap, ORA network, and GSEA ridge
   plots.
