@@ -109,6 +109,66 @@ test_that("survival wrappers fit native Kaplan-Meier and Cox models", {
   )
 })
 
+test_that("Cox tables and risk groups stay aligned to native fits", {
+  skip_if_not_installed("survival")
+  mae <- make_simulated_mae()
+  cox <- surv_cox(
+    mae,
+    "rna",
+    survival::Surv(time, event) ~ age
+  )
+  table <- surv_cox_table(cox)
+  expect_identical(
+    names(table),
+    c(
+      "term", "coefficient", "hazard_ratio", "conf_low", "conf_high",
+      "statistic", "p_value", "n", "events"
+    )
+  )
+  expect_identical(table$term, "age")
+  expect_identical(table$n, 24L)
+  expect_true(all(is.finite(as.matrix(table[setdiff(names(table), "term")]))))
+  expect_gt(table$conf_high, table$hazard_ratio)
+  expect_lt(table$conf_low, table$hazard_ratio)
+  expect_error(surv_cox_table(list()), "coxph")
+  expect_error(surv_cox_table(cox, conf_level = 1), "between zero and one")
+
+  univariable <- surv_cox_univariable(
+    mae,
+    "rna",
+    time = "time",
+    event = "event",
+    predictors = c("age", "gene0001"),
+    assay = "log_expression",
+    features = "gene0001"
+  )
+  expect_identical(univariable$predictor, c("age", "gene0001"))
+  expect_identical(univariable$term, c("age", "gene0001"))
+  expect_error(
+    surv_cox_univariable(
+      mae,
+      "rna",
+      time = "time",
+      event = "event",
+      predictors = "gene0001"
+    ),
+    "Unknown univariable predictors"
+  )
+
+  samples <- mae_samples(mae, "rna")
+  score <- stats::setNames(samples$risk_score, rownames(samples))
+  groups <- surv_risk_groups(score)
+  expect_s3_class(groups, "factor")
+  expect_identical(names(groups), names(score))
+  expect_identical(levels(groups), c("Low", "High"))
+  expect_identical(as.character(groups[which.min(score)]), "Low")
+  expect_identical(as.character(groups[which.max(score)]), "High")
+  tertiles <- surv_risk_groups(score, cuts = c(1 / 3, 2 / 3))
+  expect_identical(levels(tertiles), c("G1", "G2", "G3"))
+  expect_error(surv_risk_groups(score, cuts = c(0.5, 2)), "not a mixture")
+  expect_error(surv_risk_groups(rep(1, 8), cuts = 0.5), "named numeric")
+})
+
 test_that("surv_roc returns a native timeROC result", {
   skip_if_not_installed("timeROC")
   mae <- make_simulated_mae()
@@ -137,6 +197,29 @@ test_that("surv_roc returns a native timeROC result", {
       times = evaluation_times
     ),
     "must name different"
+  )
+})
+
+test_that("surv_auc_table returns a diagnostic cumulative/dynamic table", {
+  skip_if_not_installed("survival")
+  mae <- make_simulated_mae()
+  data <- mae_samples(mae, "rna")
+  evaluation_times <- as.numeric(stats::quantile(data$time, c(0.4, 0.6)))
+  table <- surv_auc_table(
+    mae,
+    "rna",
+    time = "time",
+    event = "event",
+    marker = "risk_score",
+    times = evaluation_times,
+    cause = 1
+  )
+  expect_true(all(c("time", "auc", "n_case", "n_control", "estimator") %in% names(table)))
+  expect_true(any(is.finite(table$auc)))
+  expect_true(all(table$estimator %in% c("timeROC", "cumulative_dynamic")))
+  expect_error(
+    surv_auc_table(data.frame(time = 1, auc = 1.4)),
+    "lie in"
   )
 })
 

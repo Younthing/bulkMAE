@@ -97,7 +97,7 @@ copies. The input MAE stays unchanged.
 | Regulatory activity | `activity_decouple()`, `activity_progeny()`, `activity_tf()` | [decoupleR](https://bioconductor.org/packages/release/bioc/html/decoupleR.html) |
 | Systems/subtypes | `cluster_consensus()`, `cluster_nmf()`, `coexpr_wgcna()`, `coexpr_preservation()`, `network_genie3()` | [ConsensusClusterPlus](https://bioconductor.org/packages/release/bioc/html/ConsensusClusterPlus.html), [NMF](https://cran.r-project.org/package=NMF), [WGCNA](https://cran.r-project.org/package=WGCNA), [GENIE3](https://bioconductor.org/packages/release/bioc/html/GENIE3.html) |
 | Deconvolution | `deconv_reference()`, `deconv()`, `deconv_music()`, `deconv_bayesprism()` | [SingleCellExperiment](https://bioconductor.org/packages/release/bioc/html/SingleCellExperiment.html), [immunedeconv](https://omnideconv.org/immunedeconv/), [MuSiC](https://xuranw.github.io/MuSiC/), [BayesPrism](https://github.com/Danko-Lab/BayesPrism) |
-| Clinical | `score_signature()`, `surv_formula()`, `surv_cox()`, `meta_collect()`, `meta_effect()`, `drug_lincs()` | [survival](https://cran.r-project.org/package=survival), [glmnet](https://cran.r-project.org/package=glmnet), [timeROC](https://cran.r-project.org/package=timeROC), [metafor](https://wviechtb.github.io/metafor/), [signatureSearch](https://bioconductor.org/packages/release/bioc/html/signatureSearch.html) |
+| Clinical | `score_signature()`, `surv_formula()`, `surv_cox()`, `surv_cox_table()`, `plot_surv_km()`, `plot_surv_auc()`, `meta_collect()`, `meta_effect()`, `drug_lincs()` | [survival](https://cran.r-project.org/package=survival), [glmnet](https://cran.r-project.org/package=glmnet), [timeROC](https://cran.r-project.org/package=timeROC), [metafor](https://wviechtb.github.io/metafor/), [signatureSearch](https://bioconductor.org/packages/release/bioc/html/signatureSearch.html) |
 
 Each backend name links to its official package page. Official pages for
 wrappers outside this table are
@@ -165,6 +165,7 @@ simulation.
   (Chinese executable guide)
 - [airway QC and paired differential expression](https://younthing.github.io/bulkMAE/articles/airway-qc-de.html)
 - [airway GO ORA, GSEA, and plots](https://younthing.github.io/bulkMAE/articles/enrichment-analysis.html)
+- [Prognostic modeling with synthetic follow-up](https://younthing.github.io/bulkMAE/articles/prognostic-modeling.html)
 - [Method-selection guide](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/expanded-methods-zh.md)
 - [Input-completeness audit](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/input-completeness-zh.md)
 - [Adapter-to-source map](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/official-sources.md)

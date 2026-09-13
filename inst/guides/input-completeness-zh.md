@@ -129,7 +129,7 @@
 | 函数 | 类别 | 输入完整性与边界 |
 |---|---|---|
 | `score_signature()` | A + B | 离线打分；权重、特征、方向、冻结的训练集 center/scale 和阈值必须由真实训练研究提供。对验证队列重新估计标准化量不是锁定验证。 |
-| `surv_formula()`、`surv_km()`、`surv_roc()`、`surv_cox()`、`surv_penalized()`、`ml_glmnet()` | A（有条件） | 在真实且对齐的 follow-up、event、outcome 和协变量存在时离线拟合。单队列交叉验证不等于外部验证。 |
+| `surv_formula()`、`surv_km()`、`surv_roc()`、`surv_auc_table()`、`surv_cox()`、`surv_cox_table()`、`surv_cox_univariable()`、`surv_risk_groups()`、`surv_penalized()`、`ml_glmnet()` | A（有条件） | 在真实且对齐的 follow-up、event、outcome 和协变量存在时离线拟合。单队列交叉验证不等于外部验证。合成随访必须在图注中标明。 |
 | `meta_collect()`、`meta_effect()` | B | 可从多个兼容 DE 结果抽取同一 feature 的 effect/SE 并拟合；独立研究、可比 contrast 和有效标准误不能从单一队列产生。 |
 | `drug_query()` | A | 从有限、具名且正负均存在的 DE 统计量离线生成 up/down query；用于 LINCS 时应先映射到参考库要求的 human Entrez ID。 |
 | `drug_lincs_databases()` | A（资源目录） | 只返回支持数据库及 ExperimentHub ID 的元数据，不下载数据库，也不表示缓存已存在。 |

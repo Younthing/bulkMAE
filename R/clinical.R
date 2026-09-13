@@ -188,6 +188,77 @@ surv_roc <- function(
   )
 }
 
+#' Tabulate time-dependent AUC
+#'
+#' Builds a plot-ready AUC(t) table from an already-computed `timeROC` result
+#' or from aligned follow-up and a marker. When `x` is a MultiAssayExperiment
+#' and `timeROC` is installed, values come from [surv_roc()]. Otherwise the
+#' helper computes a simple cumulative/dynamic AUC: cases are events of
+#' interest by time *t*, and controls remain at risk after *t*. That fallback
+#' is diagnostic and is not Uno's IPCW estimator.
+#'
+#' @inheritParams surv_roc
+#' @param x A `timeROC` result, a data frame with `time` and `auc`, or a
+#'   `MultiAssayExperiment` used to estimate AUC(t).
+#'
+#' @return A data frame with `time`, `auc`, `n_case`, `n_control`, and
+#'   `estimator`.
+#' @export
+surv_auc_table <- function(
+    x,
+    experiment,
+    time,
+    event,
+    marker,
+    times,
+    cause = 1,
+    ...
+) {
+  if (.surv_is_timeroc(x)) {
+    return(.surv_auc_from_timeroc(x))
+  }
+  if (is.data.frame(x) && missing(experiment) && missing(time)) {
+    return(.surv_auc_validate_table(x))
+  }
+  data <- mae_samples(x, experiment)
+  .assert_metadata_column(data, time, "time")
+  .assert_metadata_column(data, event, "event")
+  if (identical(time, event)) {
+    stop("`time` and `event` must name different metadata columns.", call. = FALSE)
+  }
+  marker <- .column_or_vector(marker, data, "marker")
+  .assert_finite_numeric(data[[time]], "time")
+  .assert_finite_numeric(data[[event]], "event")
+  .assert_finite_numeric(marker, "marker")
+  .assert_finite_numeric(times, "times")
+  if (any(data[[time]] < 0) || any(times <= 0)) {
+    stop("Follow-up `time` must be non-negative and `times` must be positive.", call. = FALSE)
+  }
+  if (length(cause) != 1L || is.na(cause) || !cause %in% data[[event]]) {
+    stop("`cause` must be one observed event code.", call. = FALSE)
+  }
+  if (!0 %in% data[[event]]) {
+    stop("`event` must contain zero-coded censored observations.", call. = FALSE)
+  }
+  if (!any(data[[event]] == cause) || !any(data[[event]] == 0)) {
+    stop("Time-dependent AUC needs both events of interest and censoring.", call. = FALSE)
+  }
+  if (requireNamespace("timeROC", quietly = TRUE)) {
+    roc <- surv_roc(
+      x,
+      experiment,
+      time = time,
+      event = event,
+      marker = marker,
+      times = times,
+      cause = cause,
+      ...
+    )
+    return(.surv_auc_from_timeroc(roc))
+  }
+  .surv_auc_cd(data[[time]], data[[event]], marker, times, cause)
+}
+
 #' Fit a Cox proportional-hazards model
 #'
 #' @inheritParams mae_pull_assay
@@ -219,6 +290,218 @@ surv_cox <- function(x, experiment, formula, assay = NULL, features = NULL, ...)
   }
   .validate_survival_formula(formula, data)
   survival::coxph(formula = formula, data = data, ...)
+}
+
+#' Extract a hazard-ratio table from a Cox model
+#'
+#' Converts an already-fitted [survival::coxph()] object into a data frame of
+#' coefficients, hazard ratios, and confidence intervals. The function does
+#' not refit the model or change the native `coxph` return type.
+#'
+#' @param fit A `coxph` object, usually from [surv_cox()].
+#' @param conf_level Confidence level for the hazard-ratio interval.
+#'
+#' @return A data frame with `term`, `coefficient`, `hazard_ratio`,
+#'   `conf_low`, `conf_high`, `statistic`, `p_value`, `n`, and `events`.
+#' @export
+surv_cox_table <- function(fit, conf_level = 0.95) {
+  .require_backend("survival", "to summarise a Cox model")
+  if (!inherits(fit, "coxph")) {
+    stop("`fit` must be a coxph object.", call. = FALSE)
+  }
+  .assert_confidence_level(conf_level)
+  summarised <- summary(fit, conf.int = conf_level)
+  coefficients <- summarised$coefficients
+  intervals <- summarised$conf.int
+  if (is.null(coefficients) || !nrow(coefficients) || is.null(intervals)) {
+    stop("The Cox model has no coefficient table to extract.", call. = FALSE)
+  }
+  lower_column <- grep("^lower", colnames(intervals), value = TRUE)
+  upper_column <- grep("^upper", colnames(intervals), value = TRUE)
+  if (length(lower_column) != 1L || length(upper_column) != 1L) {
+    stop("The Cox summary does not contain a unique confidence interval.", call. = FALSE)
+  }
+  table <- data.frame(
+    term = rownames(coefficients),
+    coefficient = as.numeric(coefficients[, "coef"]),
+    hazard_ratio = as.numeric(intervals[, "exp(coef)"]),
+    conf_low = as.numeric(intervals[, lower_column]),
+    conf_high = as.numeric(intervals[, upper_column]),
+    statistic = as.numeric(coefficients[, "z"]),
+    p_value = as.numeric(coefficients[, "Pr(>|z|)"]),
+    n = as.integer(fit$n),
+    events = as.integer(fit$nevent),
+    stringsAsFactors = FALSE,
+    check.names = FALSE
+  )
+  rownames(table) <- NULL
+  if (any(!is.finite(c(table$hazard_ratio, table$conf_low, table$conf_high)))) {
+    stop("Cox hazard ratios and confidence limits must be finite.", call. = FALSE)
+  }
+  table
+}
+
+#' Fit univariable Cox models for selected predictors
+#'
+#' Fits one [surv_cox()] model per predictor and stacks the coefficient tables.
+#' Clinical predictors are read from aligned sample metadata. Expression
+#' features are appended only when they are named in `features` and `assay` is
+#' supplied. This is a convenience loop around the existing Cox wrapper, not a
+#' new estimator.
+#'
+#' @inheritParams surv_cox
+#' @param time,event Metadata columns containing follow-up time and event.
+#' @param predictors Unique metadata column names and/or expression feature
+#'   identifiers. Feature names must also appear in `features`.
+#' @inheritParams surv_cox_table
+#'
+#' @return A data frame in the [surv_cox_table()] schema, with one or more
+#'   rows per predictor.
+#' @export
+surv_cox_univariable <- function(
+    x,
+    experiment,
+    time,
+    event,
+    predictors,
+    assay = NULL,
+    features = NULL,
+    conf_level = 0.95,
+    ...
+) {
+  .require_backend("survival", "to fit univariable Cox models")
+  if (
+    !is.character(predictors) || !length(predictors) || anyNA(predictors) ||
+      any(!nzchar(predictors)) || anyDuplicated(predictors)
+  ) {
+    stop("`predictors` must contain unique, non-empty names.", call. = FALSE)
+  }
+  if (any(predictors %in% c(time, event))) {
+    stop("Predictors must differ from `time` and `event`.", call. = FALSE)
+  }
+  if (!is.null(features)) {
+    if (
+      !is.character(features) || !length(features) || anyNA(features) ||
+        any(!nzchar(features)) || anyDuplicated(features)
+    ) {
+      stop("`features` must contain unique, non-empty names.", call. = FALSE)
+    }
+  }
+  sample_data <- mae_samples(x, experiment)
+  sample_predictors <- intersect(predictors, names(sample_data))
+  feature_predictors <- if (is.null(features)) {
+    character()
+  } else {
+    intersect(predictors, features)
+  }
+  unknown <- setdiff(predictors, c(sample_predictors, feature_predictors))
+  if (length(unknown)) {
+    stop(
+      "Unknown univariable predictors: ",
+      paste(unknown, collapse = ", "),
+      ". Clinical names must exist in sample metadata; expression names must ",
+      "also be supplied in `features`.",
+      call. = FALSE
+    )
+  }
+  collision <- intersect(sample_predictors, feature_predictors)
+  if (length(collision)) {
+    stop(
+      "Predictors collide with both sample metadata and `features`: ",
+      paste(collision, collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+  if (length(feature_predictors) && is.null(assay)) {
+    stop("`assay` is required when expression `features` are supplied.", call. = FALSE)
+  }
+
+  rows <- lapply(predictors, function(predictor) {
+    is_feature <- predictor %in% feature_predictors
+    fit <- surv_cox(
+      x,
+      experiment,
+      formula = surv_formula(time, event, predictors = predictor),
+      assay = if (is_feature) assay else NULL,
+      features = if (is_feature) predictor else NULL,
+      ...
+    )
+    table <- surv_cox_table(fit, conf_level = conf_level)
+    table$predictor <- predictor
+    table
+  })
+  result <- do.call(rbind, rows)
+  rownames(result) <- NULL
+  result
+}
+
+#' Stratify a named risk score into groups
+#'
+#' Cuts an already-computed, sample-named score into discrete risk groups.
+#' Quantile probabilities in `(0, 1)` are the default; supply score-scale
+#' cutpoints to use explicit thresholds. The helper does not fit a survival
+#' model.
+#'
+#' @param score A uniquely named finite numeric vector, one value per sample.
+#' @param cuts Quantile probabilities in `(0, 1)`, or explicit finite cutpoints
+#'   on the score scale. The default `0.5` is a median split.
+#' @param labels Optional group labels. When omitted, two groups are labelled
+#'   `Low` and `High`; more groups are labelled `G1`, `G2`, ...
+#'
+#' @return A named factor aligned to `names(score)`.
+#' @export
+surv_risk_groups <- function(score, cuts = 0.5, labels = NULL) {
+  .assert_named_numeric(score, "score")
+  if (!is.numeric(cuts) || !length(cuts) || any(!is.finite(cuts))) {
+    stop("`cuts` must contain finite numeric values.", call. = FALSE)
+  }
+  if (anyDuplicated(cuts)) {
+    stop("`cuts` must be unique.", call. = FALSE)
+  }
+  quantile_cuts <- all(cuts > 0 & cuts < 1)
+  if (quantile_cuts) {
+    probs <- sort(unique(c(0, cuts, 1)))
+    breaks <- unname(stats::quantile(score, probs = probs, names = FALSE, type = 7L))
+  } else {
+    if (any(cuts > 0 & cuts < 1)) {
+      stop(
+        "`cuts` must be either quantile probabilities in (0, 1) or explicit ",
+        "score-scale cutpoints, not a mixture.",
+        call. = FALSE
+      )
+    }
+    breaks <- c(-Inf, sort(cuts), Inf)
+  }
+  breaks <- .surv_unique_breaks(breaks, quantile_cuts)
+  n_groups <- length(breaks) - 1L
+  if (is.null(labels)) {
+    labels <- if (identical(n_groups, 2L)) {
+      c("Low", "High")
+    } else {
+      paste0("G", seq_len(n_groups))
+    }
+  }
+  if (
+    !is.character(labels) || length(labels) != n_groups || anyNA(labels) ||
+      any(!nzchar(labels)) || anyDuplicated(labels)
+  ) {
+    stop(
+      "`labels` must contain one unique, non-empty name per risk group.",
+      call. = FALSE
+    )
+  }
+  groups <- cut(
+    score,
+    breaks = breaks,
+    labels = labels,
+    include.lowest = TRUE,
+    right = TRUE
+  )
+  if (anyNA(groups)) {
+    stop("Risk-group cuts left samples unclassified.", call. = FALSE)
+  }
+  stats::setNames(groups, names(score))
 }
 
 #' Fit a cross-validated penalized Cox model
@@ -720,6 +1003,41 @@ drug_lincs <- function(
   invisible(value)
 }
 
+.assert_confidence_level <- function(conf_level) {
+  if (
+    !is.numeric(conf_level) || length(conf_level) != 1L || !is.finite(conf_level) ||
+      conf_level <= 0 || conf_level >= 1
+  ) {
+    stop("`conf_level` must be one finite number between zero and one.", call. = FALSE)
+  }
+  invisible(conf_level)
+}
+
+.surv_unique_breaks <- function(breaks, from_quantiles) {
+  collapsed <- unique(breaks)
+  if (length(collapsed) < 3L) {
+    stop(
+      if (from_quantiles) {
+        "Quantile `cuts` must produce at least two distinct risk groups."
+      } else {
+        "Score-scale `cuts` must produce at least two distinct risk groups."
+      },
+      call. = FALSE
+    )
+  }
+  if (from_quantiles && length(collapsed) != length(breaks)) {
+    stop(
+      "Quantile `cuts` produced tied break-points; choose different probabilities ",
+      "or supply explicit score-scale cutpoints.",
+      call. = FALSE
+    )
+  }
+  if (is.unsorted(collapsed, strictly = TRUE)) {
+    stop("Risk-group break-points must be strictly increasing.", call. = FALSE)
+  }
+  collapsed
+}
+
 .assert_alpha <- function(alpha) {
   if (
     !is.numeric(alpha) || length(alpha) != 1L || !is.finite(alpha) ||
@@ -765,4 +1083,101 @@ drug_lincs <- function(
     stop("`", argument, "` must contain non-missing identifiers.", call. = FALSE)
   }
   value
+}
+
+.surv_is_timeroc <- function(x) {
+  inherits(x, "ipcwsurvivalROC") || inherits(x, "ipcwcompetingrisksROC")
+}
+
+.surv_auc_from_timeroc <- function(x) {
+  times <- as.numeric(x$times)
+  auc <- as.numeric(x$AUC)
+  if (!length(times) || length(auc) != length(times)) {
+    stop("The timeROC result does not contain paired `times` and `AUC`.", call. = FALSE)
+  }
+  table <- data.frame(
+    time = times,
+    auc = auc,
+    n_case = NA_integer_,
+    n_control = NA_integer_,
+    estimator = "timeROC",
+    stringsAsFactors = FALSE,
+    check.names = FALSE
+  )
+  if (!is.null(x$inference) && !is.null(x$inference$vect_sd_1)) {
+    sd_auc <- as.numeric(x$inference$vect_sd_1)
+    if (length(sd_auc) == length(times)) {
+      table$conf_low <- auc - 1.96 * sd_auc
+      table$conf_high <- auc + 1.96 * sd_auc
+    }
+  }
+  .surv_auc_validate_table(table)
+}
+
+.surv_auc_validate_table <- function(x) {
+  table <- as.data.frame(x, optional = TRUE)
+  .plot_require_columns(table, c("time", "auc"), "x")
+  .plot_assert_finite_numeric(table$time, "`x$time`")
+  if (any(table$time <= 0)) {
+    stop("`x$time` must contain positive evaluation times.", call. = FALSE)
+  }
+  if (anyDuplicated(table$time)) {
+    stop("`x$time` must be unique.", call. = FALSE)
+  }
+  if (!is.numeric(table$auc) || any(is.na(table$auc))) {
+    stop("`x$auc` must be numeric and non-missing.", call. = FALSE)
+  }
+  if (any(is.finite(table$auc) & (table$auc < 0 | table$auc > 1))) {
+    stop("`x$auc` must lie in [0, 1] when finite.", call. = FALSE)
+  }
+  if (!"n_case" %in% names(table)) {
+    table$n_case <- NA_integer_
+  }
+  if (!"n_control" %in% names(table)) {
+    table$n_control <- NA_integer_
+  }
+  if (!"estimator" %in% names(table)) {
+    table$estimator <- NA_character_
+  }
+  table[order(table$time), , drop = FALSE]
+}
+
+.surv_auc_cd <- function(time, event, marker, times, cause) {
+  times <- sort(unique(as.numeric(times)))
+  rows <- lapply(times, function(t) {
+    is_case <- event == cause & time <= t
+    is_control <- time > t
+    n_case <- sum(is_case)
+    n_control <- sum(is_control)
+    auc <- if (n_case < 1L || n_control < 1L) {
+      NA_real_
+    } else {
+      .surv_mann_whitney(marker[is_case], marker[is_control])
+    }
+    data.frame(
+      time = t,
+      auc = auc,
+      n_case = as.integer(n_case),
+      n_control = as.integer(n_control),
+      estimator = "cumulative_dynamic",
+      stringsAsFactors = FALSE,
+      check.names = FALSE
+    )
+  })
+  table <- do.call(rbind, rows)
+  rownames(table) <- NULL
+  if (!any(is.finite(table$auc))) {
+    stop(
+      "Cumulative/dynamic AUC needs at least one time with both cases and controls.",
+      call. = FALSE
+    )
+  }
+  table
+}
+
+.surv_mann_whitney <- function(cases, controls) {
+  n1 <- length(cases)
+  n2 <- length(controls)
+  ranks <- rank(c(cases, controls), ties.method = "average")
+  (sum(ranks[seq_len(n1)]) - n1 * (n1 + 1) / 2) / (n1 * n2)
 }
