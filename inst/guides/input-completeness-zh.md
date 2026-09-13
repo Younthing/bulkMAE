@@ -134,6 +134,8 @@
 | `drug_query()` | A | 从有限、具名且正负均存在的 DE 统计量离线生成 up/down query；用于 LINCS 时应先映射到参考库要求的 human Entrez ID。 |
 | `drug_lincs_databases()` | A（资源目录） | 只返回支持数据库及 ExperimentHub ID 的元数据，不下载数据库，也不表示缓存已存在。 |
 | `drug_lincs()` | B/C；受限资源可为 D | 可使用显式本地参考库（B）或让 signatureSearch 从 ExperimentHub 下载/缓存预构建 LINCS 库（C）。连接性反转是假设生成，不是疗效或用药建议。 |
+| `drug_lincs_table()` | A | 从已有 `gessResult` 或同列 data frame 抽出排名表，不重算 WTCS/NCS/Tau。 |
+| `drug_lincs_example()` | A（诊断玩具表） | 返回与 `gess_lincs()` 同列的合成表，供离线教程和作图；不是 CMap/LINCS 下载，也不能当作湿实验结果。 |
 
 ## 4. 只用 bulkMAE 公共 API 的链路示例
 

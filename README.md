@@ -165,6 +165,7 @@ simulation.
   (Chinese executable guide)
 - [airway QC and paired differential expression](https://younthing.github.io/bulkMAE/articles/airway-qc-de.html)
 - [airway GO ORA, GSEA, and plots](https://younthing.github.io/bulkMAE/articles/enrichment-analysis.html)
+- [LINCS reverse-signature drug hypothesis](https://younthing.github.io/bulkMAE/articles/lincs-drug-hypothesis.html)
 - [Method-selection guide](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/expanded-methods-zh.md)
 - [Input-completeness audit](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/input-completeness-zh.md)
 - [Adapter-to-source map](https://github.com/Younthing/bulkMAE/blob/main/inst/guides/official-sources.md)
