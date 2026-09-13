@@ -21,7 +21,7 @@
 | KEGG/Reactome | `enrich_kegg()`、`enrich_reactome()`，以 `method` 选择 ORA/GSEA | clusterProfiler、ReactomePA | 显式 ID 和物种 |
 | 竞争/旋转集合检验 | `enrich_camera()`、`enrich_fry()`、`enrich_roast()` | limma | 表达矩阵、设计和 contrast |
 | 稳健样本 signature | `score_singscore()` | singscore | 每个样本的基因秩 |
-| 多方法活性推断 | `activity_decouple()` | decoupleR | 表达矩阵和长表网络/集合 |
+| 多方法活性推断 | `activity_decouple()`、`activity_contrast()`、`plot_activity_*()` | decoupleR | 表达矩阵和长表网络/集合；对比与作图只使用已算好的样本活性 |
 | 生存曲线/判别 | `surv_km()`、`surv_roc()` | survival、timeROC | 对齐的随访、结局和 marker |
 
 ## 2. 富集和活性方法如何选择

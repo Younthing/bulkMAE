@@ -42,6 +42,25 @@ test_that("decoupleR infers local weighted activities for every sample", {
   expect_setequal(result$condition, samples)
   expect_true(all(is.finite(result$score)))
   expect_true(all(is.finite(result$p_value)))
+
+  samples <- mae_samples(mae, "rna")
+  contrast <- activity_contrast(
+    result,
+    samples,
+    group = "condition",
+    statistic = "ulm"
+  )
+  expect_s3_class(contrast, "data.frame")
+  expect_setequal(contrast$source, c("regulator_a", "regulator_b"))
+  expect_true(all(is.finite(contrast$delta)))
+  expect_no_error(ggplot2::ggplot_build(plot_activity_heatmap(
+    result, annotation = "condition", sample_data = samples
+  )))
+  expect_no_error(ggplot2::ggplot_build(plot_activity_rank(result)))
+  expect_no_error(ggplot2::ggplot_build(plot_activity_sample(
+    result, sources = "regulator_a", sample_data = samples, group = "condition"
+  )))
+  expect_no_error(ggplot2::ggplot_build(plot_activity_volcano(contrast)))
 })
 
 test_that("resource-backed activity functions are opt-in online tests", {

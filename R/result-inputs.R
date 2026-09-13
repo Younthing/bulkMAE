@@ -324,30 +324,15 @@ activity_matrix <- function(
     statistic = NULL,
     statistic_column = "statistic"
 ) {
-  result <- as.data.frame(result, optional = TRUE)
-  for (argument in c("value", "source", "sample")) {
-    column <- get(argument)
-    .de_assert_column(result, column, argument)
-  }
-  if (!is.null(statistic)) {
-    .assert_scalar_character(statistic, "statistic")
-    .de_assert_column(result, statistic_column, "statistic_column")
-    result <- result[as.character(result[[statistic_column]]) == statistic, , drop = FALSE]
-    if (!nrow(result)) {
-      stop("No rows match the requested `statistic`.", call. = FALSE)
-    }
-  } else if (statistic_column %in% names(result)) {
-    available <- unique(as.character(result[[statistic_column]]))
-    available <- available[!is.na(available)]
-    if (length(available) > 1L) {
-      stop(
-        "`statistic` is required when results contain multiple statistics: ",
-        paste(available, collapse = ", "),
-        ".",
-        call. = FALSE
-      )
-    }
-  }
+  result <- .activity_prepare_result(
+    result,
+    value = value,
+    source = source,
+    sample = sample,
+    statistic = statistic,
+    statistic_column = statistic_column,
+    require_sample = TRUE
+  )
   source_ids <- as.character(result[[source]])
   sample_ids <- as.character(result[[sample]])
   values <- result[[value]]
@@ -377,6 +362,155 @@ activity_matrix <- function(
     stop("Activity results do not contain a complete source-by-sample grid.", call. = FALSE)
   }
   matrix
+}
+
+#' Compare already-inferred sample activities between two groups
+#'
+#' This helper does not run decoupleR again and does not perform gene-set
+#' enrichment. It takes the long-format table returned by
+#' [activity_decouple()], [activity_progeny()], or [activity_tf()] and
+#' computes a two-group contrast of those per-sample activity scores. The
+#' `delta` column is the difference of group means (`target - reference`).
+#' Optional Welch or Wilcoxon *p*-values describe that comparison; they are
+#' not enrichment *p*-values and they are not the per-sample `p_value`
+#' column returned by decoupleR.
+#'
+#' @param result A data-frame-like activity result.
+#' @param sample_data Optional sample metadata whose row names cover every
+#'   activity sample. Required when `group` is a column name.
+#' @param group A metadata column in `sample_data` or a complete sample-named
+#'   vector of group labels.
+#' @param reference,target Group levels used to form `target - reference`.
+#'   When both are `NULL` and `group` has exactly two levels, the first
+#'   remaining level is the reference.
+#' @param test `"welch"` for a two-sample Welch *t*-test, `"wilcox"` for a
+#'   Wilcoxon rank-sum test, or `"none"` to return mean differences only.
+#' @inheritParams activity_matrix
+#'
+#' @return A data frame with one row per regulator/source:
+#'   `source`, `reference`, `target`, `n_reference`, `n_target`,
+#'   `mean_reference`, `mean_target`, `delta`, `statistic`, `p_value`, and
+#'   `adjusted_p_value`.
+#'
+#' @examples
+#' result <- expand.grid(
+#'   source = c("TF_A", "TF_B"),
+#'   condition = paste0("s", 1:6),
+#'   stringsAsFactors = FALSE
+#' )
+#' result$statistic <- "ulm"
+#' result$score <- c(rep(c(-1, 1), each = 3), rep(c(2, -2), each = 3))
+#' samples <- data.frame(
+#'   dex = factor(rep(c("untrt", "trt"), each = 3)),
+#'   row.names = paste0("s", 1:6)
+#' )
+#' activity_contrast(
+#'   result, samples, group = "dex",
+#'   reference = "untrt", target = "trt"
+#' )
+#' @export
+activity_contrast <- function(
+    result,
+    sample_data = NULL,
+    group,
+    reference = NULL,
+    target = NULL,
+    test = c("welch", "wilcox", "none"),
+    value = "score",
+    source = "source",
+    sample = "condition",
+    statistic = NULL,
+    statistic_column = "statistic"
+) {
+  test <- match.arg(test)
+  result <- .activity_prepare_result(
+    result,
+    value = value,
+    source = source,
+    sample = sample,
+    statistic = statistic,
+    statistic_column = statistic_column,
+    require_sample = TRUE
+  )
+  source_ids <- as.character(result[[source]])
+  sample_ids <- as.character(result[[sample]])
+  scores <- result[[value]]
+  if (
+    anyNA(source_ids) || any(!nzchar(source_ids)) || anyNA(sample_ids) ||
+      any(!nzchar(sample_ids))
+  ) {
+    stop("Activity source and sample identifiers cannot be missing or empty.", call. = FALSE)
+  }
+  if (!is.numeric(scores) || any(!is.finite(scores))) {
+    stop("The activity `value` column must contain finite numeric values.", call. = FALSE)
+  }
+  groups <- .activity_sample_groups(sample_data, group, unique(sample_ids))
+  group_labels <- as.character(groups)
+  names(group_labels) <- names(groups)
+  if (xor(is.null(reference), is.null(target))) {
+    stop("Supply both `reference` and `target`, or neither.", call. = FALSE)
+  }
+  available <- unique(group_labels)
+  if (is.null(reference)) {
+    if (length(available) != 2L) {
+      stop(
+        "Supply `reference` and `target` when `group` has ",
+        length(available),
+        " levels.",
+        call. = FALSE
+      )
+    }
+    if (is.factor(groups)) {
+      available <- levels(droplevels(groups))
+    }
+    reference <- available[[1L]]
+    target <- available[[2L]]
+  } else {
+    .assert_scalar_character(reference, "reference")
+    .assert_scalar_character(target, "target")
+  }
+  if (identical(reference, target)) {
+    stop("`reference` and `target` must be different group levels.", call. = FALSE)
+  }
+  if (!reference %in% group_labels) {
+    stop("`reference` is not present in `group`.", call. = FALSE)
+  }
+  if (!target %in% group_labels) {
+    stop("`target` is not present in `group`.", call. = FALSE)
+  }
+
+  sources <- unique(source_ids)
+  contrast <- lapply(sources, function(current) {
+    keep <- source_ids == current
+    current_samples <- sample_ids[keep]
+    current_scores <- scores[keep]
+    current_groups <- unname(group_labels[current_samples])
+    reference_scores <- current_scores[current_groups == reference]
+    target_scores <- current_scores[current_groups == target]
+    delta <- mean(target_scores) - mean(reference_scores)
+    tested <- .activity_group_test(target_scores, reference_scores, test)
+    data.frame(
+      source = current,
+      reference = reference,
+      target = target,
+      n_reference = length(reference_scores),
+      n_target = length(target_scores),
+      mean_reference = mean(reference_scores),
+      mean_target = mean(target_scores),
+      delta = delta,
+      statistic = tested$statistic,
+      p_value = tested$p_value,
+      stringsAsFactors = FALSE
+    )
+  })
+  contrast <- do.call(rbind, contrast)
+  contrast$adjusted_p_value <- if (all(is.na(contrast$p_value))) {
+    rep(NA_real_, nrow(contrast))
+  } else {
+    stats::p.adjust(contrast$p_value, method = "BH")
+  }
+  rownames(contrast) <- NULL
+  contrast
 }
 
 #' Extract named WGCNA module labels
@@ -738,4 +872,159 @@ cluster_nmf_classes <- function(
 .de_optional_numeric_column <- function(table, column) {
   if (is.null(column)) return(rep(NA_real_, nrow(table)))
   .de_numeric_column(table, column, column)
+}
+
+.activity_prepare_result <- function(
+    result,
+    value,
+    source,
+    sample,
+    statistic,
+    statistic_column,
+    require_sample = TRUE
+) {
+  result <- as.data.frame(result, optional = TRUE)
+  .de_assert_column(result, value, "value")
+  .de_assert_column(result, source, "source")
+  if (require_sample) {
+    .de_assert_column(result, sample, "sample")
+  }
+  .activity_filter_statistic(result, statistic, statistic_column)
+}
+
+.activity_filter_statistic <- function(result, statistic, statistic_column) {
+  if (!is.null(statistic)) {
+    .assert_scalar_character(statistic, "statistic")
+    .de_assert_column(result, statistic_column, "statistic_column")
+    result <- result[
+      as.character(result[[statistic_column]]) == statistic,
+      ,
+      drop = FALSE
+    ]
+    if (!nrow(result)) {
+      stop("No rows match the requested `statistic`.", call. = FALSE)
+    }
+  } else if (statistic_column %in% names(result)) {
+    available <- unique(as.character(result[[statistic_column]]))
+    available <- available[!is.na(available)]
+    if (length(available) > 1L) {
+      stop(
+        "`statistic` is required when results contain multiple statistics: ",
+        paste(available, collapse = ", "),
+        ".",
+        call. = FALSE
+      )
+    }
+  }
+  result
+}
+
+.activity_sample_groups <- function(sample_data, group, sample_ids) {
+  metadata_column <- is.character(group) && length(group) == 1L && is.null(names(group))
+  if (metadata_column) {
+    if (is.null(sample_data)) {
+      stop("`sample_data` is required when `group` is a metadata column.", call. = FALSE)
+    }
+    if (!group %in% names(sample_data)) {
+      stop("`sample_data` is missing columns: ", group, ".", call. = FALSE)
+    }
+    if (is.null(rownames(sample_data)) || !all(sample_ids %in% rownames(sample_data))) {
+      stop("`sample_data` must contain a row for every activity sample.", call. = FALSE)
+    }
+    result <- sample_data[sample_ids, group, drop = TRUE]
+    names(result) <- sample_ids
+  } else {
+    if (is.null(names(group))) {
+      stop("`group` must be a metadata column or a sample-named vector.", call. = FALSE)
+    }
+    group_ids <- names(group)
+    if (
+      anyNA(group_ids) || any(!nzchar(group_ids)) || anyDuplicated(group_ids)
+    ) {
+      stop("Names of `group` must be unique and non-missing.", call. = FALSE)
+    }
+    if (!all(sample_ids %in% group_ids)) {
+      stop("`group` must describe every activity sample.", call. = FALSE)
+    }
+    result <- group[sample_ids]
+  }
+  if (anyNA(result) || any(!nzchar(as.character(result)))) {
+    stop("Group labels cannot be missing or empty.", call. = FALSE)
+  }
+  result
+}
+
+.activity_group_test <- function(target_scores, reference_scores, test) {
+  empty <- list(statistic = NA_real_, p_value = NA_real_)
+  if (test == "none") return(empty)
+  if (length(target_scores) < 2L || length(reference_scores) < 2L) {
+    return(empty)
+  }
+  if (test == "welch") {
+    if (stats::sd(target_scores) == 0 && stats::sd(reference_scores) == 0) {
+      return(empty)
+    }
+    fit <- stats::t.test(target_scores, reference_scores)
+    return(list(
+      statistic = unname(as.numeric(fit$statistic)),
+      p_value = unname(as.numeric(fit$p.value))
+    ))
+  }
+  if (length(unique(c(target_scores, reference_scores))) < 2L) {
+    return(empty)
+  }
+  fit <- stats::wilcox.test(
+    target_scores,
+    reference_scores,
+    exact = FALSE
+  )
+  list(
+    statistic = unname(as.numeric(fit$statistic)),
+    p_value = unname(as.numeric(fit$p.value))
+  )
+}
+
+.activity_statistic_methods <- function(result, statistic, statistic_column) {
+  if (!is.null(statistic)) return(statistic)
+  if (!statistic_column %in% names(result)) return(NULL)
+  available <- unique(as.character(result[[statistic_column]]))
+  available <- available[!is.na(available)]
+  if (length(available) == 1L) available else NULL
+}
+
+.activity_score_label <- function(
+    result,
+    statistic = NULL,
+    statistic_column = "statistic",
+    scaled = FALSE,
+    prefix = NULL
+) {
+  if (scaled) return("Row z-score")
+  method <- .activity_statistic_methods(result, statistic, statistic_column)
+  label <- if (!is.null(method) && length(method) == 1L && nzchar(method)) {
+    display <- if (grepl("^[A-Za-z0-9]+$", method)) toupper(method) else method
+    paste(display, "activity score")
+  } else {
+    "Estimated activity"
+  }
+  if (is.null(prefix)) return(label)
+  paste(prefix, label)
+}
+
+.activity_warn_enrichment_statistic <- function(result, statistic_column = "statistic") {
+  enrichment_style <- c("aucell", "fgsea", "gsva", "ora")
+  if (!statistic_column %in% names(result)) return(invisible(result))
+  methods <- unique(tolower(as.character(result[[statistic_column]])))
+  methods <- methods[!is.na(methods)]
+  bad <- intersect(methods, enrichment_style)
+  if (length(bad)) {
+    warning(
+      "This result includes enrichment-style decoupleR statistic(s): ",
+      paste(bad, collapse = ", "),
+      ". Activity plots display the score column and do not convert ",
+      "enrichment into regulator activity.",
+      call. = FALSE
+    )
+  }
+  invisible(result)
 }

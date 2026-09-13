@@ -133,6 +133,16 @@ test_that("activity, WGCNA, and NMF outputs have public downstream accessors", {
   matrix <- activity_matrix(activity, statistic = "ulm")
   expect_identical(dim(matrix), c(2L, 3L))
   expect_error(activity_matrix(activity), "statistic.*required")
+  groups <- stats::setNames(
+    rep(c("control", "treated"), length.out = 3L),
+    c("sample1", "sample2", "sample3")
+  )
+  contrast <- activity_contrast(
+    activity, group = groups, statistic = "ulm", test = "none"
+  )
+  expect_identical(nrow(contrast), 2L)
+  expect_true(all(is.finite(contrast$delta)))
+  expect_true(all(is.na(contrast$p_value)))
 
   modules <- coexpr_modules(list(colors = c(gene1 = "blue", gene2 = "brown")))
   expect_identical(modules, c(gene1 = "blue", gene2 = "brown"))

@@ -168,6 +168,17 @@ feature_id, effect, standard_error, statistic, p_value, adjusted_p_value
 - 分组和 feature label 仍按名称连接；重复的显示标签用 `make.unique()` 区分，避免多个 feature 合并到同一离散轴位置。
 - 行标准化值使用固定发散色阶，未标准化 assay 值使用连续 viridis 色阶。
 
+### Regulatory activity
+
+活性图只展示已经算好的 decoupleR 分数，不重新推断，也不把 ORA/GSEA 改写成活性。
+
+- `plot_activity_heatmap()` 的填充是后端活性分数（如 ULM *t*）或其行 *z*-score，轴名与色条必须写 activity score，不能写 NES 或 enrichment。
+- 表型以 annotation bar 按样本名连接；多个列名画多条顶栏。聚类只改顺序。
+- `plot_activity_rank()` 对样本级长表取每个 regulator 的平均活性；对 `activity_contrast()` 表画 `delta`。`sources` 由调用者显式给出或使用结果中的全部 source，函数不按 *p*-value 自动挑“top TF”。
+- `plot_activity_sample()` 要求显式 `sources`，按表型画 box/violin 加 jitter。图本身用 caption 标明这是调用者给出的子集，不是按 *p*-value 自动挑的 top-N。
+- `plot_activity_volcano()` 只接受 `activity_contrast()`：横轴是组均值差，纵轴是该两组比较的原始 *p* 的 `-log10`。点按活性差符号着为蓝色 Down、灰色 Not significant、橙红色 Up；`colour` 必须画在 `geom_point()` 上。水平虚线标出名义 *p* = 0.05。BH FDR 不是 y 轴坐标，也不再把全部点涂成同一灰色。
+- 若结果含 `ora`/`fgsea`/`gsva`/`aucell`，绘图发出警告：显示的仍是 score 列，不会把富集转换成活性。
+
 ### GSEA 细节图
 
 GSEA 细节图需要完整 ranked list、命中位置和 running enrichment score，因此
