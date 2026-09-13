@@ -22,7 +22,7 @@
 | 竞争/旋转集合检验 | `enrich_camera()`、`enrich_fry()`、`enrich_roast()` | limma | 表达矩阵、设计和 contrast |
 | 稳健样本 signature | `score_singscore()` | singscore | 每个样本的基因秩 |
 | 多方法活性推断 | `activity_decouple()` | decoupleR | 表达矩阵和长表网络/集合 |
-| 生存曲线/判别 | `surv_km()`、`surv_roc()`、`surv_cox_table()`、`surv_risk_groups()`、`plot_surv_km()`、`plot_surv_forest()`、`plot_surv_risk()` | survival、timeROC | 对齐的随访、结局和 marker；无真实随访时应标明合成诊断结局 |
+| 生存曲线/判别 | `surv_km()`、`surv_roc()`、`surv_auc_table()`、`surv_cox_table()`、`surv_risk_groups()`、`plot_surv_km()`、`plot_surv_forest()`、`plot_surv_risk()`、`plot_surv_auc()` | survival、timeROC | 对齐的随访、结局和 marker；无真实随访时应标明合成诊断结局 |
 
 ## 2. 富集和活性方法如何选择
 

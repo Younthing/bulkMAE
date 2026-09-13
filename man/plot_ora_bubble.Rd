@@ -55,6 +55,7 @@ Other plotting:
 \code{\link[=plot_qc_library]{plot_qc_library()}},
 \code{\link[=plot_qc_outliers]{plot_qc_outliers()}},
 \code{\link[=plot_save]{plot_save()}},
+\code{\link[=plot_surv_auc]{plot_surv_auc()}},
 \code{\link[=plot_surv_forest]{plot_surv_forest()}},
 \code{\link[=plot_surv_km]{plot_surv_km()}},
 \code{\link[=plot_surv_risk]{plot_surv_risk()}},

@@ -31,7 +31,7 @@ invisible(suppressPackageStartupMessages(
 
 # 本文完成什么
 
-本文只做预后建模这一条主线：预先指定 signature、按分数分层、拟合 Kaplan–Meier 和 Cox，并画出该分析在文献中的三张标准图。`airway`
+本文只做预后建模这一条主线：预先指定 signature、按分数分层、拟合 Kaplan–Meier 和 Cox，并画出该分析在文献中的标准图（KM、森林图、风险分数箱线，以及 AUC(t) 钩子）。`airway`
 没有随访。下面先如实说明这一点，再使用**合成、仅供诊断**的 time/event；图注不会把结果写成真实临床队列，更不会写成独立外部验证。
 
 安装完成后，分析与渲染不访问网络。缺少教学依赖时先运行：
@@ -48,23 +48,26 @@ knitr::kable(
     question = c(
       "风险组或临床分层的生存曲线？",
       "选定变量的风险比与置信区间？",
-      "样本风险分数如何分布、是否随结局分开？"
+      "样本风险分数如何分布、是否随结局分开？",
+      "标记在若干随访时间点的判别（AUC(t)）？"
     ),
     input = c(
       "对齐的 time/event + 分层变量",
       "已拟合 coxph 或单变量 Cox 表",
-      "已计算的具名风险分数 + 对齐分组"
+      "已计算的具名风险分数 + 对齐分组",
+      "已计算的 timeROC 或 surv_auc_table()"
     ),
     function_name = c(
       "surv_km(); plot_surv_km()",
       "surv_cox()/surv_cox_univariable(); plot_surv_forest()",
-      "score_signature(); surv_risk_groups(); plot_surv_risk()"
+      "score_signature(); surv_risk_groups(); plot_surv_risk()",
+      "surv_roc()/surv_auc_table(); plot_surv_auc()"
     ),
     check.names = FALSE
   ),
   col.names = c("问题", "必需输入", "bulkMAE 接口"),
   row.names = FALSE,
-  caption = "预后图的最小选择表。时间依赖 ROC 已有 surv_roc()，本文不另加依赖、也不画 ROC。"
+  caption = "预后图的最小选择表。AUC(t) 用已有 surv_roc()（timeROC）或 surv_auc_table() 的累计/动态回退，不另加依赖。"
 )
 ```
 
@@ -186,10 +189,10 @@ km_diff <- survival::survdiff(
 km_p <- stats::pchisq(km_diff$chisq, df = length(km_diff$n) - 1L, lower.tail = FALSE)
 ```
 
-同一合成队列上的 log-rank p 值为 `r format.pval(km_p, digits = 3)`。这只描述当前模拟，不是独立验证。
+同一合成队列上的 log-rank p 值为 `r format.pval(km_p, digits = 3)`。图上也会写出该值。这只描述当前模拟，不是独立验证。合成随访时间单位是**天**。
 
-```{r km-plot, fig.width=4.2, fig.height=3.2, fig.cap="图 1：合成随访上按中位风险分数分层的 Kaplan–Meier 曲线和 number-at-risk。结局由 mae_simulate() 生成，不是真实临床队列。", fig.alt="两条合成风险组的 Kaplan-Meier 曲线、点状删失标记、置信带和曲线下方的 number-at-risk 表。"}
-plot_surv_km(km) +
+```{r km-plot, fig.width=4.2, fig.height=3.2, fig.cap="图 1：合成随访（天）上按中位风险分数分层的 Kaplan–Meier 曲线、number-at-risk 和 log-rank p。结局由 mae_simulate() 生成，不是真实临床队列。", fig.alt="两条合成风险组的 Kaplan-Meier 曲线、点状删失标记、置信带、log-rank p 值和曲线下方的 number-at-risk 表。横轴单位为天。"}
+plot_surv_km(km, time_unit = "days") +
   labs(title = "Synthetic risk groups (diagnostic)")
 ```
 
@@ -225,7 +228,7 @@ knitr::kable(
 合成 `risk_score` 的单变量 C-index 为
 `r format(concordance, digits = 3)`。这是 apparent discrimination，用的是拟合同一批样本，不是外部验证。
 
-```{r forest-plot, fig.width=4.4, fig.height=2.6, fig.cap="图 2：合成队列上预先指定变量的单变量 Cox 森林图。横轴是风险比；条带是置信区间。不是独立队列验证。", fig.alt="合成 risk_score、年龄和处理分组的对数轴风险比点和置信区间，右侧写着 HR 与区间。"}
+```{r forest-plot, fig.width=4.8, fig.height=2.8, fig.cap="图 2：合成队列上预先指定变量的单变量 Cox 森林图。横轴是风险比；条带是置信区间；右侧写 HR、区间和系数 p 值。可读变量名，不是原始列码。不是独立队列验证。", fig.alt="合成风险分数、年龄和处理分组的对数轴风险比点和置信区间，右侧写着 HR、区间和 p 值。"}
 plot_surv_forest(
   cox_table,
   term_labels = c(
@@ -239,7 +242,7 @@ plot_surv_forest(
 
 # 风险分数与结局
 
-```{r risk-plot, fig.width=3.4, fig.height=2.8, fig.cap="图 3：合成风险分数按合成事件状态分组的箱线图。分组和分数来自同一模拟队列，只用于检查对齐。", fig.alt="按合成事件 0/1 分组的风险分数箱线图。"}
+```{r risk-plot, fig.width=3.4, fig.height=2.8, fig.cap="图 3：合成风险分数按合成事件状态分组的箱线图，带 jitter 和两组 Wilcoxon p。分组和分数来自同一模拟队列，只用于检查对齐。", fig.alt="按合成删失/事件分组的风险分数箱线图，叠加散点和 Wilcoxon p 值。"}
 event_group <- factor(
   samples[names(score), "event"],
   levels = c(0, 1),
@@ -250,12 +253,39 @@ plot_surv_risk(score, group = event_group, type = "box") +
   labs(title = "Synthetic score by event status")
 ```
 
+# 时间依赖 AUC
+
+`surv_roc()` 在安装了 `timeROC` 时返回原生 IPCW 结果。未安装时，`surv_auc_table()` 用累计/动态 AUC 做诊断回退：时刻 t 的病例是 t 及以前发生关注事件的样本，对照是 t 之后仍在风险集中的样本。这不是 Uno IPCW，也不是外部验证。
+
+```{r auc-table}
+auc_times <- c(180, 360, 540)
+auc_table <- surv_auc_table(
+  mae,
+  "rna",
+  time = "survival_time",
+  event = "event",
+  marker = score,
+  times = auc_times,
+  cause = 1
+)
+auc_estimator <- unique(auc_table$estimator)
+```
+
+`r paste(auc_estimator, collapse = ", ")` 估计在
+`r paste(auc_table$time, collapse = "、")` 天的 AUC 为
+`r paste(format(auc_table$auc, digits = 3), collapse = "、")`。
+
+```{r auc-plot, fig.width=4.2, fig.height=2.8, fig.cap="图 4：合成标记在若干随访天数上的 AUC(t)。这是同一诊断队列上的表观判别，不是独立验证。", fig.alt="合成风险分数的时间依赖 AUC 折线，横轴为天，0.5 处有参考线。"}
+plot_surv_auc(auc_table, time_unit = "days") +
+  labs(title = "Synthetic AUC(t) (diagnostic)")
+```
+
 # 限制与来源
 
 - `airway` 没有真实随访。挂到 airway 上的 time/event，以及 `mae_simulate()` 的生存列，都是合成诊断数据。
-- 8 个 airway 样本不能支持预后结论。图 1–3 来自 n = `r nrow(samples)` 的模拟队列。
-- 中位分层、单变量 Cox 和 C-index 都在同一队列上计算，不是锁定模型后的外部验证。
-- 未引入 LINCS、对接或新的富集封装。时间依赖 ROC 可在有 `timeROC` 时用已有 `surv_roc()`，本文跳过。
+- 8 个 airway 样本不能支持预后结论。图 1–4 来自 n = `r nrow(samples)` 的模拟队列。
+- 中位分层、单变量 Cox、C-index 和 AUC(t) 都在同一队列上计算，不是锁定模型后的外部验证。
+- 未引入 LINCS、对接或新的富集封装。`plot_surv_auc()` 画已算好的 AUC(t)；有 `timeROC` 时走 `surv_roc()`，否则用累计/动态回退。
 
 数据：Bioconductor airway ExperimentData 包（Himes 等，PLoS ONE 2014；PMID 24926665；GEO GSE52778）只用于证明它没有随访。图中结局来自 `mae_simulate()`。
 

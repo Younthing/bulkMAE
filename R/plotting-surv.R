@@ -11,6 +11,11 @@
 #' @param risk_table Print the number at risk under the survival panel.
 #' @param risk_times Optional non-negative times for the risk table. The
 #'   default uses pretty breaks of the observed follow-up.
+#' @param time_unit Unit written on the x axis, for example `"days"` or
+#'   `"months"`. Use `NULL` to keep the axis as `"Time"`.
+#' @param show_pvalue Draw a log-rank *p*-value when `fit` has two or more
+#'   strata. The statistic is computed from the already-fitted `survfit`
+#'   risk/event tables and matches `survival::survdiff()`.
 #'
 #' @return An unprinted standard ggplot object carrying recommended physical
 #'   dimensions for [plot_save()].
@@ -21,12 +26,15 @@ plot_surv_km <- function(
     conf_int = TRUE,
     censor = TRUE,
     risk_table = TRUE,
-    risk_times = NULL
+    risk_times = NULL,
+    time_unit = "days",
+    show_pvalue = TRUE
 ) {
   .require_backend("survival", "to plot Kaplan-Meier curves")
   .plot_assert_flag(conf_int, "conf_int")
   .plot_assert_flag(censor, "censor")
   .plot_assert_flag(risk_table, "risk_table")
+  .plot_assert_flag(show_pvalue, "show_pvalue")
   curves <- .plot_survfit_frame(fit)
   palette <- .plot_surv_palette(levels(curves$strata))
   stepped <- .plot_surv_stairstep(curves)
@@ -128,6 +136,26 @@ plot_surv_km <- function(
       )
   }
 
+  logrank_p <- if (show_pvalue && n_strata > 1L) {
+    .plot_surv_logrank_p(fit)
+  } else {
+    NA_real_
+  }
+  if (is.finite(logrank_p)) {
+    plot <- plot +
+      ggplot2::annotate(
+        "text",
+        x = -Inf,
+        y = 1,
+        label = .plot_surv_format_p(logrank_p, prefix = "Log-rank p"),
+        hjust = -0.05,
+        vjust = 1.35,
+        size = .bulkmae_text_size_pt,
+        size.unit = "pt",
+        colour = "#333333"
+      )
+  }
+
   plot <- plot +
     ggplot2::scale_colour_manual(values = palette, drop = FALSE)
   if (has_interval) {
@@ -144,13 +172,14 @@ plot_surv_km <- function(
     ) +
     ggplot2::coord_cartesian(ylim = y_limits, clip = "off") +
     ggplot2::labs(
-      x = "Time",
+      x = .plot_surv_time_lab(time_unit),
       y = "Survival probability",
       colour = if (n_strata > 1L) "Stratum" else NULL,
       alt = paste0(
         "Kaplan-Meier survival curves",
         if (has_interval) " with pointwise confidence bands" else "",
         if (risk_table) " and a number-at-risk table" else "",
+        if (is.finite(logrank_p)) " with a log-rank p-value" else "",
         "."
       )
     ) +
@@ -193,8 +222,11 @@ plot_surv_km <- function(
 #' axis. The constructor does not refit Cox models.
 #'
 #' @param x A `coxph` object or a data frame with `term`, `hazard_ratio`,
-#'   `conf_low`, and `conf_high`.
+#'   `conf_low`, and `conf_high`. A `p_value` column is annotated when present
+#'   or when `x` is a `coxph` fit.
 #' @param term_labels Optional uniquely named labels for a subset or all terms.
+#'   When omitted, snake_case terms and univariable `predictor` columns are
+#'   converted to readable names such as `risk_score` → `Risk score`.
 #'
 #' @return An unprinted standard ggplot object carrying recommended physical
 #'   dimensions for [plot_save()].
@@ -202,14 +234,21 @@ plot_surv_km <- function(
 #' @export
 plot_surv_forest <- function(x, term_labels = NULL) {
   table <- .plot_surv_forest_table(x)
-  table$display <- .plot_surv_term_labels(table$term, term_labels)
-  table$display <- factor(table$display, levels = rev(table$display))
+  table$display <- .plot_surv_display_terms(table, term_labels)
+  table$display <- factor(table$display, levels = rev(unique(table$display)))
   table$hr_label <- sprintf(
     "%.2f (%.2f-%.2f)",
     table$hazard_ratio,
     table$conf_low,
     table$conf_high
   )
+  if ("p_value" %in% names(table)) {
+    table$hr_label <- paste0(
+      table$hr_label,
+      "; ",
+      vapply(table$p_value, .plot_surv_format_p, character(1), prefix = "p")
+    )
+  }
   x_max <- max(table$conf_high, 1)
   x_min <- min(table$conf_low, 1)
   if (x_min <= 0) {
@@ -246,13 +285,17 @@ plot_surv_forest <- function(x, term_labels = NULL) {
     ggplot2::coord_cartesian(clip = "off") +
     ggplot2::labs(
       x = "Hazard ratio",
-      y = "Term",
-      alt = "Forest plot of Cox hazard ratios with confidence intervals."
+      y = "Variable",
+      alt = paste0(
+        "Forest plot of Cox hazard ratios with confidence intervals",
+        if ("p_value" %in% names(table)) " and coefficient p-values" else "",
+        "."
+      )
     ) +
     theme_bulkmae() +
     ggplot2::theme(
       panel.grid.major.y = ggplot2::element_blank(),
-      plot.margin = ggplot2::margin(4, 42, 4, 6, unit = "pt")
+      plot.margin = ggplot2::margin(4, 68, 4, 6, unit = "pt")
     )
   .plot_with_dimensions(
     plot,
@@ -282,12 +325,21 @@ plot_surv_forest <- function(x, term_labels = NULL) {
 #' @param score A uniquely named finite numeric vector, one value per sample.
 #' @param group Optional named vector or factor aligned to `names(score)`.
 #' @param type `"density"` or `"box"`. A box plot requires `group`.
+#' @param show_pvalue For `type = "box"`, annotate a two-group Wilcoxon
+#'   rank-sum *p*-value or a Kruskal-Wallis *p*-value for three or more groups.
+#' @param jitter Overlay individual points on the box plot.
 #'
 #' @return An unprinted standard ggplot object carrying recommended physical
 #'   dimensions for [plot_save()].
 #' @family plotting
 #' @export
-plot_surv_risk <- function(score, group = NULL, type = c("density", "box")) {
+plot_surv_risk <- function(
+    score,
+    group = NULL,
+    type = c("density", "box"),
+    show_pvalue = TRUE,
+    jitter = TRUE
+) {
   type <- match.arg(type)
   .assert_named_numeric(score, "score")
   data <- data.frame(
@@ -304,22 +356,66 @@ plot_surv_risk <- function(score, group = NULL, type = c("density", "box")) {
     if (is.null(group)) {
       stop("`group` is required when `type = \"box\"`.", call. = FALSE)
     }
+    .plot_assert_flag(show_pvalue, "show_pvalue")
+    .plot_assert_flag(jitter, "jitter")
     palette <- .plot_surv_palette(levels(data$group))
+    group_test <- if (show_pvalue) {
+      .plot_surv_group_p(data$score, data$group)
+    } else {
+      list(p_value = NA_real_, method = NA_character_)
+    }
     plot <- ggplot2::ggplot(
       data,
       ggplot2::aes(x = .data[["group"]], y = .data[["score"]], fill = .data[["group"]])
     ) +
       ggplot2::geom_boxplot(
         width = 0.62,
+        outlier.shape = if (jitter) NA else 19,
         outlier.size = 0.8,
         colour = "#333333",
         linewidth = 0.3
-      ) +
+      )
+    if (jitter) {
+      plot <- plot +
+        ggplot2::geom_jitter(
+          width = 0.14,
+          height = 0,
+          size = 0.55,
+          alpha = 0.7,
+          colour = "#333333",
+          stroke = 0.2
+        )
+    }
+    if (is.finite(group_test$p_value)) {
+      y_max <- max(data$score)
+      y_min <- min(data$score)
+      pad <- max(0.12 * (y_max - y_min), sqrt(.Machine$double.eps))
+      plot <- plot +
+        ggplot2::annotate(
+          "text",
+          x = mean(seq_len(nlevels(data$group))),
+          y = y_max + pad,
+          label = .plot_surv_format_p(
+            group_test$p_value,
+            prefix = group_test$method
+          ),
+          size = .bulkmae_text_size_pt,
+          size.unit = "pt",
+          colour = "#333333"
+        ) +
+        ggplot2::expand_limits(y = y_max + 1.35 * pad)
+    }
+    plot <- plot +
       ggplot2::scale_fill_manual(values = palette, name = "Group", drop = FALSE) +
       ggplot2::labs(
         x = "Group",
         y = "Risk score",
-        alt = "Box plot of a risk score stratified by an aligned outcome or risk group."
+        alt = paste0(
+          "Box plot of a risk score stratified by an aligned outcome or risk group",
+          if (jitter) " with jittered points" else "",
+          if (is.finite(group_test$p_value)) " and a between-group p-value" else "",
+          "."
+        )
       ) +
       theme_bulkmae() +
       ggplot2::theme(legend.position = "none")
@@ -367,6 +463,66 @@ plot_surv_risk <- function(score, group = NULL, type = c("density", "box")) {
       theme_bulkmae()
   }
   .plot_with_dimensions(plot, width = 8.5, height = 6.5)
+}
+
+#' Plot time-dependent AUC from already-computed results
+#'
+#' Draws AUC(t) from a native `timeROC` object or from a table produced by
+#' [surv_auc_table()]. The constructor does not estimate a new ROC model.
+#'
+#' @param x A `timeROC` / `ipcwsurvivalROC` object or a data frame with
+#'   `time` and `auc`. Optional `conf_low` and `conf_high` columns are drawn
+#'   as a ribbon when finite.
+#' @param time_unit Unit written on the x axis. Use `NULL` to keep `"Time"`.
+#'
+#' @return An unprinted standard ggplot object carrying recommended physical
+#'   dimensions for [plot_save()].
+#' @family plotting
+#' @export
+plot_surv_auc <- function(x, time_unit = "days") {
+  table <- .plot_surv_auc_frame(x)
+  has_interval <- all(c("conf_low", "conf_high") %in% names(table)) &&
+    any(is.finite(table$conf_low) & is.finite(table$conf_high))
+  estimator <- if ("estimator" %in% names(table) && length(unique(table$estimator)) == 1L) {
+    as.character(table$estimator[[1L]])
+  } else {
+    NULL
+  }
+  plot <- ggplot2::ggplot(table, ggplot2::aes(x = .data[["time"]], y = .data[["auc"]]))
+  if (has_interval) {
+    ribbon <- table[is.finite(table$conf_low) & is.finite(table$conf_high), , drop = FALSE]
+    if (nrow(ribbon)) {
+      plot <- plot +
+        ggplot2::geom_ribbon(
+          data = ribbon,
+          mapping = ggplot2::aes(ymin = .data[["conf_low"]], ymax = .data[["conf_high"]]),
+          fill = .bulkmae_colours[["blue"]],
+          alpha = 0.16,
+          colour = NA
+        )
+    }
+  }
+  plot <- plot +
+    ggplot2::geom_hline(
+      yintercept = 0.5,
+      linetype = 2,
+      colour = "#777777",
+      linewidth = 0.3
+    ) +
+    ggplot2::geom_line(colour = .bulkmae_colours[["blue"]], linewidth = 0.45) +
+    ggplot2::geom_point(colour = .bulkmae_colours[["blue"]], size = 1.3) +
+    ggplot2::scale_y_continuous(limits = c(0.4, 1), breaks = c(0.5, 0.6, 0.7, 0.8, 0.9, 1)) +
+    ggplot2::labs(
+      x = .plot_surv_time_lab(time_unit),
+      y = "AUC(t)",
+      alt = paste0(
+        "Time-dependent AUC curve",
+        if (!is.null(estimator)) paste0(" using the ", estimator, " estimator") else "",
+        "."
+      )
+    ) +
+    theme_bulkmae()
+  .plot_with_dimensions(plot, width = 8.5, height = 6.2)
 }
 
 .plot_survfit_frame <- function(fit) {
@@ -580,4 +736,206 @@ plot_surv_risk <- function(score, group = NULL, type = c("density", "box")) {
     return(unname(.bulkmae_qualitative))
   }
   stats::setNames(unname(.bulkmae_qualitative[seq_along(levels)]), levels)
+}
+
+.plot_surv_time_lab <- function(time_unit) {
+  if (is.null(time_unit)) {
+    return("Time")
+  }
+  if (!is.character(time_unit) || length(time_unit) != 1L || is.na(time_unit)) {
+    stop("`time_unit` must be one non-missing string or NULL.", call. = FALSE)
+  }
+  time_unit <- trimws(time_unit)
+  if (!nzchar(time_unit)) {
+    return("Time")
+  }
+  paste0("Time (", time_unit, ")")
+}
+
+.plot_surv_format_p <- function(p, prefix = "p") {
+  if (!length(p) || is.na(p[[1L]]) || !is.finite(p[[1L]])) {
+    return(paste0(prefix, " = NA"))
+  }
+  p <- p[[1L]]
+  if (p < 0.001) {
+    paste0(prefix, " < 0.001")
+  } else {
+    paste0(prefix, " = ", formatC(p, digits = 3, format = "fg"))
+  }
+}
+
+.plot_surv_title_case <- function(x) {
+  x <- gsub("_", " ", as.character(x), fixed = TRUE)
+  x <- trimws(gsub("\\s+", " ", x))
+  ifelse(
+    !nzchar(x),
+    x,
+    paste0(toupper(substr(x, 1L, 1L)), substring(x, 2L))
+  )
+}
+
+.plot_surv_pretty_term <- function(term, predictors = character()) {
+  predictors <- unique(as.character(predictors))
+  predictors <- predictors[nzchar(predictors) & !is.na(predictors)]
+  if (length(predictors)) {
+    hits <- predictors[startsWith(term, predictors)]
+    if (length(hits)) {
+      pred <- hits[[which.max(nchar(hits))]]
+      rest <- substring(term, nchar(pred) + 1L)
+      if (!nzchar(rest)) {
+        return(.plot_surv_title_case(pred))
+      }
+      return(paste0(.plot_surv_title_case(pred), ": ", rest))
+    }
+  }
+  .plot_surv_title_case(term)
+}
+
+.plot_surv_display_terms <- function(table, term_labels) {
+  if (!is.null(term_labels)) {
+    return(.plot_surv_term_labels(table$term, term_labels))
+  }
+  predictors <- if ("predictor" %in% names(table)) {
+    as.character(table$predictor)
+  } else {
+    character()
+  }
+  vapply(
+    seq_along(table$term),
+    function(i) {
+      pred <- if (length(predictors)) predictors[[i]] else character()
+      .plot_surv_pretty_term(table$term[[i]], pred)
+    },
+    character(1)
+  )
+}
+
+.survfit_nrisk_just_before <- function(time, n.risk, n.event, n.censor, t) {
+  at <- which(time <= t + 1e-12)
+  if (!length(at)) {
+    return(n.risk[[1L]])
+  }
+  last <- at[[length(at)]]
+  if (abs(time[[last]] - t) <= 1e-12) {
+    return(n.risk[[last]])
+  }
+  max(n.risk[[last]] - n.event[[last]] - n.censor[[last]], 0)
+}
+
+.survfit_nevent_at <- function(time, n.event, t) {
+  at <- which(abs(time - t) <= 1e-12)
+  if (!length(at)) {
+    return(0)
+  }
+  sum(n.event[at])
+}
+
+.plot_surv_logrank_p <- function(fit) {
+  if (is.null(fit$strata) || length(fit$strata) < 2L) {
+    return(NA_real_)
+  }
+  event_times <- unique(as.numeric(fit$time[as.numeric(fit$n.event) > 0]))
+  event_times <- event_times[is.finite(event_times)]
+  if (!length(event_times)) {
+    return(NA_real_)
+  }
+  n_censor <- if (!is.null(fit$n.censor)) {
+    as.numeric(fit$n.censor)
+  } else {
+    rep(0, length(fit$time))
+  }
+  ends <- cumsum(as.integer(fit$strata))
+  starts <- c(1L, ends[-length(ends)] + 1L)
+  k <- length(ends)
+  if (k < 2L) {
+    return(NA_real_)
+  }
+  observed <- numeric(k)
+  expected <- numeric(k)
+  variance <- matrix(0, k, k)
+  for (event_time in event_times) {
+    n <- numeric(k)
+    d <- numeric(k)
+    for (i in seq_len(k)) {
+      idx <- starts[[i]]:ends[[i]]
+      n[[i]] <- .survfit_nrisk_just_before(
+        fit$time[idx],
+        as.numeric(fit$n.risk[idx]),
+        as.numeric(fit$n.event[idx]),
+        n_censor[idx],
+        event_time
+      )
+      d[[i]] <- .survfit_nevent_at(
+        fit$time[idx],
+        as.numeric(fit$n.event[idx]),
+        event_time
+      )
+    }
+    n_total <- sum(n)
+    d_total <- sum(d)
+    if (n_total <= 1 || d_total <= 0) {
+      next
+    }
+    observed <- observed + d
+    expected <- expected + n * d_total / n_total
+    factor <- d_total * (n_total - d_total) / (n_total^2 * (n_total - 1))
+    if (!is.finite(factor)) {
+      next
+    }
+    for (i in seq_len(k)) {
+      for (j in seq_len(k)) {
+        variance[i, j] <- variance[i, j] + if (identical(i, j)) {
+          n[[i]] * (n_total - n[[i]]) * factor
+        } else {
+          -n[[i]] * n[[j]] * factor
+        }
+      }
+    }
+  }
+  keep <- seq_len(k - 1L)
+  contrast <- (observed - expected)[keep]
+  v <- variance[keep, keep, drop = FALSE]
+  inverse <- tryCatch(solve(v), error = function(e) NULL)
+  if (is.null(inverse)) {
+    return(NA_real_)
+  }
+  chi <- as.numeric(t(contrast) %*% inverse %*% contrast)
+  if (!is.finite(chi) || chi < 0) {
+    return(NA_real_)
+  }
+  stats::pchisq(chi, df = k - 1L, lower.tail = FALSE)
+}
+
+.plot_surv_group_p <- function(score, group) {
+  group <- droplevels(group)
+  n_groups <- nlevels(group)
+  if (n_groups < 2L) {
+    return(list(p_value = NA_real_, method = "p"))
+  }
+  counts <- table(group)
+  if (any(counts < 1L)) {
+    return(list(p_value = NA_real_, method = "p"))
+  }
+  if (n_groups == 2L) {
+    if (any(counts < 2L)) {
+      return(list(p_value = NA_real_, method = "Wilcoxon p"))
+    }
+    tested <- stats::wilcox.test(score ~ group, exact = FALSE)
+    return(list(p_value = unname(tested$p.value), method = "Wilcoxon p"))
+  }
+  tested <- stats::kruskal.test(score ~ group)
+  list(p_value = unname(tested$p.value), method = "Kruskal-Wallis p")
+}
+
+.plot_surv_auc_frame <- function(x) {
+  if (.surv_is_timeroc(x)) {
+    return(.surv_auc_from_timeroc(x))
+  }
+  if (!is.data.frame(x)) {
+    stop(
+      "`x` must be a timeROC result or an AUC table with `time` and `auc`.",
+      call. = FALSE
+    )
+  }
+  .surv_auc_validate_table(x)
 }

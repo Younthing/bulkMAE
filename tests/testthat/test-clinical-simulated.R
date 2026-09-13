@@ -200,6 +200,29 @@ test_that("surv_roc returns a native timeROC result", {
   )
 })
 
+test_that("surv_auc_table returns a diagnostic cumulative/dynamic table", {
+  skip_if_not_installed("survival")
+  mae <- make_simulated_mae()
+  data <- mae_samples(mae, "rna")
+  evaluation_times <- as.numeric(stats::quantile(data$time, c(0.4, 0.6)))
+  table <- surv_auc_table(
+    mae,
+    "rna",
+    time = "time",
+    event = "event",
+    marker = "risk_score",
+    times = evaluation_times,
+    cause = 1
+  )
+  expect_true(all(c("time", "auc", "n_case", "n_control", "estimator") %in% names(table)))
+  expect_true(any(is.finite(table$auc)))
+  expect_true(all(table$estimator %in% c("timeROC", "cumulative_dynamic")))
+  expect_error(
+    surv_auc_table(data.frame(time = 1, auc = 1.4)),
+    "lie in"
+  )
+})
+
 test_that("penalized survival modelling is reproducible and validates folds", {
   skip_if_not_installed("survival")
   skip_if_not_installed("glmnet")

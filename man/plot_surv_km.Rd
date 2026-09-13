@@ -9,7 +9,9 @@ plot_surv_km(
   conf_int = TRUE,
   censor = TRUE,
   risk_table = TRUE,
-  risk_times = NULL
+  risk_times = NULL,
+  time_unit = "days",
+  show_pvalue = TRUE
 )
 }
 \arguments{
@@ -23,6 +25,13 @@ plot_surv_km(
 
 \item{risk_times}{Optional non-negative times for the risk table. The
 default uses pretty breaks of the observed follow-up.}
+
+\item{time_unit}{Unit written on the x axis, for example \code{"days"} or
+\code{"months"}. Use \code{NULL} to keep the axis as \code{"Time"}.}
+
+\item{show_pvalue}{Draw a log-rank \emph{p}-value when \code{fit} has two or more
+strata. The statistic is computed from the already-fitted \code{survfit}
+risk/event tables and matches \code{survival::survdiff()}.}
 }
 \value{
 An unprinted standard ggplot object carrying recommended physical
@@ -49,6 +58,7 @@ Other plotting:
 \code{\link[=plot_qc_library]{plot_qc_library()}},
 \code{\link[=plot_qc_outliers]{plot_qc_outliers()}},
 \code{\link[=plot_save]{plot_save()}},
+\code{\link[=plot_surv_auc]{plot_surv_auc()}},
 \code{\link[=plot_surv_forest]{plot_surv_forest()}},
 \code{\link[=plot_surv_risk]{plot_surv_risk()}},
 \code{\link[=theme_bulkmae]{theme_bulkmae()}}

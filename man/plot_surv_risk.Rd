@@ -4,7 +4,13 @@
 \alias{plot_surv_risk}
 \title{Plot a risk-score distribution or outcome-stratified box plot}
 \usage{
-plot_surv_risk(score, group = NULL, type = c("density", "box"))
+plot_surv_risk(
+  score,
+  group = NULL,
+  type = c("density", "box"),
+  show_pvalue = TRUE,
+  jitter = TRUE
+)
 }
 \arguments{
 \item{score}{A uniquely named finite numeric vector, one value per sample.}
@@ -12,6 +18,11 @@ plot_surv_risk(score, group = NULL, type = c("density", "box"))
 \item{group}{Optional named vector or factor aligned to \code{names(score)}.}
 
 \item{type}{\code{"density"} or \code{"box"}. A box plot requires \code{group}.}
+
+\item{show_pvalue}{For \code{type = "box"}, annotate a two-group Wilcoxon
+rank-sum \emph{p}-value or a Kruskal-Wallis \emph{p}-value for three or more groups.}
+
+\item{jitter}{Overlay individual points on the box plot.}
 }
 \value{
 An unprinted standard ggplot object carrying recommended physical
@@ -37,6 +48,7 @@ Other plotting:
 \code{\link[=plot_qc_library]{plot_qc_library()}},
 \code{\link[=plot_qc_outliers]{plot_qc_outliers()}},
 \code{\link[=plot_save]{plot_save()}},
+\code{\link[=plot_surv_auc]{plot_surv_auc()}},
 \code{\link[=plot_surv_forest]{plot_surv_forest()}},
 \code{\link[=plot_surv_km]{plot_surv_km()}},
 \code{\link[=theme_bulkmae]{theme_bulkmae()}}

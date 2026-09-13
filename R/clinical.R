@@ -188,6 +188,77 @@ surv_roc <- function(
   )
 }
 
+#' Tabulate time-dependent AUC
+#'
+#' Builds a plot-ready AUC(t) table from an already-computed `timeROC` result
+#' or from aligned follow-up and a marker. When `x` is a MultiAssayExperiment
+#' and `timeROC` is installed, values come from [surv_roc()]. Otherwise the
+#' helper computes a simple cumulative/dynamic AUC: cases are events of
+#' interest by time *t*, and controls remain at risk after *t*. That fallback
+#' is diagnostic and is not Uno's IPCW estimator.
+#'
+#' @inheritParams surv_roc
+#' @param x A `timeROC` result, a data frame with `time` and `auc`, or a
+#'   `MultiAssayExperiment` used to estimate AUC(t).
+#'
+#' @return A data frame with `time`, `auc`, `n_case`, `n_control`, and
+#'   `estimator`.
+#' @export
+surv_auc_table <- function(
+    x,
+    experiment,
+    time,
+    event,
+    marker,
+    times,
+    cause = 1,
+    ...
+) {
+  if (.surv_is_timeroc(x)) {
+    return(.surv_auc_from_timeroc(x))
+  }
+  if (is.data.frame(x) && missing(experiment) && missing(time)) {
+    return(.surv_auc_validate_table(x))
+  }
+  data <- mae_samples(x, experiment)
+  .assert_metadata_column(data, time, "time")
+  .assert_metadata_column(data, event, "event")
+  if (identical(time, event)) {
+    stop("`time` and `event` must name different metadata columns.", call. = FALSE)
+  }
+  marker <- .column_or_vector(marker, data, "marker")
+  .assert_finite_numeric(data[[time]], "time")
+  .assert_finite_numeric(data[[event]], "event")
+  .assert_finite_numeric(marker, "marker")
+  .assert_finite_numeric(times, "times")
+  if (any(data[[time]] < 0) || any(times <= 0)) {
+    stop("Follow-up `time` must be non-negative and `times` must be positive.", call. = FALSE)
+  }
+  if (length(cause) != 1L || is.na(cause) || !cause %in% data[[event]]) {
+    stop("`cause` must be one observed event code.", call. = FALSE)
+  }
+  if (!0 %in% data[[event]]) {
+    stop("`event` must contain zero-coded censored observations.", call. = FALSE)
+  }
+  if (!any(data[[event]] == cause) || !any(data[[event]] == 0)) {
+    stop("Time-dependent AUC needs both events of interest and censoring.", call. = FALSE)
+  }
+  if (requireNamespace("timeROC", quietly = TRUE)) {
+    roc <- surv_roc(
+      x,
+      experiment,
+      time = time,
+      event = event,
+      marker = marker,
+      times = times,
+      cause = cause,
+      ...
+    )
+    return(.surv_auc_from_timeroc(roc))
+  }
+  .surv_auc_cd(data[[time]], data[[event]], marker, times, cause)
+}
+
 #' Fit a Cox proportional-hazards model
 #'
 #' @inheritParams mae_pull_assay
@@ -1012,4 +1083,101 @@ drug_lincs <- function(
     stop("`", argument, "` must contain non-missing identifiers.", call. = FALSE)
   }
   value
+}
+
+.surv_is_timeroc <- function(x) {
+  inherits(x, "ipcwsurvivalROC") || inherits(x, "ipcwcompetingrisksROC")
+}
+
+.surv_auc_from_timeroc <- function(x) {
+  times <- as.numeric(x$times)
+  auc <- as.numeric(x$AUC)
+  if (!length(times) || length(auc) != length(times)) {
+    stop("The timeROC result does not contain paired `times` and `AUC`.", call. = FALSE)
+  }
+  table <- data.frame(
+    time = times,
+    auc = auc,
+    n_case = NA_integer_,
+    n_control = NA_integer_,
+    estimator = "timeROC",
+    stringsAsFactors = FALSE,
+    check.names = FALSE
+  )
+  if (!is.null(x$inference) && !is.null(x$inference$vect_sd_1)) {
+    sd_auc <- as.numeric(x$inference$vect_sd_1)
+    if (length(sd_auc) == length(times)) {
+      table$conf_low <- auc - 1.96 * sd_auc
+      table$conf_high <- auc + 1.96 * sd_auc
+    }
+  }
+  .surv_auc_validate_table(table)
+}
+
+.surv_auc_validate_table <- function(x) {
+  table <- as.data.frame(x, optional = TRUE)
+  .plot_require_columns(table, c("time", "auc"), "x")
+  .plot_assert_finite_numeric(table$time, "`x$time`")
+  if (any(table$time <= 0)) {
+    stop("`x$time` must contain positive evaluation times.", call. = FALSE)
+  }
+  if (anyDuplicated(table$time)) {
+    stop("`x$time` must be unique.", call. = FALSE)
+  }
+  if (!is.numeric(table$auc) || any(is.na(table$auc))) {
+    stop("`x$auc` must be numeric and non-missing.", call. = FALSE)
+  }
+  if (any(is.finite(table$auc) & (table$auc < 0 | table$auc > 1))) {
+    stop("`x$auc` must lie in [0, 1] when finite.", call. = FALSE)
+  }
+  if (!"n_case" %in% names(table)) {
+    table$n_case <- NA_integer_
+  }
+  if (!"n_control" %in% names(table)) {
+    table$n_control <- NA_integer_
+  }
+  if (!"estimator" %in% names(table)) {
+    table$estimator <- NA_character_
+  }
+  table[order(table$time), , drop = FALSE]
+}
+
+.surv_auc_cd <- function(time, event, marker, times, cause) {
+  times <- sort(unique(as.numeric(times)))
+  rows <- lapply(times, function(t) {
+    is_case <- event == cause & time <= t
+    is_control <- time > t
+    n_case <- sum(is_case)
+    n_control <- sum(is_control)
+    auc <- if (n_case < 1L || n_control < 1L) {
+      NA_real_
+    } else {
+      .surv_mann_whitney(marker[is_case], marker[is_control])
+    }
+    data.frame(
+      time = t,
+      auc = auc,
+      n_case = as.integer(n_case),
+      n_control = as.integer(n_control),
+      estimator = "cumulative_dynamic",
+      stringsAsFactors = FALSE,
+      check.names = FALSE
+    )
+  })
+  table <- do.call(rbind, rows)
+  rownames(table) <- NULL
+  if (!any(is.finite(table$auc))) {
+    stop(
+      "Cumulative/dynamic AUC needs at least one time with both cases and controls.",
+      call. = FALSE
+    )
+  }
+  table
+}
+
+.surv_mann_whitney <- function(cases, controls) {
+  n1 <- length(cases)
+  n2 <- length(controls)
+  ranks <- rank(c(cases, controls), ties.method = "average")
+  (sum(ranks[seq_len(n1)]) - n1 * (n1 + 1) / 2) / (n1 * n2)
 }
