@@ -186,7 +186,7 @@ plot_activity_rank(activity, sources = rank_sources) +
   labs(title = "Mean ULM activity across airway samples")
 ```
 
-```{r sample, fig.width=6.8, fig.height=4.4, fig.cap="图 3：事先选定的两个合成 regulator 在 untreated / treated 上的样本级 ULM 活性。每组 4 个点；箱线只是描述性摘要。", fig.alt="两个合成 regulator 按地塞米松分组的样本级活性箱线图，带抖动点。"}
+```{r sample, fig.width=6.8, fig.height=4.4, fig.cap="图 3：事先选定的两个合成 regulator（synth_TF01 与 synth_TF03）在 untreated / treated 上的样本级 ULM 活性。这是说明用子集，与火山图标注的同一对，不是按本次 contrast p-value 自动挑出的 top-N。每组 4 个点；箱线只是描述性摘要。", fig.alt="两个事先选定的合成 regulator 按地塞米松分组的样本级活性箱线图，带抖动点；图注说明这不是 p-value top-N。"}
 plot_activity_sample(
   activity,
   sources = c("synth_TF01", "synth_TF03"),
@@ -221,10 +221,9 @@ knitr::kable(
 )
 ```
 
-```{r volcano, fig.width=6.5, fig.height=4.8, fig.cap="图 4：合成 regulator 的组间活性差火山图。横轴是平均 ULM 活性差，纵轴是该两组比较的原始 p-value 的 −log10；颜色用 BH FDR 与效应阈值，二者不是同一条线。n = 4 对，仅作诊断。", fig.alt="六个合成 regulator 的活性差火山图，点按 FDR 与效应阈值着色。"}
+```{r volcano, fig.width=6.5, fig.height=4.8, fig.cap="图 4：合成 regulator 的组间活性差火山图。横轴是平均 ULM 活性差，纵轴是该两组比较的原始 p-value 的 −log10；点按活性差符号着色（Up / Down / NS），水平虚线标出名义 p = 0.05。BH FDR 不是这条横线。n = 4 对，仅作诊断。", fig.alt="六个合成 regulator 的活性差火山图，点按活性差正负着色，并有 p = 0.05 的水平虚线。"}
 plot_activity_volcano(
   contrast,
-  fdr = 0.05,
   min_abs_effect = 0,
   label_sources = c("synth_TF01", "synth_TF03")
 ) +

@@ -20,10 +20,12 @@ plot_activity_volcano(
 \arguments{
 \item{result}{A data frame returned by \code{\link[=activity_contrast]{activity_contrast()}}.}
 
-\item{fdr}{Maximum adjusted \emph{p}-value used only to colour points.}
+\item{fdr}{Accepted for interface parity with \code{\link[=plot_de_volcano]{plot_de_volcano()}}. It is
+validated but does not recolour points; the y axis already shows the
+two-group raw \emph{p}-value.}
 
-\item{min_abs_effect}{Minimum absolute activity difference used only to
-colour points.}
+\item{min_abs_effect}{Minimum absolute activity difference used to
+separate Up/Down from Not significant.}
 
 \item{label_sources}{Regulator identifiers to label; none are selected
 automatically.}
@@ -42,9 +44,10 @@ dimensions for \code{\link[=plot_save]{plot_save()}}.
 \description{
 Expects the table returned by \code{\link[=activity_contrast]{activity_contrast()}}. The x axis is the
 mean activity difference; the y axis is \code{-log10} of the two-group
-\emph{p}-value from that helper. Colour uses the same FDR and effect-size
-rule as \code{\link[=plot_de_volcano]{plot_de_volcano()}}, but the test is applied to inferred
-activities, not gene-level differential expression.
+\emph{p}-value from that helper. Colour is the sign of that activity
+difference (Up / Down / Not significant). A dashed horizontal line marks
+nominal \emph{p} = 0.05 on the same raw-\emph{p} scale as the y axis. BH FDR is
+not a y-coordinate and is not used to recolour points.
 }
 \seealso{
 Other plotting:

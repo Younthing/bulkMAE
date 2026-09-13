@@ -46,7 +46,8 @@ dimensions for \code{\link[=plot_save]{plot_save()}}.
 \description{
 Draws already-inferred per-sample activity scores for an explicit set of
 regulators. Points are the samples; boxes or violins summarise the
-phenotype groups supplied by the caller.
+phenotype groups supplied by the caller. The figure states that only this
+caller-supplied subset is shown; it is not a \emph{p}-value top-N.
 }
 \seealso{
 Other plotting:

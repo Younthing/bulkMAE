@@ -222,7 +222,8 @@ plot_activity_rank <- function(
 #'
 #' Draws already-inferred per-sample activity scores for an explicit set of
 #' regulators. Points are the samples; boxes or violins summarise the
-#' phenotype groups supplied by the caller.
+#' phenotype groups supplied by the caller. The figure states that only this
+#' caller-supplied subset is shown; it is not a *p*-value top-N.
 #'
 #' @param result A data-frame-like activity result.
 #' @param sources Regulator identifiers to display. Required and not chosen
@@ -301,7 +302,19 @@ plot_activity_sample <- function(
     ggplot2::scale_fill_manual(values = colours, name = group_label) +
     ggplot2::labs(
       x = group_label, y = y_label,
-      alt = "Sample-level inferred activity scores grouped by phenotype."
+      caption = paste0(
+        "Showing ", length(sources),
+        if (length(sources) == 1L) {
+          " explicitly selected regulator"
+        } else {
+          " explicitly selected regulators"
+        },
+        "; not a p-value top-N."
+      ),
+      alt = paste(
+        "Sample-level inferred activity scores grouped by phenotype",
+        "for an explicit regulator subset."
+      )
     ) +
     theme_bulkmae() +
     ggplot2::theme(
@@ -333,14 +346,17 @@ plot_activity_sample <- function(
 #'
 #' Expects the table returned by [activity_contrast()]. The x axis is the
 #' mean activity difference; the y axis is `-log10` of the two-group
-#' *p*-value from that helper. Colour uses the same FDR and effect-size
-#' rule as [plot_de_volcano()], but the test is applied to inferred
-#' activities, not gene-level differential expression.
+#' *p*-value from that helper. Colour is the sign of that activity
+#' difference (Up / Down / Not significant). A dashed horizontal line marks
+#' nominal *p* = 0.05 on the same raw-*p* scale as the y axis. BH FDR is
+#' not a y-coordinate and is not used to recolour points.
 #'
 #' @param result A data frame returned by [activity_contrast()].
-#' @param fdr Maximum adjusted *p*-value used only to colour points.
-#' @param min_abs_effect Minimum absolute activity difference used only to
-#'   colour points.
+#' @param fdr Accepted for interface parity with [plot_de_volcano()]. It is
+#'   validated but does not recolour points; the y axis already shows the
+#'   two-group raw *p*-value.
+#' @param min_abs_effect Minimum absolute activity difference used to
+#'   separate Up/Down from Not significant.
 #' @param label_sources Regulator identifiers to label; none are selected
 #'   automatically.
 #' @param source_labels Optional complete source-named labels.
@@ -398,11 +414,10 @@ plot_activity_volcano <- function(
     minus_log10_p = -log10(pmax(raw_p, floor, na.rm = FALSE)),
     stringsAsFactors = FALSE
   )
-  significant <- !is.na(adj_p) & adj_p <= fdr &
-    is.finite(table$effect) & abs(table$effect) >= min_abs_effect
+  signed <- is.finite(table$effect) & abs(table$effect) >= min_abs_effect
   direction <- rep("Not significant", nrow(table))
-  direction[significant & table$effect < 0] <- "Down"
-  direction[significant & table$effect > 0] <- "Up"
+  direction[signed & table$effect < 0] <- "Down"
+  direction[signed & table$effect > 0] <- "Up"
   table$direction <- factor(direction, levels = c("Down", "Not significant", "Up"))
   table$label <- .plot_feature_labels(
     table$source,
@@ -411,22 +426,35 @@ plot_activity_volcano <- function(
     data.frame(feature_id = table$source, stringsAsFactors = FALSE)
   )
   x_label <- .plot_activity_delta_label(result)
+  p_cutoff <- 0.05
+  p_cutoff_y <- -log10(p_cutoff)
   plot <- ggplot2::ggplot(table, ggplot2::aes(
-    x = .data[["effect"]], y = .data[["minus_log10_p"]],
-    colour = .data[["direction"]]
+    x = .data[["effect"]], y = .data[["minus_log10_p"]]
   )) +
-    ggplot2::geom_point(alpha = 0.8, size = 1.6, na.rm = TRUE) +
+    ggplot2::geom_hline(
+      yintercept = p_cutoff_y,
+      linetype = 2,
+      colour = "#777777"
+    ) +
     ggplot2::geom_vline(
       xintercept = c(-min_abs_effect, min_abs_effect),
       linetype = 2, colour = "#777777"
+    ) +
+    ggplot2::geom_point(
+      mapping = ggplot2::aes(colour = .data[["direction"]]),
+      alpha = 0.8,
+      size = 1.6,
+      na.rm = TRUE
     ) +
     .plot_de_scale() +
     ggplot2::labs(
       x = x_label, y = expression(-log[10](italic(p))),
       colour = "Direction",
+      caption = "Dashed line: nominal p = 0.05.",
       alt = paste(
         "A volcano plot of two-group activity differences and raw p-values,",
-        "coloured by FDR and effect-size thresholds."
+        "coloured by the sign of the activity difference, with a dashed",
+        "nominal p = 0.05 line."
       )
     ) +
     .plot_de_theme()
@@ -448,6 +476,7 @@ plot_activity_volcano <- function(
         y = .data[["minus_log10_p"]],
         label = .data[["label"]]
       ),
+      inherit.aes = FALSE,
       nudge_y = nudge_y,
       size = .bulkmae_text_size_pt,
       size.unit = "pt",

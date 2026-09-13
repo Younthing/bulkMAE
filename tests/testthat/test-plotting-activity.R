@@ -69,6 +69,8 @@ test_that("activity plots return buildable ggplots with activity axis labels", {
   expect_identical(rank$labels$y, "Regulator")
   expect_identical(sample_plot$labels$y, "ULM activity score")
   expect_identical(sample_plot$labels$x, "dex")
+  expect_match(sample_plot$labels$caption, "explicitly selected regulators")
+  expect_match(sample_plot$labels$caption, "not a p-value top-N")
   expect_match(volcano$labels$x, "Activity difference \\(trt")
   expect_identical(as.character(rank$data$source), c("TF_C", "TF_A", "TF_B"))
 })
@@ -154,6 +156,28 @@ test_that("activity contrast volcano uses two-group activity p-values", {
 
   volcano <- plot_activity_volcano(contrast, fdr = 1, min_abs_effect = 0)
   expect_true(all(c("Down", "Not significant", "Up") %in% levels(volcano$data$direction)))
+  expect_setequal(as.character(volcano$data$direction), c("Up", "Down"))
+  point_layer <- Filter(
+    function(layer) inherits(layer$geom, "GeomPoint"),
+    volcano$layers
+  )[[1L]]
+  expect_false(is.null(point_layer$mapping$colour))
+  built <- ggplot2::ggplot_build(volcano)
+  point_idx <- which(vapply(
+    volcano$layers,
+    function(layer) inherits(layer$geom, "GeomPoint"),
+    logical(1)
+  ))
+  point_colours <- unique(built$data[[point_idx]]$colour)
+  expect_setequal(point_colours, c("#0072B2", "#D55E00"))
+  hline <- Filter(
+    function(layer) inherits(layer$geom, "GeomHline"),
+    volcano$layers
+  )[[1L]]
+  yintercept <- hline$aes_params$yintercept
+  if (is.null(yintercept)) yintercept <- hline$data$yintercept
+  expect_equal(yintercept, -log10(0.05))
+  expect_match(volcano$labels$caption, "p = 0.05")
   expect_error(
     plot_activity_volcano(contrast, label_sources = "missing"),
     "Unknown `label_features`"
