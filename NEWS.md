@@ -1,5 +1,14 @@
 # bulkMAE (development version)
 
+- Adds the prognostic-signature mainline: `plot_surv_km()` (Kaplan-Meier
+  curves with a number-at-risk panel), `plot_surv_forest()` (Cox hazard-ratio
+  forest with an estimate column), `plot_glmnet_cv()`, `plot_glmnet_path()`,
+  `plot_surv_risk()` (ranked risk score with follow-up status), and
+  `plot_surv_roc()` (time-dependent ROC). A new offline vignette builds and
+  validates a LASSO-Cox signature on the breastCancerVDX cohort. Plot types
+  follow common figures in the FigureYa collection; the code is written from
+  scratch on the package plotting contract.
+
 - Adds the LINCS reverse-signature mainline: `drug_lincs_table()` extracts
   ranked compounds from a native `gessResult` or a gess-style table,
   `drug_lincs_example()` supplies a labelled diagnostic toy table, and

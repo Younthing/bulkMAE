@@ -237,6 +237,23 @@ clusterProfiler 的 ratio 字符串为 `numerator/denominator`；background term
 总拼图脚本只用于吸收单图比例、边框、留白和推荐物理尺寸经验。bulkMAE 不提供 GSEA/ORA
 overview 或报告拼图函数；调用者可在包外使用 patchwork/cowplot 组合返回的独立 ggplot。
 
+### 生存与惩罚模型图
+
+预后签名主线的图只读取原生 `survfit`、`survdiff`、`coxph`、`cv.glmnet` 和 `timeROC` 对象，
+不重新拟合。
+
+- `plot_surv_km()` 的风险人数表是同一个 ggplot 的第二个 facet：两层共用一条连续 y 标尺，
+  生存面板只含 0–1 刻度，风险表的行位于负值区并以分层名作为刻度标签；`scales = "free_y"`
+  让每层只显示自己的刻度。置信带数据必须带 `panel` 列，否则会画进风险表。
+- log-rank p 只在调用者传入 `survdiff` 时显示；层数不一致直接报错。
+- `plot_surv_forest()` 用离散 y 轴的 `dup_axis()` 在右侧打印 HR、CI 和 Wald p。标签必须按
+  `levels(term)` 的顺序给成向量；用 `function(breaks)` 按名字查表在 ggplot2 4.0 下会错位。
+  x 轴用固定候选刻度（0.5、0.7、1、1.5、2…），避免 `scale_x_log10()` 默认刻度只落在 1 以下。
+- `plot_glmnet_path()` 按所选 lambda 处的系数符号着色，不自动标注基因。
+- `plot_surv_risk()` 的切点必须由调用者给出，并应来自训练集；样本按名字与元数据对齐。
+- KM 使用通用离散色板，按因子水平取色。教程里把高风险组放在第一个水平，使颜色与风险分布图
+  （高 = 橙、低 = 蓝）一致。
+
 ### LINCS 连接性图
 
 LINCS / CMap 图只展示已经算好的连接性表，不重跑 `gess_lincs()`，也不把分数说成药效。

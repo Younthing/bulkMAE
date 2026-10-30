@@ -24,28 +24,34 @@ dimensions for \code{\link[=plot_save]{plot_save()}}.
 }
 \description{
 Uses the \code{N_upset} and \code{N_downset} columns returned by
-\code{\link[signatureSearch:gess_lincs]{signatureSearch::gess_lincs()}}. Those counts are the query genes that
+\code{\link[signatureSearch:gess]{signatureSearch::gess_lincs()}}. Those counts are the query genes that
 overlap the extreme ranks of each reference signature. They are not an
 independent enrichment test.
 }
 \seealso{
-Other plotting:
-\code{\link[=plot_assay_heatmap]{plot_assay_heatmap()}},
-\code{\link[=plot_de_ma]{plot_de_ma()}},
-\code{\link[=plot_de_volcano]{plot_de_volcano()}},
-\code{\link[=plot_embedding]{plot_embedding()}},
-\code{\link[=plot_gsea_classic]{plot_gsea_classic()}},
-\code{\link[=plot_gsea_ridge]{plot_gsea_ridge()}},
-\code{\link[=plot_lincs_heatmap]{plot_lincs_heatmap()}},
-\code{\link[=plot_lincs_rank]{plot_lincs_rank()}},
-\code{\link[=plot_lincs_waterfall]{plot_lincs_waterfall()}},
-\code{\link[=plot_ora_bubble]{plot_ora_bubble()}},
-\code{\link[=plot_ora_network]{plot_ora_network()}},
-\code{\link[=plot_ora_radial]{plot_ora_radial()}},
-\code{\link[=plot_qc_correlation]{plot_qc_correlation()}},
-\code{\link[=plot_qc_library]{plot_qc_library()}},
-\code{\link[=plot_qc_outliers]{plot_qc_outliers()}},
-\code{\link[=plot_save]{plot_save()}},
-\code{\link[=theme_bulkmae]{theme_bulkmae()}}
+Other plotting: 
+\code{\link{plot_assay_heatmap}()},
+\code{\link{plot_de_ma}()},
+\code{\link{plot_de_volcano}()},
+\code{\link{plot_embedding}()},
+\code{\link{plot_glmnet_cv}()},
+\code{\link{plot_glmnet_path}()},
+\code{\link{plot_gsea_classic}()},
+\code{\link{plot_gsea_ridge}()},
+\code{\link{plot_lincs_heatmap}()},
+\code{\link{plot_lincs_rank}()},
+\code{\link{plot_lincs_waterfall}()},
+\code{\link{plot_ora_bubble}()},
+\code{\link{plot_ora_network}()},
+\code{\link{plot_ora_radial}()},
+\code{\link{plot_qc_correlation}()},
+\code{\link{plot_qc_library}()},
+\code{\link{plot_qc_outliers}()},
+\code{\link{plot_save}()},
+\code{\link{plot_surv_forest}()},
+\code{\link{plot_surv_km}()},
+\code{\link{plot_surv_risk}()},
+\code{\link{plot_surv_roc}()},
+\code{\link{theme_bulkmae}()}
 }
 \concept{plotting}

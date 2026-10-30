@@ -44,6 +44,7 @@ Suggests:
     BayesPrism,
     Biobase,
     BiocParallel,
+    breastCancerVDX,
     biomaRt,
     clusterProfiler,
     ConsensusClusterPlus,
