@@ -69,16 +69,18 @@ test_that("public API follows discoverable analysis families", {
     "network_genie3", "network_genie3_links", "network_string",
     "normalize_deseq", "normalize_tmm", "normalize_tpm", "qc_correlation", "qc_library",
     "qc_outliers", "plot_assay_heatmap", "plot_de_ma", "plot_de_volcano",
-    "plot_embedding", "plot_gsea_classic",
+    "plot_embedding", "plot_glmnet_cv", "plot_glmnet_path", "plot_gsea_classic",
     "plot_gsea_ridge", "plot_lincs_heatmap", "plot_lincs_overlap",
     "plot_lincs_rank", "plot_lincs_waterfall",
     "plot_ora_bubble", "plot_ora_network",
     "plot_ora_radial", "plot_qc_correlation", "plot_qc_library",
-    "plot_save", "plot_qc_outliers",
+    "plot_save", "plot_qc_outliers", "plot_surv_auc", "plot_surv_calibration",
+    "plot_surv_dca", "plot_surv_forest", "plot_surv_km",
+    "plot_surv_risk", "plot_surv_roc",
     "theme_bulkmae", "reduce_mds", "reduce_pca", "reduce_tsne",
     "reduce_umap", "score_gsva", "score_signature", "score_singscore",
     "score_ssgsea", "surv_cox", "surv_formula", "surv_km",
-    "surv_penalized", "surv_roc",
+    "surv_calibration", "surv_dca", "surv_penalized", "surv_roc",
     "transform_rlog", "transform_voom", "transform_vst"
   )
 
