@@ -22,10 +22,10 @@ An unprinted standard ggplot object carrying recommended physical
 dimensions for \code{\link[=plot_save]{plot_save()}}.
 }
 \description{
-Draws already-estimated hazard ratios with their confidence intervals on a
-log axis. The right-hand axis prints each estimate, interval, and Wald
-p-value, so the figure carries its own table. Pass one multivariable
-\code{coxph} fit, or a named list of univariate fits for a screening forest.
+Draws already-estimated hazard ratios with capped confidence intervals on
+a log axis. The right-hand axis prints each estimate, interval, and Wald
+p-value. Estimates whose interval excludes one are coloured by direction.
+Pass one multivariable \code{coxph} fit, or a named list of univariate fits.
 }
 \seealso{
 Other plotting: 
@@ -48,6 +48,9 @@ Other plotting:
 \code{\link{plot_qc_library}()},
 \code{\link{plot_qc_outliers}()},
 \code{\link{plot_save}()},
+\code{\link{plot_surv_auc}()},
+\code{\link{plot_surv_calibration}()},
+\code{\link{plot_surv_dca}()},
 \code{\link{plot_surv_km}()},
 \code{\link{plot_surv_risk}()},
 \code{\link{plot_surv_roc}()},

@@ -2,14 +2,16 @@
 % Please edit documentation in R/plotting-survival.R
 \name{plot_surv_km}
 \alias{plot_surv_km}
-\title{Plot Kaplan-Meier survival curves with a number-at-risk table}
+\title{Plot Kaplan-Meier survival curves}
 \usage{
 plot_surv_km(
   fit,
   test = NULL,
-  risk_times = NULL,
-  conf_int = TRUE,
-  risk_table = TRUE
+  cox = NULL,
+  hr_label = "HR",
+  conf_int = FALSE,
+  risk_table = FALSE,
+  risk_times = NULL
 )
 }
 \arguments{
@@ -17,24 +19,29 @@ plot_surv_km(
 
 \item{test}{Optional \code{survival::survdiff()} result for the same strata.}
 
-\item{risk_times}{Optional non-negative times at which to count subjects
-at risk. Defaults to pretty breaks across the observed follow-up.}
+\item{cox}{Optional \code{coxph} fit whose first coefficient is reported as the
+hazard ratio, for example a model of the same two-level group.}
+
+\item{hr_label}{Text printed before the hazard ratio.}
 
 \item{conf_int}{Draw the pointwise confidence band when the fit has one.}
 
-\item{risk_table}{Draw the number-at-risk panel.}
+\item{risk_table}{Draw a number-at-risk panel below the curves.}
+
+\item{risk_times}{Optional non-negative times for the number-at-risk panel.
+Defaults to pretty breaks across the observed follow-up.}
 }
 \value{
 An unprinted standard ggplot object carrying recommended physical
 dimensions for \code{\link[=plot_save]{plot_save()}}.
 }
 \description{
-Draws the step curves, pointwise confidence bands, and censoring marks
-stored in an already-fitted \code{survfit} object, with a number-at-risk table
-underneath. The table is a second panel of the same standard ggplot, not a
-separate figure. The log-rank p-value is printed only when the caller
-passes the \code{survdiff} result it was computed from; the constructor does not
-run a test.
+Draws the step curves and censoring marks stored in an already-fitted
+\code{survfit} object, with the legend inside the panel and an optional
+annotation of the hazard ratio and log-rank p-value. The constructor does
+not run a test or fit a model: pass the \code{survdiff} and \code{coxph} results the
+annotation should report. A number-at-risk panel can be added below the
+curves as a second facet of the same ggplot.
 }
 \seealso{
 Other plotting: 
@@ -57,6 +64,9 @@ Other plotting:
 \code{\link{plot_qc_library}()},
 \code{\link{plot_qc_outliers}()},
 \code{\link{plot_save}()},
+\code{\link{plot_surv_auc}()},
+\code{\link{plot_surv_calibration}()},
+\code{\link{plot_surv_dca}()},
 \code{\link{plot_surv_forest}()},
 \code{\link{plot_surv_risk}()},
 \code{\link{plot_surv_roc}()},

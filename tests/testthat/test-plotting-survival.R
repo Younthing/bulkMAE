@@ -27,21 +27,32 @@ test_that("plot_surv_km draws strata, censor marks, risk table, and log-rank p",
   data <- .survival_lung()
   fit <- survival::survfit(survival::Surv(time, status) ~ sex, data = data)
   test <- survival::survdiff(survival::Surv(time, status) ~ sex, data = data)
-  plot <- plot_surv_km(fit, test = test, risk_times = c(0, 250, 500, 750))
+  cox <- survival::coxph(survival::Surv(time, status) ~ sex, data = data)
+  plot <- plot_surv_km(fit, test = test, cox = cox, hr_label = "HR",
+                       risk_table = TRUE, conf_int = TRUE,
+                       risk_times = c(0, 250, 500, 750))
   .expect_bulkmae_plot(plot)
   expect_identical(plot$labels$y, "Survival probability")
-  expect_identical(plot$labels$colour, "sex")
   built <- ggplot2::ggplot_build(plot)
   layers <- vapply(plot$layers, function(layer) class(layer$geom)[[1L]], character(1))
   expect_true(all(c("GeomRibbon", "GeomStep", "GeomPoint", "GeomText") %in% layers))
-  risk <- built$data[[which(layers == "GeomText")[[1L]]]]
+  risk_layer <- which(vapply(plot$layers, function(layer) {
+    is.data.frame(layer$data) && "n_risk" %in% names(layer$data)
+  }, logical(1)))
+  risk <- built$data[[risk_layer]]
   expected <- summary(fit, times = c(0, 250, 500, 750), extend = TRUE)$n.risk
   expect_setequal(as.integer(risk$label), as.integer(expected))
   labels <- vapply(plot$layers, function(layer) {
     data <- layer$data
     if (is.data.frame(data) && "label" %in% names(data)) paste(data$label, collapse = "|") else ""
   }, character(1))
-  expect_true(any(grepl("^Log-rank p = 0.001$", labels)))
+  hr <- sprintf("%.2f", exp(stats::coef(cox)[[1L]]))
+  expect_true(any(grepl(paste0("^HR = ", hr, " .*
+Log-rank P = 0.001$"), labels)))
+  expect_identical(
+    unname(plot$scales$get_scales("colour")$palette(2)),
+    c("#B64C3C", "#3D6B8C")
+  )
   # Confidence ribbons stay in the survival panel.
   ribbon <- built$data[[which(layers == "GeomRibbon")]]
   expect_identical(unique(as.integer(ribbon$PANEL)), 1L)
@@ -57,7 +68,8 @@ test_that("plot_surv_km handles unstratified fits and rejects bad inputs", {
   other <- survival::survdiff(survival::Surv(time, status) ~ ph.ecog, data = data)
   stratified <- survival::survfit(survival::Surv(time, status) ~ sex, data = data)
   expect_error(plot_surv_km(stratified, test = other), "different numbers of strata")
-  expect_error(plot_surv_km(stratified, risk_times = c(-1, 10)), "non-negative")
+  expect_error(plot_surv_km(stratified, risk_table = TRUE, risk_times = c(-1, 10)), "non-negative")
+  expect_error(plot_surv_km(stratified, cox = list()), "coxph fit")
 })
 
 test_that("plot_surv_forest keeps right-hand estimates aligned with rows", {
@@ -72,7 +84,11 @@ test_that("plot_surv_forest keeps right-hand estimates aligned with rows", {
   secondary <- plot$scales$get_scales("y")$secondary.axis
   expect_match(secondary$labels[[3L]], sprintf("^%.2f ", hr[["age"]]))
   expect_match(secondary$labels[[1L]], sprintf("^%.2f ", hr[["ph.ecog"]]))
-  expect_identical(plot$labels$x, "Hazard ratio (95% CI, log scale)")
+  expect_identical(plot$labels$x, "Hazard ratio (95% CI)")
+  # Rows run top to bottom, so ECOG sits at y = 1 and age at y = 3.
+  built <- ggplot2::ggplot_build(plot)$data[[3L]]
+  expect_identical(built$colour[built$y == 1], "#B64C3C")
+  expect_identical(built$colour[built$y == 3], "#6E6A66")
 })
 
 test_that("plot_surv_forest accepts a named list of univariate fits", {
@@ -126,7 +142,7 @@ test_that("plot_surv_risk joins metadata by sample name and splits at the cutoff
   expect_equal(top$x[order(top$y)], 1:4)
   # Sample b has rank 3 and was followed for 20 time units with an event.
   expect_equal(bottom$y[bottom$x == 3], 20)
-  expect_identical(bottom$fill[bottom$x == 3], "#000000")
+  expect_identical(bottom$fill[bottom$x == 3], "#2C2926")
   expect_error(plot_surv_risk(score, samples[1:3, ], "time", "event", 1), "exactly")
   samples$event[1] <- 2
   expect_error(plot_surv_risk(score, samples, "time", "event", 1), "coded 0")
@@ -149,8 +165,78 @@ test_that("plot_surv_roc draws one curve per time with AUC labels", {
   .expect_bulkmae_plot(plot)
   expect_identical(
     levels(plot$data$time),
-    sprintf("%s (AUC %.3f)", c("6 months", "1 year"), roc$AUC)
+    sprintf("%s  AUC = %.3f", c("6 months", "1 year"), roc$AUC)
   )
   expect_error(plot_surv_roc(roc, time_labels = "one"), "one unique label")
   expect_error(plot_surv_roc(list()), "timeROC result")
+})
+
+.survival_mae <- function() {
+  data <- .survival_lung()
+  data <- data[stats::complete.cases(data[c("time", "status", "age", "sex", "ph.ecog")]), ]
+  rownames(data) <- paste0("patient", seq_len(nrow(data)))
+  expression <- matrix(
+    0, nrow = 1L, ncol = nrow(data),
+    dimnames = list("feature", rownames(data))
+  )
+  mae_from_matrix(expression, data[c("time", "status", "age", "sex", "ph.ecog")])
+}
+
+test_that("plot_surv_auc compares predictors across shared times", {
+  skip_if_not_installed("timeROC")
+  skip_if_not_installed("survival")
+  mae <- .survival_mae()
+  rocs <- list(
+    Age = surv_roc(mae, "rna", "time", "status", "age", times = c(180, 365)),
+    ECOG = surv_roc(mae, "rna", "time", "status", "ph.ecog", times = c(180, 365))
+  )
+  plot <- plot_surv_auc(rocs, time_labels = c("6 months", "1 year"))
+  .expect_bulkmae_plot(plot)
+  expect_equal(plot$data$auc[plot$data$predictor == "ECOG"], unname(rocs$ECOG$AUC))
+  expect_identical(levels(plot$data$predictor), c("Age", "ECOG"))
+  other <- surv_roc(mae, "rna", "time", "status", "age", times = c(100, 365))
+  expect_error(plot_surv_auc(list(A = rocs$Age, B = other)), "same evaluation times")
+  expect_error(plot_surv_auc(rocs$Age), "named list")
+})
+
+test_that("surv_calibration groups predicted survival and plots against KM", {
+  skip_if_not_installed("survival")
+  mae <- .survival_mae()
+  fit <- surv_cox(mae, "rna", surv_formula("time", "status", c("age", "sex", "ph.ecog")),
+                  model = TRUE)
+  calibration <- surv_calibration(mae, "rna", fit, "time", "status",
+                                  times = c(180, 365), groups = 3L)
+  expect_identical(
+    names(calibration),
+    c("time", "group", "n", "predicted", "observed", "lower", "upper")
+  )
+  expect_identical(sum(calibration$n[calibration$time == 180]), nrow(mae_samples(mae, "rna")))
+  expect_true(all(calibration$predicted > 0 & calibration$predicted < 1))
+  plot <- plot_surv_calibration(calibration, time_labels = c("180 d", "365 d"))
+  .expect_bulkmae_plot(plot)
+  expect_identical(levels(plot$data$time_label), c("180 d", "365 d"))
+  expect_error(surv_calibration(mae, "rna", fit, "time", "status", times = 0), "positive")
+  expect_error(plot_surv_calibration(calibration[, -4]), "missing columns")
+})
+
+test_that("surv_dca returns a native dca object that plots with references", {
+  skip_if_not_installed("survival")
+  skip_if_not_installed("dcurves")
+  mae <- .survival_mae()
+  models <- list(
+    Full = surv_cox(mae, "rna", surv_formula("time", "status", c("age", "sex", "ph.ecog")),
+                    model = TRUE),
+    Age = surv_cox(mae, "rna", surv_formula("time", "status", "age"), model = TRUE)
+  )
+  decision <- surv_dca(mae, "rna", models, "time", "status", horizon = 365,
+                       thresholds = seq(0.1, 0.8, by = 0.1))
+  expect_s3_class(decision, "dca")
+  expect_setequal(as.character(unique(decision$dca$label)),
+                  c("Full", "Age", "Treat All", "Treat None"))
+  plot <- plot_surv_dca(decision)
+  .expect_bulkmae_plot(plot)
+  palette <- plot$scales$get_scales("colour")$palette(4)
+  expect_identical(unname(palette[c("Full", "Treat None")]), c("#B64C3C", "#2C2926"))
+  expect_error(surv_dca(mae, "rna", models[[1L]], "time", "status", 365), "named list")
+  expect_error(plot_surv_dca(list()), "decision-curve")
 })

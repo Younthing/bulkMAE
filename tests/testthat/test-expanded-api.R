@@ -74,12 +74,13 @@ test_that("public API follows discoverable analysis families", {
     "plot_lincs_rank", "plot_lincs_waterfall",
     "plot_ora_bubble", "plot_ora_network",
     "plot_ora_radial", "plot_qc_correlation", "plot_qc_library",
-    "plot_save", "plot_qc_outliers", "plot_surv_forest", "plot_surv_km",
+    "plot_save", "plot_qc_outliers", "plot_surv_auc", "plot_surv_calibration",
+    "plot_surv_dca", "plot_surv_forest", "plot_surv_km",
     "plot_surv_risk", "plot_surv_roc",
     "theme_bulkmae", "reduce_mds", "reduce_pca", "reduce_tsne",
     "reduce_umap", "score_gsva", "score_signature", "score_singscore",
     "score_ssgsea", "surv_cox", "surv_formula", "surv_km",
-    "surv_penalized", "surv_roc",
+    "surv_calibration", "surv_dca", "surv_penalized", "surv_roc",
     "transform_rlog", "transform_voom", "transform_vst"
   )
 

@@ -3,8 +3,12 @@
 - Adds the prognostic-signature mainline: `plot_surv_km()` (Kaplan-Meier
   curves with a number-at-risk panel), `plot_surv_forest()` (Cox hazard-ratio
   forest with an estimate column), `plot_glmnet_cv()`, `plot_glmnet_path()`,
-  `plot_surv_risk()` (ranked risk score with follow-up status), and
-  `plot_surv_roc()` (time-dependent ROC). A new offline vignette builds and
+  `plot_surv_risk()` (ranked risk score with follow-up status),
+  `plot_surv_roc()` (time-dependent ROC), `plot_surv_auc()`,
+  `plot_surv_calibration()`, and `plot_surv_dca()`. New thin wrappers
+  `surv_calibration()` (quantile-group KM calibration of a Cox model) and
+  `surv_dca()` (decision curves via dcurves) feed the last two. The survival
+  family uses a classic publication theme (7 pt, muted red/blue palette). A new offline vignette builds and
   validates a LASSO-Cox signature on the breastCancerVDX cohort. Plot types
   follow common figures in the FigureYa collection; the code is written from
   scratch on the package plotting contract.

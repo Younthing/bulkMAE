@@ -53,6 +53,7 @@ jobs:
             any::survival
             any::glmnet
             any::timeROC
+            any::dcurves
             local::.
           needs: website
 

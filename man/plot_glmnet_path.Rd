@@ -24,8 +24,8 @@ dimensions for \code{\link[=plot_save]{plot_save()}}.
 \description{
 Draws each feature's coefficient across the penalty path of a \code{cv.glmnet}
 fit. Features that are non-zero at the chosen \code{lambda} are coloured by the
-sign of that coefficient; all other paths are grey. Text labels are added
-only for features named in \code{label_features}.
+sign of that coefficient; all other paths are light grey. Text labels are
+added only for features named in \code{label_features}.
 }
 \seealso{
 Other plotting: 
@@ -47,6 +47,9 @@ Other plotting:
 \code{\link{plot_qc_library}()},
 \code{\link{plot_qc_outliers}()},
 \code{\link{plot_save}()},
+\code{\link{plot_surv_auc}()},
+\code{\link{plot_surv_calibration}()},
+\code{\link{plot_surv_dca}()},
 \code{\link{plot_surv_forest}()},
 \code{\link{plot_surv_km}()},
 \code{\link{plot_surv_risk}()},

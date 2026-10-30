@@ -239,20 +239,30 @@ overview 或报告拼图函数；调用者可在包外使用 patchwork/cowplot �
 
 ### 生存与惩罚模型图
 
-预后签名主线的图只读取原生 `survfit`、`survdiff`、`coxph`、`cv.glmnet` 和 `timeROC` 对象，
-不重新拟合。
+预后签名主线的图只读取原生 `survfit`、`survdiff`、`coxph`、`cv.glmnet`、`timeROC` 和 `dca`
+对象，或 `surv_calibration()` 的结果表，不重新拟合。
 
-- `plot_surv_km()` 的风险人数表是同一个 ggplot 的第二个 facet：两层共用一条连续 y 标尺，
-  生存面板只含 0–1 刻度，风险表的行位于负值区并以分层名作为刻度标签；`scales = "free_y"`
-  让每层只显示自己的刻度。置信带数据必须带 `panel` 列，否则会画进风险表。
-- log-rank p 只在调用者传入 `survdiff` 时显示；层数不一致直接报错。
-- `plot_surv_forest()` 用离散 y 轴的 `dup_axis()` 在右侧打印 HR、CI 和 Wald p。标签必须按
-  `levels(term)` 的顺序给成向量；用 `function(breaks)` 按名字查表在 ggplot2 4.0 下会错位。
-  x 轴用固定候选刻度（0.5、0.7、1、1.5、2…），避免 `scale_x_log10()` 默认刻度只落在 1 以下。
-- `plot_glmnet_path()` 按所选 lambda 处的系数符号着色，不自动标注基因。
+视觉规格来自维护者的 HCC 乳酸代谢项目（`code/fig/fig_theme.R`、Fig 5/6、FigS2/S6），
+维护者明确认为它比包内通用主题更适合发表。生存图族因此使用私有的
+`.plot_survival_theme()`，不使用 `theme_bulkmae()`：
+
+- `theme_classic()`、基础字号 7 pt、细轴线 0.3、无网格、白底；数据文字 6 pt。
+- 色板 `.bulkmae_survival`：高风险 / 危险 `#B64C3C`，低风险 / 保护 `#3D6B8C`，第三色金色
+  `#C4A35A`，中性灰 `#6E6A66`，墨色 `#2C2926`，缺失 / 参照浅灰 `#D5D1CB`。`High`/`Low` 两组
+  按名字取色，其余按水平顺序取红、蓝、金……
+- KM：默认无风险表、无置信带；图例放在面板右上角且无标题；左下角注释调用者传入的
+  `coxph` HR（95% CI）与 `survdiff` log-rank P；y 轴为百分比；删失标记小号 `+`。
+  风险表仍可用 `risk_table = TRUE` 打开：它是同一个 ggplot 的第二个 facet，生存面板只含
+  0–1 刻度，风险表的行位于负值区并以分层名作为刻度标签。
+- 森林图：带端帽的 `geom_errorbar(orientation = "y")` + 实心点；区间整体大于 1 为红、
+  整体小于 1 为蓝、跨 1 为灰；右侧 `dup_axis()` 打印 HR (CI) 与 P。标签必须按
+  `levels(term)` 顺序给成向量；用 `function(breaks)` 按名字查表在 ggplot2 4.0 下会错位。
+  刻度优先用倍数步长（0.5、1、2），窄范围才退到 0.7、1、1.5。
+- 校准图、DCA、AUC 折线沿用参考项目 Fig 6D/E 与 FigS6 的线宽、点大小和图例位置。
+- P 值格式与参考项目 `fmt_p()` 一致：`P < 0.001` 用一位小数的科学计数。
 - `plot_surv_risk()` 的切点必须由调用者给出，并应来自训练集；样本按名字与元数据对齐。
-- KM 使用通用离散色板，按因子水平取色。教程里把高风险组放在第一个水平，使颜色与风险分布图
-  （高 = 橙、低 = 蓝）一致。
+
+列线图依赖 rms 的 base graphics，无法返回标准 ggplot，暂不提供。
 
 ### LINCS 连接性图
 

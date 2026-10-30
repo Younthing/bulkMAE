@@ -48,6 +48,7 @@ Suggests:
     biomaRt,
     clusterProfiler,
     ConsensusClusterPlus,
+    dcurves,
     decoupleR (>= 2.0.0),
     DESeq2,
     diffcoexp,

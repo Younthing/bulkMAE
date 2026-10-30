@@ -66,6 +66,7 @@ jobs:
             any::survival
             any::glmnet
             any::timeROC
+            any::dcurves
           needs: check
 
       - name: Resolve tag and verify it matches DESCRIPTION

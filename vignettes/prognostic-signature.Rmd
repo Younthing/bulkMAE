@@ -33,13 +33,13 @@ library(ggplot2)
 
 分析主线是文献中最常见的预后签名流程：单因素 Cox 初筛 → LASSO-Cox 选择基因 →
 线性预测值作为风险评分 → 按训练集切点分组 → 在验证集中画 KM 曲线、风险分布、时间依赖
-ROC，并用多因素 Cox 检查签名是否独立于临床变量。每一步都使用 bulkMAE 的 `surv_*()`
-封装，图全部来自 `plot_surv_*()` 与 `plot_glmnet_*()`。
+ROC，用多因素 Cox 检查签名是否独立于临床变量，最后比较联合模型的 AUC、校准和决策曲线。每一步都使用 bulkMAE 的 `surv_*()`
+封装，图全部来自 `plot_surv_*()` 与 `plot_glmnet_*()`，配色与版式沿用发表图的低饱和红蓝方案。
 
 安装完成后，分析与渲染不访问网络。缺少教学依赖时先运行：
 
 ```{r install, eval=FALSE}
-BiocManager::install(c("breastCancerVDX", "survival", "glmnet", "timeROC"))
+BiocManager::install(c("breastCancerVDX", "survival", "glmnet", "timeROC", "dcurves"))
 ```
 
 # 数据：VDX 队列
@@ -138,18 +138,18 @@ signature <- coefficients[coefficients != 0]
 
 LASSO 最终保留 `r length(signature)` 个基因。
 
-```{r lasso-cv, fig.width = 3.6, fig.height = 3, fig.cap = "LASSO-Cox 交叉验证曲线。点为各 lambda 的交叉验证偏差均值，竖线为一个标准误；虚线标出 lambda.min 与 lambda.1se，上轴为非零系数个数。", fig.alt = "交叉验证偏差随 log lambda 先降后升，两条虚线标出 lambda.min 和 lambda.1se。"}
+```{r lasso-cv, fig.width = 3.2, fig.height = 2.8, fig.cap = "LASSO-Cox 交叉验证曲线。点为各 lambda 的交叉验证偏差均值，竖线为一个标准误；虚线标出 lambda.min 与 lambda.1se，上轴为非零系数个数。", fig.alt = "交叉验证偏差随 log lambda 先降后升，两条虚线标出 lambda.min 和 lambda.1se。"}
 plot_glmnet_cv(lasso) + labs(title = "LASSO-Cox cross-validation")
 ```
 
-```{r lasso-path, fig.width = 3.6, fig.height = 3, fig.cap = "LASSO 系数路径。在 lambda.min 处系数为正的基因为橙色、为负的为蓝色，其余候选基因为灰色。", fig.alt = "随 lambda 增大，候选基因系数逐渐收缩到零；保留基因按系数正负着色。"}
+```{r lasso-path, fig.width = 3.2, fig.height = 2.8, fig.cap = "LASSO 系数路径。在 lambda.min 处系数为正的基因为红色、为负的为蓝色，其余候选基因为浅灰。", fig.alt = "随 lambda 增大，候选基因系数逐渐收缩到零；保留基因按系数正负着色。"}
 plot_glmnet_path(lasso, lambda = "lambda.min") + labs(title = "Coefficient paths")
 ```
 
 签名基因的单因素 Cox 结果可以用森林图展示。注意这些基因正是因为训练集里显著才入选，
 所以这张图是描述性的，不是验证。
 
-```{r univariate-forest, fig.width = 4.6, fig.height = 3, fig.cap = "训练集中签名基因的单因素 Cox 风险比（每个基因一个模型）。右侧为 HR、95% CI 与 Wald p 值。", fig.alt = "签名基因的单因素风险比森林图，右侧列出风险比、置信区间和 p 值。"}
+```{r univariate-forest, fig.width = 4.2, fig.height = 3.4, fig.cap = "训练集中签名基因的单因素 Cox 风险比（每个基因一个模型）。红色为危险因素、蓝色为保护因素；右侧为 HR、95% CI 与 Wald P 值。", fig.alt = "签名基因的单因素风险比森林图，右侧列出风险比、置信区间和 P 值。"}
 plot_surv_forest(univariate[names(signature)]) + labs(title = "Univariate Cox (training)")
 ```
 
@@ -167,12 +167,13 @@ risk_group <- factor(
   ifelse(validation_score > cutoff, "High", "Low"),
   levels = c("Low", "High")
 )
+training <- mae_add_sample_data(training, "rna", training_score, name = "risk_score")
 validation <- mae_add_sample_data(validation, "rna", validation_score, name = "risk_score")
 validation <- mae_add_sample_data(validation, "rna", risk_group, name = "risk_group")
 table(risk_group)
 ```
 
-```{r risk, fig.width = 4.6, fig.height = 4, fig.cap = "验证集风险分布。上：按风险评分排序的患者，虚线为训练集中位数切点；下：每名患者的随访时间，黑点为发生远处转移、灰点为删失。", fig.alt = "两个对齐面板：上方是排序后的风险评分，以切点分为低风险蓝色和高风险橙色；下方是对应患者的随访年数和事件状态。"}
+```{r risk, fig.width = 4.2, fig.height = 3.4, fig.cap = "验证集风险分布。上：按风险评分排序的患者，虚线为训练集中位数切点；下：每名患者的随访时间，深色为发生远处转移、浅灰为删失。", fig.alt = "两个对齐面板：上方是排序后的风险评分，以切点分为低风险蓝色和高风险红色；下方是对应患者的随访年数和事件状态。"}
 plot_surv_risk(
   validation_score, mae_samples(validation, "rna"),
   time = "time_years", event = "event", cutoff = cutoff,
@@ -182,26 +183,25 @@ plot_surv_risk(
 
 # 验证集中的生存差异
 
-```{r km, fig.width = 4.4, fig.height = 4.2, fig.cap = "验证集按训练集切点分组的 Kaplan-Meier 曲线，阴影为 95% 置信带，+ 为删失。下方为各时间点的风险人数，p 值来自 log-rank 检验。", fig.alt = "高风险组的无远处转移生存曲线低于低风险组，下方表格列出两组在各年份的风险人数。"}
-# High first so the KM colours match the risk plot (high = orange, low = blue).
-validation <- mae_add_sample_data(
-  validation, "rna", factor(risk_group, levels = c("High", "Low")),
-  name = "risk_group", overwrite = TRUE
-)
+KM 图里的 HR 来自以低风险组为参照的单因素 Cox 模型，p 值来自 log-rank 检验；两者都由调用者
+先算好再交给绘图函数。
+
+```{r km, fig.width = 3, fig.height = 2.8, fig.cap = "验证集按训练集切点分组的 Kaplan-Meier 曲线，+ 为删失。左下注释为高风险对低风险的 HR（95% CI）与 log-rank P 值。", fig.alt = "高风险组的无远处转移生存曲线低于低风险组，左下角注释风险比和 log-rank P 值。"}
 km_formula <- surv_formula("time_years", "event", predictors = "risk_group")
 km <- surv_km(validation, "rna", km_formula)
 log_rank <- survival::survdiff(km_formula, data = mae_samples(validation, "rna"))
-plot_surv_km(km, test = log_rank, risk_times = seq(0, 12, by = 2)) +
-  labs(x = "Years", y = "DMFS probability", colour = "Risk group")
+group_cox <- surv_cox(validation, "rna", km_formula)
+plot_surv_km(km, test = log_rank, cox = group_cox, hr_label = "HR (high vs low)") +
+  labs(x = "Years", y = "Distant metastasis-free survival", title = "VDX validation")
 ```
 
-```{r roc, fig.width = 3.4, fig.height = 3.4, fig.cap = "验证集风险评分在 3、5、8 年的时间依赖 ROC 曲线（timeROC，逆概率删失加权）。", fig.alt = "三条时间依赖 ROC 曲线均位于对角线上方，图例给出各时间点的 AUC。"}
+```{r roc, fig.width = 2.8, fig.height = 2.8, fig.cap = "验证集风险评分在 3、5、8 年的时间依赖 ROC 曲线（timeROC，逆概率删失加权）。", fig.alt = "三条时间依赖 ROC 曲线均位于对角线上方，图例给出各时间点的 AUC。"}
 roc <- surv_roc(
   validation, "rna",
   time = "time_years", event = "event", marker = "risk_score",
   times = c(3, 5, 8)
 )
-plot_surv_roc(roc, time_labels = c("3 years", "5 years", "8 years")) +
+plot_surv_roc(roc, time_labels = c("3-year", "5-year", "8-year")) +
   labs(title = "Time-dependent ROC (validation)")
 ```
 
@@ -213,11 +213,15 @@ plot_surv_roc(roc, time_labels = c("3 years", "5 years", "8 years")) +
 在验证集中把风险评分（每增加 1 个单位）与年龄、ER 状态放进同一个多因素 Cox 模型。
 `surv_cox()` 不静默丢弃缺失值，所以先显式取年龄完整的患者。
 
-```{r multivariable, fig.width = 4.6, fig.height = 2.2, fig.cap = "验证集多因素 Cox 模型的风险比森林图。", fig.alt = "风险评分、年龄和 ER 阳性三项的多因素风险比，右侧列出数值和 p 值。"}
-validation_samples <- mae_samples(validation, "rna")
-complete_ids <- rownames(validation_samples)[!is.na(validation_samples$age)]
+```{r multivariable, fig.width = 4.2, fig.height = 1.6, fig.cap = "验证集多因素 Cox 模型的风险比森林图。", fig.alt = "风险评分、年龄和 ER 阳性三项的多因素风险比，右侧列出数值和 P 值。"}
+complete_samples <- function(x) {
+  samples <- mae_samples(x, "rna")
+  rownames(samples)[!is.na(samples$age)]
+}
+training_complete <- training[, complete_samples(training), ]
+validation_complete <- validation[, complete_samples(validation), ]
 multivariable <- surv_cox(
-  validation[, complete_ids, ], "rna",
+  validation_complete, "rna",
   formula = surv_formula("time_years", "event", predictors = c("risk_score", "age", "er"))
 )
 plot_surv_forest(
@@ -229,13 +233,74 @@ plot_surv_forest(
 
 多因素模型纳入 `r multivariable$n` 名患者、`r multivariable$nevent` 个事件。
 
+# 联合模型：区分度、校准与临床获益
+
+签名有没有用，最终要看它能否在临床变量之外增加信息。这里在**训练集**上拟合三个 Cox 模型：
+只用临床变量（年龄 + ER）、只用风险评分、两者联合；然后原样带到验证集评价。
+`model = TRUE` 让模型保存建模数据，后续才能对新样本预测生存概率。
+
+```{r models}
+fit_model <- function(predictors) {
+  surv_cox(
+    training_complete, "rna",
+    formula = surv_formula("time_years", "event", predictors = predictors),
+    model = TRUE
+  )
+}
+models <- list(
+  Combined = fit_model(c("risk_score", "age", "er")),
+  `Risk score` = fit_model("risk_score"),
+  Clinical = fit_model(c("age", "er"))
+)
+```
+
+三个模型在验证集上的线性预测值分别做时间依赖 ROC，比较各时间点的 AUC。
+
+```{r auc, fig.width = 3, fig.height = 2.8, fig.cap = "验证集中联合模型、风险评分与临床模型在 3、5、8 年的时间依赖 AUC；虚线为随机水平 0.5。", fig.alt = "三条折线分别表示联合模型、风险评分和临床模型在三个时间点的 AUC。"}
+validation_data <- mae_samples(validation_complete, "rna")
+rocs <- lapply(models, function(model) {
+  surv_roc(
+    validation_complete, "rna",
+    time = "time_years", event = "event",
+    marker = stats::predict(model, newdata = validation_data, type = "lp"),
+    times = c(3, 5, 8)
+  )
+})
+plot_surv_auc(rocs, time_labels = c("3-year", "5-year", "8-year")) +
+  labs(title = "Time-dependent AUC (validation)")
+```
+
+`surv_calibration()` 用联合模型预测验证集每名患者 3 年和 5 年的无转移生存概率，按预测值
+四分位分组，再与各组 Kaplan-Meier 观察值比较。
+
+```{r calibration, fig.width = 2.8, fig.height = 2.8, fig.cap = "联合模型在验证集的外部校准曲线。点为每个预测四分位组的平均预测生存与 KM 观察生存，竖线为观察值 95% CI，虚线为完美校准。", fig.alt = "3 年和 5 年两条校准曲线贴近对角线，每个点带有置信区间。"}
+calibration <- surv_calibration(
+  validation_complete, "rna", models$Combined,
+  time = "time_years", event = "event", times = c(3, 5)
+)
+plot_surv_calibration(calibration, time_labels = c("3-year", "5-year")) +
+  labs(title = "Calibration (validation)")
+```
+
+决策曲线回答另一个问题：如果按模型预测的 5 年转移风险决定是否加强干预，在一系列阈值上
+净获益是否高于“全部干预”或“全部不干预”。
+
+```{r dca, fig.width = 3.4, fig.height = 2.8, fig.cap = "验证集 5 年远处转移风险的决策曲线。浅灰为全部干预，深色水平线为全部不干预。", fig.alt = "三条模型曲线与全部干预、全部不干预两条参照线的净获益随阈值概率变化。"}
+decision <- surv_dca(
+  validation_complete, "rna", models,
+  time = "time_years", event = "event", horizon = 5,
+  thresholds = seq(0.05, 0.6, by = 0.01)
+)
+plot_surv_dca(decision) + labs(title = "Decision curve (validation)")
+```
+
 # 限制
 
 - 单一队列随机拆分不等于外部验证；同中心、同平台的验证集通常会高估签名表现。
 - 方差过滤、初筛阈值和 `lambda.min` 都是分析者的选择，换一组选择会得到不同的基因。
 - 签名在 HG-U133A 芯片的 log2 表达尺度上训练，迁移到其他平台需要重新校准。
 - VDX 患者未接受系统辅助治疗，结论不适用于已治疗人群。
-- 校准曲线与决策曲线需要单独的预测模型封装，本文暂未包含。
+- 验证集只有一百余名年龄完整的患者，校准分组和决策曲线的估计波动较大。
 
 # 复现信息
 
